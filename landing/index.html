@@ -1,0 +1,463 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>PGDesk — PG &amp; hostel operations, on one screen</title>
+<meta name="description" content="Residents, beds, rent and payments for PG and hostel owners in India. Multi-branch, bed-level occupancy, and a portal for every tenant. Android app and web." />
+<meta name="theme-color" content="#0F172A" />
+
+<meta property="og:type" content="website" />
+<meta property="og:title" content="PGDesk — PG &amp; hostel operations" />
+<meta property="og:description" content="Every bed, every rupee, every branch. Built for PG owners in India." />
+
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><rect width='32' height='32' rx='7' fill='%230F172A'/><text x='16' y='23' font-family='system-ui,sans-serif' font-size='20' font-weight='700' fill='%23fff' text-anchor='middle'>P</text></svg>" />
+
+<style>
+/* ---------------------------------------------------------------------------
+   No webfont. This page is opened on a phone, often on mobile data, and the
+   app it advertises already had a Google Fonts request fail in testing. The
+   personality here comes from the bed grid and the numerals, not the typeface.
+   --------------------------------------------------------------------------- */
+:root{
+  --ink:#0F172A;          /* the app's own brand-900 */
+  --ink-2:#334155;
+  --ink-3:#64748B;
+  --mute:#94A3B8;
+  --rule:#E4E7EF;
+  --paper:#FFFFFF;
+  --wash:#F6F7FB;
+  --accent:#373DA6;       /* brand-700, the app's chart colour */
+  --occupied:#373DA6;
+  --vacant:#0F766E;
+  --maxw:64rem;
+}
+*{box-sizing:border-box}
+html{-webkit-text-size-adjust:100%;scroll-behavior:smooth}
+@media (prefers-reduced-motion:reduce){html{scroll-behavior:auto}*{transition-duration:.01ms!important;animation-duration:.01ms!important}}
+
+body{
+  margin:0;background:var(--paper);color:var(--ink);
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif;
+  font-size:16px;line-height:1.6;-webkit-font-smoothing:antialiased;
+}
+.tnum{font-variant-numeric:tabular-nums}
+.wrap{max-width:var(--maxw);margin:0 auto;padding:0 1.25rem}
+a{color:inherit}
+:focus-visible{outline:3px solid var(--accent);outline-offset:3px;border-radius:4px}
+
+/* ------------------------------------------------------------------ topbar */
+.top{
+  position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);
+  backdrop-filter:blur(8px);border-bottom:1px solid var(--rule);
+  padding-top:env(safe-area-inset-top);
+}
+.top .wrap{display:flex;align-items:center;gap:.75rem;height:3.5rem}
+.mark{
+  width:1.875rem;height:1.875rem;border-radius:.5rem;background:var(--ink);color:#fff;
+  display:inline-flex;align-items:center;justify-content:center;
+  font-weight:700;font-size:.9375rem;flex:0 0 auto;
+}
+.top strong{font-size:.9375rem;font-weight:650;letter-spacing:-.01em}
+.top .by{margin-left:auto;font-size:.8125rem;color:var(--mute)}
+.top .by a{color:var(--ink-3);text-decoration:none;font-weight:600}
+.top .by a:hover{color:var(--ink)}
+
+/* -------------------------------------------------------------------- hero */
+.hero{padding:3.5rem 0 3rem}
+h1{
+  font-size:clamp(2rem,7vw,3.25rem);line-height:1.06;letter-spacing:-.03em;
+  font-weight:650;margin:0 0 1.125rem;max-width:16ch;
+}
+.hero .lede{font-size:clamp(1.0625rem,2.4vw,1.25rem);color:var(--ink-2);margin:0 0 2.5rem;max-width:46ch}
+
+/* the bed grid: the product's actual mental model, not a laptop mockup */
+.beds{
+  border:1px solid var(--rule);border-radius:1rem;background:var(--wash);
+  padding:1.375rem;margin-bottom:2rem;
+}
+.beds-head{display:flex;align-items:baseline;gap:.625rem;flex-wrap:wrap;margin-bottom:1rem}
+.beds-head .n{font-size:1.75rem;font-weight:650;letter-spacing:-.02em;line-height:1}
+.beds-head .lbl{font-size:.875rem;color:var(--ink-3)}
+.beds-head .pct{margin-left:auto;font-size:.875rem;color:var(--ink-3)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(1.375rem,1fr));gap:.375rem}
+.bed{aspect-ratio:1;border-radius:.3125rem}
+.bed.on{background:var(--occupied)}
+.bed.off{background:transparent;box-shadow:inset 0 0 0 1.5px #CBD5E1}
+.key{display:flex;gap:1.25rem;margin-top:1rem;font-size:.8125rem;color:var(--ink-3)}
+.key i{width:.75rem;height:.75rem;border-radius:.25rem;display:inline-block;margin-right:.4375rem;vertical-align:-1px}
+.key .on{background:var(--occupied)}
+.key .off{box-shadow:inset 0 0 0 1.5px #CBD5E1}
+
+/* ------------------------------------------------------------------ action */
+.cta{display:flex;gap:.75rem;flex-wrap:wrap}
+.btn{
+  display:inline-flex;align-items:center;justify-content:center;
+  padding:.9375rem 1.5rem;border-radius:.75rem;font-size:1rem;font-weight:600;
+  text-decoration:none;border:1px solid transparent;transition:background .15s ease,border-color .15s ease;
+}
+.btn-primary{background:var(--ink);color:#fff}
+.btn-primary:hover{background:#1E293B}
+.btn-primary:active{background:#020617}
+.btn-ghost{background:var(--paper);color:var(--ink);border-color:var(--rule)}
+.btn-ghost:hover{border-color:#CBD5E1;background:var(--wash)}
+.cta-meta{margin:.875rem 0 0;font-size:.8125rem;color:var(--mute)}
+
+/* ---------------------------------------------------------------- sections */
+section{padding:3.5rem 0;border-top:1px solid var(--rule)}
+section.tint{background:var(--wash)}
+h2{font-size:clamp(1.375rem,3.4vw,1.875rem);line-height:1.2;letter-spacing:-.02em;font-weight:650;margin:0 0 .625rem}
+.sub{color:var(--ink-3);margin:0 0 2rem;max-width:56ch}
+
+/* before / after — the notebook this replaces */
+.swap{display:grid;gap:1rem;grid-template-columns:1fr}
+@media(min-width:44rem){.swap{grid-template-columns:1fr 1fr;gap:1.5rem}}
+.swap div{padding:1.375rem 1.5rem;border-radius:.875rem}
+.swap .was{background:var(--paper);border:1px solid var(--rule)}
+.swap .now{background:var(--ink);color:#fff}
+.swap h3{margin:0 0 .875rem;font-size:.9375rem;font-weight:650}
+.swap .was h3{color:var(--ink-3)}
+.swap .now h3{color:#94A3B8}
+.swap ul{margin:0;padding:0;list-style:none}
+.swap li{padding:.4375rem 0;font-size:.9375rem}
+.swap .was li{color:var(--ink-2)}
+.swap .now li{color:#E2E8F0}
+
+/* the lifecycle — genuinely a sequence, so it is numbered */
+.flow{margin:0;padding:0;list-style:none;counter-reset:s}
+.flow li{
+  counter-increment:s;display:grid;grid-template-columns:2rem 1fr;gap:1rem;
+  padding:1.125rem 0;border-bottom:1px solid var(--rule);
+}
+.flow li:first-child{border-top:1px solid var(--rule)}
+.flow li::before{
+  content:counter(s);font-size:.8125rem;font-weight:650;color:var(--mute);
+  font-variant-numeric:tabular-nums;padding-top:.1875rem;
+}
+.flow h3{margin:0 0 .25rem;font-size:1rem;font-weight:650}
+.flow p{margin:0;font-size:.9375rem;color:var(--ink-3);max-width:60ch}
+
+/* modules — grouped by area, deliberately not identical cards */
+.mods{display:grid;gap:1.75rem 2.5rem;grid-template-columns:1fr}
+@media(min-width:38rem){.mods{grid-template-columns:1fr 1fr}}
+@media(min-width:58rem){.mods{grid-template-columns:repeat(3,1fr)}}
+.mod h3{margin:0 0 .5rem;font-size:.875rem;font-weight:650;color:var(--accent)}
+.mod ul{margin:0;padding:0;list-style:none;border-top:1px solid var(--rule)}
+.mod li{padding:.5rem 0;font-size:.9375rem;color:var(--ink-2);border-bottom:1px solid var(--rule)}
+
+/* portals */
+.portals{display:grid;gap:1rem;grid-template-columns:1fr}
+@media(min-width:44rem){.portals{grid-template-columns:repeat(3,1fr)}}
+.portal{border:1px solid var(--rule);border-radius:.875rem;padding:1.375rem;background:var(--paper)}
+.portal h3{margin:0 0 .375rem;font-size:1rem;font-weight:650}
+.portal p{margin:0;font-size:.9375rem;color:var(--ink-3)}
+.portal .who{display:block;margin-top:.875rem;font-size:.8125rem;color:var(--mute)}
+
+/* install */
+.install{max-width:38rem}
+.note{
+  margin-top:1.25rem;padding:.9375rem 1.125rem;background:var(--paper);
+  border:1px solid var(--rule);border-radius:.75rem;font-size:.9375rem;color:var(--ink-3);
+}
+.note b{color:var(--ink-2);font-weight:600}
+
+/* honesty block */
+.limits{max-width:56rem}
+.limits ul{margin:0;padding:0;list-style:none;border-top:1px solid var(--rule)}
+.limits li{padding:.75rem 0;border-bottom:1px solid var(--rule);font-size:.9375rem;color:var(--ink-2)}
+.limits b{font-weight:650;color:var(--ink)}
+
+/* footer */
+footer{border-top:1px solid var(--rule);padding:2.5rem 0 calc(env(safe-area-inset-bottom) + 2.5rem);font-size:.875rem;color:var(--mute)}
+footer .wrap{display:flex;gap:1rem;flex-wrap:wrap;align-items:center}
+footer a{color:var(--ink-3);text-decoration:none;font-weight:600}
+footer a:hover{color:var(--ink)}
+footer .r{margin-left:auto}
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap">
+    <span class="mark" aria-hidden="true">P</span>
+    <strong>PGDesk</strong>
+    <span class="by">by <a href="https://dygine.com">Dygine</a></span>
+  </div>
+</header>
+
+<main>
+
+  <!-- ============================================================== hero -->
+  <div class="wrap hero">
+    <h1>Every bed, every rupee, every branch.</h1>
+    <p class="lede">
+      PGDesk is the operations system for PG and hostel owners in India who are
+      still running three branches out of a notebook and four WhatsApp groups.
+    </p>
+
+    <div class="beds">
+      <div class="beds-head">
+        <span class="n tnum">42</span>
+        <span class="lbl">of 55 beds occupied</span>
+        <span class="pct tnum">76%</span>
+      </div>
+      <div class="grid" id="beds" role="img" aria-label="Occupancy grid: 42 of 55 beds occupied"></div>
+      <div class="key">
+        <span><i class="on"></i>Occupied</span>
+        <span><i class="off"></i>Available</span>
+      </div>
+    </div>
+
+    <div class="cta">
+      <a class="btn btn-primary" href="pgdesk.apk" download="pgdesk.apk">Download for Android</a>
+      <a class="btn btn-ghost" href="https://pgdesk.dygine.com">Open in your browser</a>
+    </div>
+    <p class="cta-meta tnum">APK · Android 7.0 and above · v1.0</p>
+  </div>
+
+  <!-- ============================================================== swap -->
+  <section class="tint">
+    <div class="wrap">
+      <h2>What it replaces</h2>
+      <p class="sub">
+        Most PGs already have all of this written down somewhere. The problem is
+        that it is written down in six places and none of them agree.
+      </p>
+      <div class="swap">
+        <div class="was">
+          <h3>Today</h3>
+          <ul>
+            <li>A rent register that only you can read</li>
+            <li>Bed availability you work out by walking the floors</li>
+            <li>Payment reminders sent one WhatsApp at a time</li>
+            <li>A watchman's diary for visitors and gate passes</li>
+            <li>Month-end spent adding up receipts</li>
+          </ul>
+        </div>
+        <div class="now">
+          <h3>With PGDesk</h3>
+          <ul>
+            <li>Every resident, invoice and payment in one ledger</li>
+            <li>Occupancy down to the individual bed, live</li>
+            <li>Rent raised for the whole branch in one run</li>
+            <li>Gate entries scanned, visitors logged and approved</li>
+            <li>Collections and outstanding, ready at any moment</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============================================================== flow -->
+  <section>
+    <div class="wrap">
+      <h2>How it works</h2>
+      <p class="sub">
+        One resident, from enquiry to checkout. Every step below is a real screen,
+        and each one updates the ledger the next step reads from.
+      </p>
+      <ol class="flow">
+        <li>
+          <div>
+            <h3>Add the resident</h3>
+            <p>Name, phone, KYC and the branch they are joining. They count against your plan's resident limit, so you always know where you stand.</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h3>Assign a bed</h3>
+            <p>Pick from beds that are genuinely free right now. Two staff members cannot assign the same bed — the server locks it.</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h3>Check in</h3>
+            <p>Rent, deposit and stay terms are agreed, and the first invoice is raised in the same transaction. Nothing is half-done if something fails.</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h3>Bill every month</h3>
+            <p>One rent run raises invoices for the whole branch. Rent, food, laundry, electricity, maintenance and late fees are separate lines, so a resident can see what they are paying for.</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h3>Record and verify payment</h3>
+            <p>Reception records it, a manager verifies it. Only verified payments move the balance — which is what stops the ledger drifting from the bank.</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h3>Run the property day to day</h3>
+            <p>Attendance, gate scans, visitors, gate passes, meals, laundry slots and complaints — all against the same resident record.</p>
+          </div>
+        </li>
+        <li>
+          <div>
+            <h3>Transfer or check out</h3>
+            <p>Move them to another room or another branch, or settle up and release the bed. The bed is free for the next resident the moment it happens.</p>
+          </div>
+        </li>
+      </ol>
+    </div>
+  </section>
+
+  <!-- =========================================================== modules -->
+  <section class="tint">
+    <div class="wrap">
+      <h2>What's inside</h2>
+      <p class="sub">Everything below ships in the app today.</p>
+      <div class="mods">
+        <div class="mod">
+          <h3>Property</h3>
+          <ul>
+            <li>Branches</li><li>Buildings and floors</li><li>Rooms</li>
+            <li>Beds and floor plan</li><li>Availability</li>
+          </ul>
+        </div>
+        <div class="mod">
+          <h3>Residents</h3>
+          <ul>
+            <li>Resident records</li><li>KYC</li><li>Check-in</li>
+            <li>Room transfer</li><li>Checkout</li>
+          </ul>
+        </div>
+        <div class="mod">
+          <h3>Money</h3>
+          <ul>
+            <li>Invoices with line items</li><li>Monthly rent runs</li>
+            <li>Payments, verify and refund</li><li>Late fees</li><li>Expenses</li>
+          </ul>
+        </div>
+        <div class="mod">
+          <h3>Operations</h3>
+          <ul>
+            <li>Attendance</li><li>Gate scan</li><li>Visitors</li>
+            <li>Gate passes</li><li>Food and mess</li><li>Laundry</li>
+          </ul>
+        </div>
+        <div class="mod">
+          <h3>People</h3>
+          <ul>
+            <li>Staff accounts</li><li>Roles and permissions</li>
+            <li>Complaints</li><li>Query centre</li><li>Announcements</li>
+          </ul>
+        </div>
+        <div class="mod">
+          <h3>Oversight</h3>
+          <ul>
+            <li>Occupancy and revenue reports</li><li>Outstanding and collections</li>
+            <li>CSV export</li><li>Audit log</li><li>Inventory and assets</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== portals -->
+  <section>
+    <div class="wrap">
+      <h2>Three ways in</h2>
+      <p class="sub">
+        The same application, showing each person only what their role allows.
+        Permissions are checked on the server, so hiding a button is not the
+        security model.
+      </p>
+      <div class="portals">
+        <div class="portal">
+          <h3>Owner and staff</h3>
+          <p>The full operation across every branch you are assigned to. Roles decide what each person can open — a receptionist records payments, a manager approves them.</p>
+          <span class="who">Owner · Manager · Accountant · Receptionist · Security</span>
+        </div>
+        <div class="portal">
+          <h3>Resident</h3>
+          <p>Their own rent and payment history, meals, laundry bookings, complaints, visitor requests and gate passes. Their data and nobody else's.</p>
+          <span class="who">Every tenant</span>
+        </div>
+        <div class="portal">
+          <h3>Platform</h3>
+          <p>For running PGDesk itself: creating organisations, plans and subscriptions, and watching usage across every PG on the system.</p>
+          <span class="who">Dygine</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- =========================================================== install -->
+  <section class="tint">
+    <div class="wrap install">
+      <h2>Installing the Android app</h2>
+      <p class="sub">
+        PGDesk is not on the Play Store yet, so Android will ask you to confirm.
+        Three taps.
+      </p>
+      <ol class="flow">
+        <li><div><h3>Download the file</h3><p>Tap the button below. Your browser will ask you to confirm — choose <b>Download anyway</b>.</p></div></li>
+        <li><div><h3>Allow the install</h3><p>Open the downloaded file. Android will say installing from this source is blocked. Tap <b>Settings</b> and turn on <b>Allow from this source</b>.</p></div></li>
+        <li><div><h3>Install and open</h3><p>Go back, tap <b>Install</b>, then <b>Open</b>. PGDesk appears on your home screen.</p></div></li>
+      </ol>
+
+      <p class="note">
+        Android shows these warnings for <b>any</b> app installed outside the Play
+        Store. You can switch the permission back off afterwards and PGDesk will
+        keep working.
+      </p>
+
+      <div class="cta" style="margin-top:1.75rem">
+        <a class="btn btn-primary" href="pgdesk.apk" download="pgdesk.apk">Download for Android</a>
+        <a class="btn btn-ghost" href="https://pgdesk.dygine.com">Use the web version</a>
+      </div>
+      <p class="cta-meta">No iPhone build yet. The web version works on iPhone.</p>
+    </div>
+  </section>
+
+  <!-- ============================================================ limits -->
+  <section>
+    <div class="wrap limits">
+      <h2>What it does not do yet</h2>
+      <p class="sub">Worth knowing before you plan around it.</p>
+      <ul>
+        <li><b>No email, SMS or WhatsApp sending.</b> Notifications appear inside the app. Nothing is sent out.</li>
+        <li><b>No PDF invoices.</b> Invoices are on screen and export to CSV; a printable document is next.</li>
+        <li><b>KYC stores a reference, not the document.</b> You record the ID number; the file itself lives wherever you keep it today.</li>
+        <li><b>No iPhone app.</b> The web version works on any phone.</li>
+      </ul>
+    </div>
+  </section>
+
+</main>
+
+<footer>
+  <div class="wrap">
+    <span>PGDesk — built by <a href="https://dygine.com">Dygine</a></span>
+    <span class="r"><a href="mailto:hello@dygine.com">hello@dygine.com</a></span>
+  </div>
+</footer>
+
+<script>
+/* 55 beds, 42 occupied — the same figures the hero states, drawn rather than
+   described. Occupied beds are distributed, not front-loaded, because a real
+   property fills unevenly. */
+(function () {
+  const TOTAL = 55, FULL = 42;
+  const el = document.getElementById('beds');
+  if (!el) return;
+  const taken = new Set();
+  // Deterministic spread: no PRNG, so the picture is identical on every load.
+  for (let i = 0, n = 0; n < FULL; i += 1) {
+    const at = (i * 7 + Math.floor(i / 8)) % TOTAL;
+    if (!taken.has(at)) { taken.add(at); n += 1; }
+  }
+  const frag = document.createDocumentFragment();
+  for (let i = 0; i < TOTAL; i += 1) {
+    const b = document.createElement('span');
+    b.className = 'bed ' + (taken.has(i) ? 'on' : 'off');
+    frag.appendChild(b);
+  }
+  el.appendChild(frag);
+})();
+</script>
+
+</body>
+</html>
