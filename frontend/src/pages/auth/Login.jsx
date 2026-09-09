@@ -4,6 +4,7 @@ import { ArrowRight, Building2, Eye, EyeOff, ShieldCheck, Users, BedDouble, Copy
 import { useAuth } from '@/context/AuthContext'
 import { Button, FormField, Input, InlineAlert, StatusBadge } from '@/components/ui'
 import { useToast } from '@/context/ToastContext'
+import { Capacitor } from '@capacitor/core'
 
 /**
  * Whether to offer the seeded development accounts on the sign-in screen.
@@ -150,6 +151,20 @@ export default function Login() {
               Sign in
             </Button>
           </form>
+
+                  {/* Web only. Inside the APK this screen is already the app, so the
+            download prompt would be nonsense there. */}
+        {!Capacitor.isNativePlatform() && (
+          <a href="https://get.dygine.com"
+            className="mt-8 flex items-center gap-3 rounded-lg border border-line px-3.5 py-3 hover:bg-slate-50 transition-colors">
+            <span className="h-9 w-9 rounded-lg bg-brand-800 text-white inline-flex items-center justify-center font-bold text-sm shrink-0">P</span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-slate-900">Get the Android app</span>
+              <span className="block text-xs text-slate-500">Same account, on your phone</span>
+            </span>
+            <span className="text-slate-400 shrink-0" aria-hidden="true">›</span>
+          </a>
+        )}
 
           {SHOW_SEED_ACCOUNTS && (
           <div className="mt-8">
