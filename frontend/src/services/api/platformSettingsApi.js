@@ -1,0 +1,13 @@
+/**
+ * Platform-wide settings. Master admin only; the API 403s anyone else.
+ *
+ * `channels` in the response reports what can actually deliver on this
+ * deployment, which is separate from whether an operator has switched a channel
+ * on. The UI must show both rather than collapsing them into one toggle.
+ */
+import { api, unwrap } from './client'
+
+export const platformSettingsApi = {
+  get: () => api.get('/master/settings').then(unwrap),
+  update: (body) => api.patch('/master/settings', body).then(unwrap),
+}

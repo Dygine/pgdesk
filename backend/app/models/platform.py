@@ -1,0 +1,86 @@
+"""
+Platform-level settings.
+
+Deliberately NOT tenant-scoped. `organization_settings` is one row per tenant and
+answers "how does this PG run"; this table is one row for the whole installation
+and answers "how does the platform treat its tenants" - trial lengths, grace
+periods, when a lapsed subscription gets suspended.
+
+A single row is enforced by a CHECK on a fixed primary key rather than by
+convention, because "the settings row" being ambiguous is the kind of bug that
+only shows up once two rows disagree in production.
+"""
+from sqlalchemy import Boolean, CheckConstraint, Index, Integer, JSON, String
+from sqlalchemy.orm import Mapped, mapped_column
+
+from app.core.database import Base
+from app.models.base import Timestamps, UUIDPrimaryKey
+
+# The one legal primary key. Any other value is rejected by the CHECK below.
+SINGLETON_ID = "00000000-0000-0000-0000-000000000001"
+
+
+class PlatformSettings(Base, UUIDPrimaryKey, Timestamps):
+    __tablename__ = "platform_settings"
+
+    # --- subscription lifecycle ---
+    default_trial_days: Mapped[int] = mapped_column(Integer, nullable=False, default=14)
+    grace_period_days: Mapped[int] = mapped_column(Integer, nullable=False, default=7)
+    auto_suspend_after_grace: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True)
+    expiry_warning_days: Mapped[int] = mapped_column(Integer, nullable=False, default=7)
+
+    # --- notification channels ---
+    # These are honest booleans about intent. Whether a channel can actually
+    # deliver is a separate question answered by `channel_status()` in the
+    # service, which checks for real credentials. Turning a switch on here does
+    # not make an unconfigured provider start sending.
+    notify_email_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True)
+    notify_sms_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False)
+    notify_whatsapp_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False)
+
+    # --- platform identity ---
+    platform_name: Mapped[str] = mapped_column(
+        String(80), nullable=False, default="PGDesk")
+    support_email: Mapped[str | None] = mapped_column(String(255))
+
+    extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+
+    __table_args__ = (
+        CheckConstraint(f"id = '{SINGLETON_ID}'", name="ck_platform_settings_singleton"),
+        CheckConstraint("default_trial_days BETWEEN 0 AND 365",
+                        name="ck_platform_trial_days"),
+        CheckConstraint("grace_period_days BETWEEN 0 AND 90",
+                        name="ck_platform_grace_days"),
+        CheckConstraint("expiry_warning_days BETWEEN 0 AND 90",
+                        name="ck_platform_warning_days"),
+    )
+
+
+class LoginAttempt(Base, UUIDPrimaryKey, Timestamps):
+    """
+    Every sign-in attempt, successful or not.
+
+    Persisted rather than counted in memory because a lockout that resets when a
+    worker restarts is not a lockout, and an API behind more than one process
+    would otherwise give an attacker one budget per worker.
+
+    Deliberately stores no password and no token - only who was asked for, from
+    where, and whether it worked. `identifier` is the email as submitted, which
+    may not correspond to any account; that is the point, since attempts against
+    addresses that do not exist are exactly what a spray looks like.
+    """
+    __tablename__ = "login_attempts"
+
+    identifier: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
+    ip_address: Mapped[str | None] = mapped_column(String(64), index=True)
+    successful: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    reason: Mapped[str | None] = mapped_column(String(80))
+
+    __table_args__ = (
+        Index("ix_login_attempts_identifier_time", "identifier", "created_at"),
+        Index("ix_login_attempts_ip_time", "ip_address", "created_at"),
+    )

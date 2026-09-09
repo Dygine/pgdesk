@@ -1,0 +1,97 @@
+
+/**
+ * Release signing.
+ *
+ * Nothing secret lives in this repository. Gradle looks for a
+ * keystore.properties beside this file (gitignored) and falls back to
+ * environment variables, which is what a CI runner supplies. If neither is
+ * present the release signingConfig is simply not created, so `assembleDebug`
+ * and every other task still work on a fresh clone.
+ *
+ * See ANDROID.md -> "Release signing" for how to create the keystore.
+ */
+def keystorePropsFile = rootProject.file("keystore.properties")
+def keystoreProps = new Properties()
+if (keystorePropsFile.exists()) {
+    keystoreProps.load(new FileInputStream(keystorePropsFile))
+}
+
+def storeFilePath = keystoreProps['storeFile'] ?: System.getenv('PGDESK_KEYSTORE')
+def storePassword_ = keystoreProps['storePassword'] ?: System.getenv('PGDESK_KEYSTORE_PASSWORD')
+def keyAlias_      = keystoreProps['keyAlias'] ?: System.getenv('PGDESK_KEY_ALIAS')
+def keyPassword_   = keystoreProps['keyPassword'] ?: System.getenv('PGDESK_KEY_PASSWORD')
+def hasSigning     = storeFilePath != null && file(storeFilePath).exists()
+
+apply plugin: 'com.android.application'
+
+android {
+    namespace = "in.kredo.pgdesk"
+    compileSdk = rootProject.ext.compileSdkVersion
+    defaultConfig {
+        applicationId "in.kredo.pgdesk"
+        minSdkVersion rootProject.ext.minSdkVersion
+        targetSdkVersion rootProject.ext.targetSdkVersion
+        versionCode 1
+        versionName "1.0"
+        testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+        aaptOptions {
+             // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
+             // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
+            ignoreAssetsPattern = '!.svn:!.git:!.ds_store:!*.scc:.*:!CVS:!thumbs.db:!picasa.ini:!*~'
+        }
+    }
+    signingConfigs {
+        if (hasSigning) {
+            release {
+                storeFile file(storeFilePath)
+                storePassword storePassword_
+                keyAlias keyAlias_
+                keyPassword keyPassword_
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Shrinking is on for release: the bundle is mostly the web app, but
+            // the Java side still benefits and it keeps the AAB smaller.
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            if (hasSigning) {
+                signingConfig signingConfigs.release
+            } else {
+                logger.lifecycle("No keystore configured - the release build will be UNSIGNED. See ANDROID.md.")
+            }
+        }
+    }
+}
+
+repositories {
+    flatDir{
+        dirs '../capacitor-cordova-android-plugins/src/main/libs', 'libs'
+    }
+}
+
+dependencies {
+    implementation fileTree(include: ['*.jar'], dir: 'libs')
+    implementation "androidx.appcompat:appcompat:$androidxAppCompatVersion"
+    implementation "androidx.coordinatorlayout:coordinatorlayout:$androidxCoordinatorLayoutVersion"
+    implementation "androidx.core:core-splashscreen:$coreSplashScreenVersion"
+    implementation project(':capacitor-android')
+    testImplementation "junit:junit:$junitVersion"
+    androidTestImplementation "androidx.test.ext:junit:$androidxJunitVersion"
+    androidTestImplementation "androidx.test.espresso:espresso-core:$androidxEspressoCoreVersion"
+    implementation project(':capacitor-cordova-android-plugins')
+}
+
+apply from: 'capacitor.build.gradle'
+
+try {
+    def servicesJSON = file('google-services.json')
+    if (servicesJSON.text) {
+        apply plugin: 'com.google.gms.google-services'
+    }
+} catch(Exception e) {
+    logger.info("google-services.json not found, google-services plugin not applied. Push Notifications won't work")
+}

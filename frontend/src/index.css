@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html { -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-canvas text-slate-800 antialiased;
+    font-feature-settings: 'cv02','cv03','cv04','cv11';
+  }
+  /* Money, counts and IDs line up in columns. */
+  .tnum { font-variant-numeric: tabular-nums; }
+  :focus-visible { @apply outline-none ring-2 ring-brand-500 ring-offset-2 ring-offset-white rounded-[3px]; }
+  ::-webkit-scrollbar { width: 10px; height: 10px; }
+  ::-webkit-scrollbar-thumb { @apply bg-slate-300 rounded-full border-2 border-solid border-transparent bg-clip-content; }
+  ::-webkit-scrollbar-thumb:hover { @apply bg-slate-400 bg-clip-content; }
+}
+
+@layer components {
+  .card { @apply bg-white border border-line rounded-xl shadow-card; }
+  .safe-b { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+
+@layer components {
+  /* Android keyboard: android.js sets --kb-height and toggles .kb-open, so the
+     fixed bottom navigation steps aside instead of covering the focused field. */
+  :root { --kb-height: 0px; }
+  body.kb-open [data-bottom-nav] { display: none; }
+  body.kb-open { padding-bottom: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
