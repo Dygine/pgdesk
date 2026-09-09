@@ -19,6 +19,11 @@
 @layer components {
   .card { @apply bg-white border border-line rounded-xl shadow-card; }
   .safe-b { padding-bottom: env(safe-area-inset-bottom); }
+  /* targetSdk 36 means Android 15+ draws the app edge-to-edge whether or not we
+     ask, so the topbar starts under the clock and battery. iOS needs the same
+     for the notch. index.html already sets viewport-fit=cover, which is what
+     makes these insets resolve to anything but zero. */
+  .safe-t { padding-top: env(safe-area-inset-top); }
 }
 
 

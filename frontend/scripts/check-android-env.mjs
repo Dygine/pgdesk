@@ -8,8 +8,29 @@
  *
  * Run by `npm run build:android`.
  */
-const url = process.env.VITE_API_URL
-const seed = process.env.VITE_SHOW_SEED_ACCOUNTS
+import fs from 'node:fs'
+
+/**
+ * Vite reads .env and .env.local as well as the shell, and a file value applies
+ * when the shell has nothing set. Checking process.env alone let a build with
+ * VITE_SHOW_SEED_ACCOUNTS=true in .env.local pass this guard and ship working
+ * demo credentials inside the APK.
+ */
+function fromEnvFiles(key) {
+  for (const file of ['.env.local', '.env']) {
+    if (!fs.existsSync(file)) continue
+    const line = fs.readFileSync(file, 'utf8')
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !l.startsWith('#'))
+      .find((l) => l.startsWith(`${key}=`))
+    if (line) return line.slice(key.length + 1).trim().replace(/^["']|["']$/g, '')
+  }
+  return undefined
+}
+
+const url  = process.env.VITE_API_URL ?? fromEnvFiles('VITE_API_URL')
+const seed = process.env.VITE_SHOW_SEED_ACCOUNTS ?? fromEnvFiles('VITE_SHOW_SEED_ACCOUNTS')
 
 const die = (msg) => {
   console.error(`\n  Android build refused.\n\n  ${msg}\n`)

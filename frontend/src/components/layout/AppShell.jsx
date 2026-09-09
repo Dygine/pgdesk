@@ -418,7 +418,7 @@ export function AppShell({ navGroups, bottomItems, children, banner, showBranchS
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-slate-900/50 animate-fadeIn" onClick={() => setDrawer(false)} />
           <div className="relative w-[17rem] max-w-[85vw] bg-brand-900 flex flex-col animate-slideLeft">
-            <div className="h-14 flex items-center justify-between px-4 border-b border-brand-800/70 shrink-0">
+            <div className="h-14 flex items-center justify-between px-4 border-b border-brand-800/70 shrink-0 safe-t">
               <Brand />
               <button onClick={() => setDrawer(false)} aria-label="Close menu" className="text-brand-300 p-1">
                 <X size={20} />
@@ -430,7 +430,7 @@ export function AppShell({ navGroups, bottomItems, children, banner, showBranchS
       )}
 
       {/* Topbar */}
-      <header className="lg:pl-[16.5rem] sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-line">
+      <header className="lg:pl-[16.5rem] sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-line safe-t">
         <div className="h-14 flex items-center gap-2 sm:gap-3 px-3 sm:px-5">
           <button onClick={() => setDrawer(true)} aria-label="Open menu"
             className="lg:hidden h-9 w-9 inline-flex items-center justify-center rounded-lg text-slate-600 hover:bg-slate-100 shrink-0">
