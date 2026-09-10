@@ -38,6 +38,11 @@ WRITABLE = {
     # eventually see it echoed by a serializer that treats every column alike.
     "smtp_host", "smtp_port", "smtp_username", "smtp_from_email",
     "smtp_from_name", "smtp_use_tls", "smtp_use_ssl",
+    # The Brevo API key is not here for the same reason the SMTP password is
+    # not: it takes a separate path that encrypts on the way in and offers no
+    # way out. A serializer that treats every column alike would eventually
+    # echo it.
+    "email_provider", "brevo_sender_email", "brevo_sender_name",
     "native_session_days",
 }
 
@@ -55,13 +60,28 @@ def channel_status(db: Session | None = None) -> dict[str, dict]:
 
     `db` is optional so the older env-only call sites keep working.
     """
-    email_ready = bool(os.getenv("SMTP_HOST") and os.getenv("SMTP_FROM"))
-    email_source = "environment"
-    if not email_ready and db is not None:
+    provider = "smtp"
+    if db is not None:
         row = db.get(PlatformSettings, uuid.UUID(SINGLETON_ID))
-        if row is not None and row.smtp_host and row.smtp_from_email:
-            email_ready = True
-            email_source = "platform settings"
+        if row is not None and row.email_provider:
+            provider = row.email_provider
+
+    if provider == "brevo":
+        email_ready = bool(os.getenv("BREVO_API_KEY") and os.getenv("BREVO_SENDER_EMAIL"))
+        email_source = "environment"
+        if not email_ready and db is not None:
+            row = db.get(PlatformSettings, uuid.UUID(SINGLETON_ID))
+            if row is not None and row.brevo_sender_email and row.brevo_api_key_encrypted:
+                email_ready = True
+                email_source = "platform settings"
+    else:
+        email_ready = bool(os.getenv("SMTP_HOST") and os.getenv("SMTP_FROM"))
+        email_source = "environment"
+        if not email_ready and db is not None:
+            row = db.get(PlatformSettings, uuid.UUID(SINGLETON_ID))
+            if row is not None and row.smtp_host and row.smtp_from_email:
+                email_ready = True
+                email_source = "platform settings"
     sms_ready = bool(os.getenv("SMS_PROVIDER_KEY"))
     whatsapp_ready = bool(os.getenv("WHATSAPP_PROVIDER_KEY")
                           and os.getenv("WHATSAPP_PHONE_ID"))
@@ -73,9 +93,13 @@ def channel_status(db: Session | None = None) -> dict[str, dict]:
         "email": {
             "configured": email_ready,
             "source": email_source if email_ready else None,
-            "detail": (f"SMTP is configured ({email_source})." if email_ready else
-                       "Not configured. Set a mail server below, or supply "
-                       "SMTP_HOST and SMTP_FROM in the environment."),
+            "provider": provider,
+            "detail": (f"{'Brevo' if provider == 'brevo' else 'SMTP'} is "
+                       f"configured ({email_source})." if email_ready else
+                       ("Not configured. Add a Brevo API key and a verified "
+                        "sender below." if provider == "brevo" else
+                        "Not configured. Set a mail server below, or supply "
+                        "SMTP_HOST and SMTP_FROM in the environment.")),
         },
         "sms": {
             "configured": sms_ready,
@@ -141,6 +165,15 @@ class PlatformSettingsService:
             "smtp_password_set": bool(row.smtp_password_encrypted),
             "smtp_password_readable": is_readable(row.smtp_password_encrypted),
 
+            # --- provider selection ---
+            "email_provider": row.email_provider or "smtp",
+            "brevo_sender_email": row.brevo_sender_email,
+            "brevo_sender_name": row.brevo_sender_name,
+            "brevo_api_key_set": bool(row.brevo_api_key_encrypted),
+            "brevo_api_key_readable": is_readable(row.brevo_api_key_encrypted),
+            "brevo_verified_at": (row.brevo_verified_at.isoformat()
+                                  if row.brevo_verified_at else None),
+
             # Reported alongside the toggles so the UI can show "enabled but not
             # deliverable" as the distinct state it is.
             "channels": channel_status(self.db),
@@ -162,6 +195,25 @@ class PlatformSettingsService:
         # Leaving the old timestamp would show a green "verified" tick beside a
         # password nobody has ever successfully sent with.
         row.smtp_verified_at = None
+        self.db.flush()
+
+    def set_brevo_api_key(self, plaintext: str | None) -> None:
+        """Store or clear the Brevo key. Encrypted in, nothing out."""
+        row = self.get()
+        row.brevo_api_key_encrypted = encrypt(plaintext) if plaintext else None
+        # New credentials invalidate the old proof of delivery. A green tick
+        # beside a key nobody has ever sent with is worse than no tick.
+        row.brevo_verified_at = None
+        self.db.flush()
+
+    def mark_provider_verified(self) -> None:
+        """Called after a test message actually left the building."""
+        row = self.get()
+        now = datetime.now(timezone.utc)
+        if (row.email_provider or "smtp") == "brevo":
+            row.brevo_verified_at = now
+        else:
+            row.smtp_verified_at = now
         self.db.flush()
 
     def mark_smtp_verified(self) -> None:

@@ -2,6 +2,8 @@
 import uuid
 from datetime import date, datetime
 
+from typing import Literal
+
 from pydantic import BaseModel, EmailStr, Field
 
 from app.schemas.common import ORMModel
@@ -142,6 +144,12 @@ class CreatedOwnerCredentials(BaseModel):
     must_change_password: bool = True
 
 
+class BrevoKeyUpdate(BaseModel):
+    """Write-only, like the SMTP password. Empty string clears it."""
+
+    api_key: str = Field(max_length=400)
+
+
 class SmtpPasswordUpdate(BaseModel):
     """
     Write-only. There is no matching read anywhere in the API.
@@ -189,6 +197,11 @@ class PlatformSettingsUpdate(BaseModel):
     smtp_from_name: str | None = Field(default=None, max_length=120)
     smtp_use_tls: bool | None = None
     smtp_use_ssl: bool | None = None
+
+    # --- which transport actually sends ---
+    email_provider: Literal["smtp", "brevo"] | None = None
+    brevo_sender_email: str | None = Field(default=None, max_length=255)
+    brevo_sender_name: str | None = Field(default=None, max_length=120)
 
     #: How long a signed-in phone stays signed in. The default of 3650 days is
     #: "until the app is removed" in practice; an operator who decides that is

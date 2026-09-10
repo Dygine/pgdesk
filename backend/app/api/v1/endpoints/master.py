@@ -25,7 +25,7 @@ from app.models import (
 )
 from app.schemas.organization import (
     ChangePlan, ExtendSubscription, LimitOverrides, OrganizationCreate,
-    OrganizationUpdate, PlanUpdate, PlatformSettingsUpdate, SmtpPasswordUpdate, TestEmailRequest, StatusChange,
+    OrganizationUpdate, PlanUpdate, BrevoKeyUpdate, PlatformSettingsUpdate, SmtpPasswordUpdate, TestEmailRequest, StatusChange,
 )
 from app.models.enums import AuditAction
 from app.services.audit import AuditService
@@ -440,10 +440,33 @@ def send_test_email(body: TestEmailRequest, db: DbSession, scope: Master,
     except EmailSendFailed as exc:
         raise UpstreamServiceError(str(exc)) from None
 
-    service.mark_smtp_verified()
+    service.mark_provider_verified()
     AuditService(db).record(
         scope=scope, module="Platform", action=AuditAction.UPDATE,
         description=f"Test email sent to {body.to}",
         entity_type="platform_settings", ip_address=client_ip(request))
     db.commit()
     return ok(service.as_dict(), message=f"Test message delivered to {body.to}.")
+
+
+@router.put("/settings/brevo-key", summary="Set or clear the Brevo API key")
+def set_brevo_key(body: BrevoKeyUpdate, db: DbSession, scope: Master,
+                  request: Request) -> dict:
+    """
+    Write-only, exactly like the SMTP password.
+
+    Encrypted before it reaches the database, and no endpoint returns it. The
+    settings response says whether a key is stored, not what it is - a
+    configuration screen that hands back the secret it was given is a way to
+    read secrets.
+    """
+    service = PlatformSettingsService(db)
+    service.set_brevo_api_key(body.api_key)
+    AuditService(db).record(
+        scope=scope, module="Platform", action=AuditAction.UPDATE,
+        description=("Brevo API key cleared" if not body.api_key
+                     else "Brevo API key updated"),
+        entity_type="platform_settings", ip_address=client_ip(request))
+    db.commit()
+    return ok(service.as_dict(),
+              message="Brevo key saved. Send a test message to confirm it works.")

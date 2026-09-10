@@ -21,10 +21,12 @@ whose email fails must still not tell the caller whether the address exists.
 """
 from __future__ import annotations
 
+import json
 import logging
 import os
 import smtplib
 import ssl
+from urllib import error as urlerror, request as urlrequest
 from dataclasses import dataclass
 from email.message import EmailMessage
 from email.utils import formataddr
@@ -42,6 +44,9 @@ log = logging.getLogger("pgdesk.email")
 #: a bad experience; 30 would be an outage.
 SMTP_TIMEOUT_SECONDS = 10
 
+#: Brevo's transactional send endpoint.
+BREVO_ENDPOINT = "https://api.brevo.com/v3/smtp/email"
+
 
 class EmailNotConfigured(Exception):
     """No usable SMTP configuration. Distinct from a send that was attempted."""
@@ -49,6 +54,25 @@ class EmailNotConfigured(Exception):
 
 class EmailSendFailed(Exception):
     """The server was reachable and refused, or the connection broke."""
+
+
+@dataclass(frozen=True)
+class BrevoConfig:
+    """
+    Brevo's transactional API.
+
+    No host or port here, and that is the entire point: this posts to
+    https://api.brevo.com over 443, the same port every other outbound request
+    already uses. SMTP ports are blocked on a lot of managed hosting; 443 is
+    blocked nowhere, because blocking it would break the platform itself.
+    """
+
+    api_key: str
+    from_email: str
+    from_name: str
+    source: str
+
+    kind: str = "brevo"
 
 
 @dataclass(frozen=True)
@@ -62,6 +86,8 @@ class MailConfig:
     use_tls: bool
     use_ssl: bool
     source: str          # "environment" or "platform settings"
+
+    kind: str = "smtp"
 
 
 def _from_environment() -> MailConfig | None:
@@ -101,7 +127,49 @@ def _from_database(db: Session) -> MailConfig | None:
     )
 
 
-def resolve_config(db: Session) -> MailConfig | None:
+def _brevo_from_environment() -> BrevoConfig | None:
+    key = os.getenv("BREVO_API_KEY")
+    sender = os.getenv("BREVO_SENDER_EMAIL")
+    if not (key and sender):
+        return None
+    return BrevoConfig(api_key=key, from_email=sender,
+                       from_name=os.getenv("BREVO_SENDER_NAME") or "PGDesk",
+                       source="environment")
+
+
+def _brevo_from_database(db: Session) -> BrevoConfig | None:
+    import uuid
+
+    row = db.get(PlatformSettings, uuid.UUID(SINGLETON_ID))
+    if row is None or not row.brevo_sender_email:
+        return None
+    key = decrypt(row.brevo_api_key_encrypted)
+    if not key:
+        return None
+    return BrevoConfig(
+        api_key=key, from_email=row.brevo_sender_email,
+        from_name=row.brevo_sender_name or (row.platform_name or "PGDesk"),
+        source="platform settings")
+
+
+def selected_provider(db: Session) -> str:
+    """Which transport the operator chose. Defaults to SMTP."""
+    import uuid
+
+    row = db.get(PlatformSettings, uuid.UUID(SINGLETON_ID))
+    return (row.email_provider if row and row.email_provider else "smtp")
+
+
+def resolve_config(db: Session) -> MailConfig | BrevoConfig | None:
+    """
+    The transport that will actually be used.
+
+    Environment beats database for both, so a deployment already configured
+    that way keeps behaving identically and an operator cannot lock themselves
+    out of mail by saving a bad form.
+    """
+    if selected_provider(db) == "brevo":
+        return _brevo_from_environment() or _brevo_from_database(db)
     return _from_environment() or _from_database(db)
 
 
@@ -126,8 +194,13 @@ class EmailService:
         config = resolve_config(self.db)
         if config is None:
             raise EmailNotConfigured(
-                "No SMTP server is configured. A master admin can set one under "
-                "Platform settings, or it can be supplied in the environment.")
+                "No mail provider is configured. A master admin can set one "
+                "under Platform settings, or it can be supplied in the "
+                "environment.")
+
+        if config.kind == "brevo":
+            self._send_brevo(config, to=to, subject=subject, body=body, html=html)
+            return
 
         message = EmailMessage()
         message["Subject"] = subject
@@ -166,6 +239,64 @@ class EmailService:
             raise EmailSendFailed(
                 f"Could not reach {config.host}:{config.port}. Check the host, "
                 f"the port, and whether TLS should be on. ({exc})") from exc
+
+    @staticmethod
+    def _send_brevo(config: BrevoConfig, *, to: str, subject: str,
+                    body: str, html: str | None) -> None:
+        """
+        POST the message to Brevo's transactional endpoint.
+
+        Uses urllib rather than a HTTP client library on purpose. This is one
+        JSON POST to one URL, and `httpx` is currently declared as a test
+        dependency - reaching for it here would quietly make the whole test
+        stack a production requirement. The standard library is enough.
+        """
+        payload = {
+            "sender": {"name": config.from_name, "email": config.from_email},
+            "to": [{"email": to}],
+            "subject": subject,
+            "textContent": body,
+        }
+        if html:
+            payload["htmlContent"] = html
+
+        request = urlrequest.Request(
+            BREVO_ENDPOINT,
+            data=json.dumps(payload).encode(),
+            headers={
+                "api-key": config.api_key,
+                "content-type": "application/json",
+                "accept": "application/json",
+            },
+            method="POST",
+        )
+
+        try:
+            with urlrequest.urlopen(request, timeout=SMTP_TIMEOUT_SECONDS) as res:
+                if res.status not in (200, 201, 202):
+                    raise EmailSendFailed(f"Brevo returned {res.status}.")
+        except urlerror.HTTPError as exc:
+            detail = ""
+            try:
+                detail = json.loads(exc.read().decode()).get("message", "")
+            except Exception:                                   # noqa: BLE001
+                pass
+            if exc.code == 401:
+                raise EmailSendFailed(
+                    "Brevo rejected the API key. Check it has not been deleted "
+                    "or expired in the Brevo dashboard.") from exc
+            if exc.code == 400 and "sender" in detail.lower():
+                # By far the most common Brevo failure, and the message it
+                # returns on its own does not say what to do about it.
+                raise EmailSendFailed(
+                    f"Brevo refused the sender address {config.from_email}. It "
+                    "must be verified under Senders, domains, IPs in Brevo "
+                    f"before it can send. ({detail})") from exc
+            raise EmailSendFailed(
+                f"Brevo refused the message: {detail or exc.code}") from exc
+        except urlerror.URLError as exc:
+            raise EmailSendFailed(
+                f"Could not reach Brevo: {exc.reason}") from exc
 
     @staticmethod
     def _deliver(smtp, config: MailConfig, message: EmailMessage) -> None:

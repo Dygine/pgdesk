@@ -269,6 +269,31 @@ cannot reach a public page by being caught in a loop.
 
 ## Mail
 
+Two transports, chosen under **Master → Platform settings → Email**. Both stay,
+because they fail in different places.
+
+| | Port | Works where |
+|---|---|---|
+| **Brevo** (recommended) | 443 (https) | everywhere |
+| **SMTP** | 587 / 465 | your own VPS, paid managed hosting |
+
+Managed hosts routinely block outbound SMTP on free plans — Render closed 25,
+465 and 587 to free web services in September 2025 — so a perfectly correct
+Gmail configuration fails there with `Network is unreachable` and nothing about
+the message points at the host. An HTTP provider posts to 443, which is never
+blocked because blocking it would break the platform itself.
+
+SMTP is kept for anyone self-hosting who wants no third party in the path.
+
+Credentials come from the environment first, then the database, for both. The
+SMTP password and the Brevo key are encrypted at rest and have no read path in
+the API: the settings response reports whether one is stored, never what it is.
+
+**Send test** proves delivery, which is a different claim from "saved". A wrong
+port, an unverified Brevo sender, or a Gmail account password where an app
+password was needed all save perfectly and deliver nothing.
+
+
 Configured under **Master → Platform settings → Mail server**, or from the
 environment, which wins when set. The password is encrypted at rest and has no
 read path in the API - the settings response reports whether one is stored, not

@@ -18,6 +18,10 @@ export const platformSettingsApi = {
   setSmtpPassword: (password) =>
     api.put('/master/settings/smtp-password', { password }).then(unwrap),
 
+  /** Also write-only. The settings response reports whether a key is stored. */
+  setBrevoKey: (api_key) =>
+    api.put('/master/settings/brevo-key', { api_key }).then(unwrap),
+
   /** Proves delivery, which is a different claim from "saved". */
   sendTestEmail: (to) =>
     api.post('/master/settings/test-email', { to }).then(unwrap),

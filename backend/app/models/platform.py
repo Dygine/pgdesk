@@ -49,6 +49,26 @@ class PlatformSettings(Base, UUIDPrimaryKey, Timestamps):
         Boolean, nullable=False, default=False)
 
     # --- outbound mail ---
+    #: "smtp" or "brevo". Which transport actually sends.
+    #:
+    #: Both are kept because they fail in different places. SMTP talks to a mail
+    #: server on port 587, which most managed hosts block on their free tiers -
+    #: Render closed 25, 465 and 587 outright. An HTTP provider posts to port
+    #: 443, which nothing blocks anywhere, so it works on hosting where SMTP
+    #: simply cannot. Someone self-hosting on their own VPS has the opposite
+    #: preference and wants no third party in the path at all.
+    email_provider: Mapped[str] = mapped_column(
+        String(20), nullable=False, default="smtp")
+
+    #: Encrypted, like the SMTP password, and equally write-only: the settings
+    #: endpoint reports whether a key is stored, never what it is.
+    brevo_api_key_encrypted: Mapped[str | None] = mapped_column(Text)
+    #: Must be an address verified in the Brevo dashboard. An unverified sender
+    #: is rejected at send time with an error that reads like a code fault.
+    brevo_sender_email: Mapped[str | None] = mapped_column(String(255))
+    brevo_sender_name: Mapped[str | None] = mapped_column(String(120))
+    brevo_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
     # Stored here rather than only in the environment so an operator can change
     # a mail password without a redeploy. The environment still wins when set,
     # so existing deployments keep behaving exactly as they did.
@@ -96,6 +116,8 @@ class PlatformSettings(Base, UUIDPrimaryKey, Timestamps):
         CheckConstraint("expiry_warning_days BETWEEN 0 AND 90",
                         name="ck_platform_warning_days"),
         CheckConstraint("smtp_port BETWEEN 1 AND 65535", name="ck_platform_smtp_port"),
+        CheckConstraint("email_provider IN ('smtp', 'brevo')",
+                        name="ck_platform_email_provider"),
         CheckConstraint("native_session_days BETWEEN 1 AND 3650",
                         name="ck_platform_native_session_days"),
     )

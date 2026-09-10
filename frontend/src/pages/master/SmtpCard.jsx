@@ -31,17 +31,22 @@ export function SmtpCard({ form, onChange, onSaved }) {
 
   if (!form) return null
 
+  const provider = form.email_provider || 'smtp'
+  const isBrevo = provider === 'brevo'
   const fromEnv = form.channels?.email?.source === 'environment'
-  const verified = !!form.smtp_verified_at
-  const stored = !!form.smtp_password_set
+  const verified = isBrevo ? !!form.brevo_verified_at : !!form.smtp_verified_at
+  const stored = isBrevo ? !!form.brevo_api_key_set : !!form.smtp_password_set
 
   const savePassword = async () => {
     setBusy('password')
     try {
-      const data = await platformSettingsApi.setSmtpPassword(password)
+      const data = isBrevo
+        ? await platformSettingsApi.setBrevoKey(password)
+        : await platformSettingsApi.setSmtpPassword(password)
       setPassword('')
       onSaved?.(data)
-      success('Mail password saved', 'Send a test message to confirm it works.')
+      success(isBrevo ? 'Brevo key saved' : 'Mail password saved',
+        'Send a test message to confirm it works.')
     } catch (err) {
       error('Could not save the password', err.message)
     } finally { setBusy(null) }
@@ -63,7 +68,7 @@ export function SmtpCard({ form, onChange, onSaved }) {
 
   return (
     <Card>
-      <CardHeader title="Mail server"
+      <CardHeader title="Email"
         subtitle="Used for password resets and verification codes."
         action={verified
           ? <span className="inline-flex items-center gap-1.5 text-xs text-emerald-700">
@@ -72,15 +77,22 @@ export function SmtpCard({ form, onChange, onSaved }) {
               <CircleAlert size={13} /> Not yet tested</span>} />
 
       <div className="p-5 space-y-4">
+        {isBrevo && !form.brevo_api_key_set && !fromEnv && (
+          <InlineAlert tone="warn" title="No Brevo key yet">
+            Password resets and signup codes cannot be delivered until a key is
+            saved. Both flows will accept the request and silently send nothing.
+          </InlineAlert>
+        )}
+
         {fromEnv && (
           <InlineAlert tone="info" title="Configured in the environment">
-            SMTP_HOST is set on the server, and those values win over anything
+            Credentials are set on the server, and those values win over anything
             entered here. Clear them from the environment if you want to manage
             mail from this screen instead.
           </InlineAlert>
         )}
 
-        {!form.smtp_host && !fromEnv && (
+        {!isBrevo && !form.smtp_host && !fromEnv && (
           <InlineAlert tone="warn" title="No mail server yet">
             Password resets and signup codes cannot be delivered until this is
             filled in. Both flows will accept the request and silently send
@@ -88,6 +100,55 @@ export function SmtpCard({ form, onChange, onSaved }) {
           </InlineAlert>
         )}
 
+        <FormField label="How email is sent"
+          hint={isBrevo
+            ? 'Brevo posts over https on port 443, which no host blocks. Use this on Render, Railway, Vercel and anywhere else that closes SMTP ports.'
+            : 'A direct connection to a mail server on port 587. Many managed hosts block that port on free plans — if test messages cannot reach the server, switch to Brevo.'}>
+          <Select value={provider} onChange={onChange('email_provider')}>
+            <option value="smtp">SMTP server (Gmail, your own mail host)</option>
+            <option value="brevo">Brevo API (recommended)</option>
+          </Select>
+        </FormField>
+
+        {isBrevo ? (
+          <>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <FormField label="Sender address" required
+                hint="Must be verified in Brevo under Senders, domains, IPs.">
+                <Input value={form.brevo_sender_email || ''}
+                  onChange={onChange('brevo_sender_email')}
+                  placeholder="no-reply@yourdomain.com" disabled={fromEnv} />
+              </FormField>
+              <FormField label="Sender name"
+                hint="What residents see the message came from.">
+                <Input value={form.brevo_sender_name || ''}
+                  onChange={onChange('brevo_sender_name')}
+                  placeholder={form.platform_name || 'PGDesk'} disabled={fromEnv} />
+              </FormField>
+            </div>
+
+            <FormField label={stored ? 'Change API key' : 'API key'}
+              hint={stored
+                ? 'A key is stored. Leave blank to keep it.'
+                : 'From Brevo: SMTP & API → API Keys. Starts with xkeysib-.'}>
+              <div className="flex gap-2">
+                <Input type="password" value={password} autoComplete="new-password"
+                  onChange={(e) => setPassword(e.target.value)}
+                  placeholder={stored ? '••••••••••••' : 'xkeysib-…'} disabled={fromEnv} />
+                <Button icon={KeyRound} loading={busy === 'password'}
+                  disabled={fromEnv || !password} onClick={savePassword}>Save</Button>
+              </div>
+            </FormField>
+
+            {stored && !form.brevo_api_key_readable && (
+              <InlineAlert tone="error" title="The stored key cannot be read">
+                It was encrypted with a different SECRET_KEY than the one running
+                now. Enter it again to restore email.
+              </InlineAlert>
+            )}
+          </>
+        ) : (
+        <>
         <div className="grid sm:grid-cols-3 gap-4">
           <FormField label="Host" className="sm:col-span-2">
             <Input value={form.smtp_host || ''} onChange={onChange('smtp_host')}
@@ -153,6 +214,9 @@ export function SmtpCard({ form, onChange, onSaved }) {
             </Select>
           </FormField>
         </div>
+
+        </>
+        )}
 
         <div className="pt-4 border-t border-line">
           <p className="text-sm font-medium text-slate-800 mb-1">Send a test message</p>
