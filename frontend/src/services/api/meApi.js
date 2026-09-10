@@ -42,4 +42,16 @@ export const meApi = {
   requestGatePass: (body) => api.post('/me/gate-passes', body).then(unwrap),
 
   announcements: () => api.get('/me/announcements').then(unwrap),
+
+  /* Moving out: notice given ahead of the date, withdrawable until then. */
+  notice: () => api.get('/me/checkout-notice').then(unwrap),
+  giveNotice: (body) => api.post('/me/checkout-notice', body).then(unwrap),
+  withdrawNotice: () => api.post('/me/checkout-notice/withdraw').then(unwrap),
+
+  /* Paying. Razorpay payments are confirmed server-side by signature; UPI and
+     bank transfers need the UTR and stay pending until the office checks. */
+  paymentOptions: () => api.get('/me/payments/options').then(unwrap),
+  submitPayment: (body) => api.post('/me/payments/manual', body).then(unwrap),
+  startOnlinePayment: (body) => api.post('/me/payments/razorpay/order', body).then(unwrap),
+  confirmOnlinePayment: (body) => api.post('/me/payments/razorpay/verify', body).then(unwrap),
 }

@@ -9,8 +9,8 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     public, seeker,
-    auth, billing, dashboard, master, me, meta, operations, property, rbac,
-    residents, support,
+    accounts, auth, billing, dashboard, master, me, meta, operations, property, rbac,
+    residents, staff, support,
 )
 
 api_router = APIRouter()
@@ -31,4 +31,6 @@ api_router.include_router(support.router)       # complaints, queries, expenses,
                                                 # inventory, assets, announcements,
                                                 # settings, notifications,
                                                 # reports                     Phases 11-16
+api_router.include_router(staff.router)        # /staff  the workforce list, salaries
+api_router.include_router(accounts.router)     # /accounts/pnl
 api_router.include_router(me.router)            # /me/*  the resident portal

@@ -29,6 +29,12 @@ def main() -> int:
     db = SessionLocal()
     try:
         result = SubscriptionLifecycleService(db).sweep(dry_run=args.dry_run)
+        # Same daily run: one-day menu specials older than a week are deleted.
+        # The weekly menu is never touched. See operations_service.prune_old_specials.
+        from app.services.operations_service import prune_old_specials
+        pruned = prune_old_specials(db)
+        if pruned:
+            print(f"deleted {pruned} menu special(s) older than a week")
         if args.dry_run:
             db.rollback()
         else:

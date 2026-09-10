@@ -18,8 +18,8 @@ from sqlalchemy.orm import Session, selectinload
 from app.core.dependencies import CurrentScope
 from app.core.exceptions import ConflictError, NotFoundError, PermissionDeniedError
 from app.models import (
-    Attendance, Branch, Customer, FoodMenu, GateLog, GatePass, LaundryRequest,
-    LaundrySlot, MealAttendance, OrganizationSettings, User, Visitor,
+    Attendance, Branch, Customer, FoodMenu, FoodWeekMenu, GateLog, GatePass,
+    LaundryRequest, LaundrySlot, MealAttendance, OrganizationSettings, User, Visitor,
 )
 from app.models.enums import (
     AttendanceStatus, AttendanceSubject, AuditAction, CustomerStatus, GateDirection,
@@ -29,6 +29,90 @@ from app.models.enums import (
 from app.services.audit import AuditService
 from app.services.notification_service import NotificationService
 from app.utils import qr_payload
+
+
+# ------------------------------------------------------------------ food --
+#: What a PG serves when the owner has not said otherwise. `label` is what
+#: residents read, so a PG that calls its snack "Evening tea" can say so.
+DEFAULT_MEAL_SCHEDULE: dict[str, dict] = {
+    "BREAKFAST": {"enabled": True, "label": "Breakfast", "serve_from": "07:30", "serve_to": "09:30"},
+    "LUNCH": {"enabled": True, "label": "Lunch", "serve_from": "12:30", "serve_to": "14:00"},
+    "SNACK": {"enabled": True, "label": "Evening snacks", "serve_from": "17:00", "serve_to": "18:00"},
+    "DINNER": {"enabled": True, "label": "Dinner", "serve_from": "20:00", "serve_to": "21:30"},
+}
+WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+#: Date-specific specials are kept this many days after the date, then deleted.
+#: The weekly menu itself is never deleted - it is the menu.
+SPECIALS_KEPT_DAYS = 7
+
+
+def _hhmm(value) -> str | None:
+    if not value:
+        return None
+    text = str(value)[:5]
+    try:
+        datetime.strptime(text, "%H:%M")
+    except ValueError:
+        raise ConflictError(f"{value} is not a time. Use HH:MM, like 07:30.") from None
+    return text
+
+
+def meal_schedule_for(settings_row) -> dict[str, dict]:
+    stored = (getattr(settings_row, "meal_schedule", None) or {}) if settings_row else {}
+    out = {}
+    for meal, default in DEFAULT_MEAL_SCHEDULE.items():
+        mine = stored.get(meal) or {}
+        out[meal] = {**default, **{k: v for k, v in mine.items() if k in default}}
+    return out
+
+
+def prune_old_specials(db: Session, organization_id: uuid.UUID | None = None) -> int:
+    """Delete date-specific menus older than a week. Attendance is unaffected -
+    meal attendance rows carry their own date and never point at a menu."""
+    from sqlalchemy import delete
+    stmt = delete(FoodMenu).where(
+        FoodMenu.on_date < date.today() - timedelta(days=SPECIALS_KEPT_DAYS))
+    if organization_id is not None:
+        stmt = stmt.where(FoodMenu.organization_id == organization_id)
+    return db.execute(stmt).rowcount or 0
+
+
+def effective_menus(db: Session, organization_id: uuid.UUID, branch_id: uuid.UUID,
+                    from_date: date, to_date: date, schedule: dict) -> list[dict]:
+    """
+    The menu residents actually get, day by day: a special for that date if
+    there is one, otherwise the weekly menu for that weekday. Meals the PG does
+    not serve are left out unless a special was published for them anyway.
+    """
+    specials = {
+        (m.on_date, m.meal): m for m in db.scalars(select(FoodMenu).where(
+            FoodMenu.organization_id == organization_id, FoodMenu.branch_id == branch_id,
+            FoodMenu.on_date >= from_date, FoodMenu.on_date <= to_date)).all()}
+    weekly = {
+        (w.weekday, w.meal): w for w in db.scalars(select(FoodWeekMenu).where(
+            FoodWeekMenu.organization_id == organization_id,
+            FoodWeekMenu.branch_id == branch_id)).all()}
+    out, day = [], from_date
+    while day <= to_date:
+        for meal in (m.value for m in MealType):
+            cfg = schedule.get(meal) or DEFAULT_MEAL_SCHEDULE[meal]
+            special = specials.get((day, meal))
+            week = weekly.get((day.weekday(), meal))
+            if special is None and not cfg.get("enabled", True):
+                continue
+            source = special or week
+            if source is None or not (source.items or "").strip():
+                continue
+            out.append({
+                "id": str(source.id), "on_date": day.isoformat(), "weekday": day.weekday(),
+                "meal": meal, "label": cfg.get("label") or meal.title(),
+                "items": source.items, "notes": source.notes,
+                "calories": getattr(special, "calories", None) if special else None,
+                "serve_from": cfg.get("serve_from"), "serve_to": cfg.get("serve_to"),
+                "source": "special" if special else "weekly",
+            })
+        day += timedelta(days=1)
+    return out
 
 
 class OperationsService:
@@ -487,7 +571,86 @@ class OperationsService:
         row.serve_to = data.get("serve_to")
         row.notes = data.get("notes")
         self.db.flush()
+        prune_old_specials(self.db, self.org_id)
         return row
+
+    def delete_special(self, menu_id: uuid.UUID) -> None:
+        row = self.db.scalars(self._scoped(FoodMenu).where(FoodMenu.id == menu_id)).first()
+        if row is None:
+            raise NotFoundError("That menu does not exist.")
+        self.db.delete(row)
+
+    def meal_schedule(self) -> dict:
+        return meal_schedule_for(self.settings())
+
+    def set_meal_schedule(self, meals: dict) -> dict:
+        current = meal_schedule_for(self.settings())
+        for meal, cfg in (meals or {}).items():
+            if meal not in DEFAULT_MEAL_SCHEDULE:
+                raise ConflictError(f"{meal} is not a meal. Use {', '.join(DEFAULT_MEAL_SCHEDULE)}.")
+            label = (cfg.get("label") or "").strip()[:30] or DEFAULT_MEAL_SCHEDULE[meal]["label"]
+            current[meal] = {
+                "enabled": bool(cfg.get("enabled", True)), "label": label,
+                "serve_from": _hhmm(cfg.get("serve_from")),
+                "serve_to": _hhmm(cfg.get("serve_to")),
+            }
+        if not any(c["enabled"] for c in current.values()):
+            raise ConflictError("Keep at least one meal switched on, or turn food off in Settings.")
+        self.settings().meal_schedule = current
+        self.audit.record(
+            scope=self.scope, module="Food", action=AuditAction.UPDATE,
+            description="Updated which meals are served and when",
+            entity_type="settings", entity_id=None)
+        return current
+
+    def _own_branch(self, branch_id: uuid.UUID) -> None:
+        if not self.scope.owns_branch(branch_id):
+            raise PermissionDeniedError("Branch access denied.")
+
+    def week_menu(self, branch_id: uuid.UUID) -> list[FoodWeekMenu]:
+        self._own_branch(branch_id)
+        return list(self.db.scalars(select(FoodWeekMenu).where(
+            FoodWeekMenu.organization_id == self.org_id,
+            FoodWeekMenu.branch_id == branch_id)
+            .order_by(FoodWeekMenu.weekday, FoodWeekMenu.meal)).all())
+
+    def save_week_menu(self, branch_id: uuid.UUID, entries: list[dict]) -> list[FoodWeekMenu]:
+        """Upsert by (weekday, meal); an entry with no items removes that slot."""
+        self._own_branch(branch_id)
+        existing = {(w.weekday, w.meal): w for w in self.week_menu(branch_id)}
+        for e in entries:
+            meal = str(e["meal"]).upper()
+            if meal not in DEFAULT_MEAL_SCHEDULE:
+                raise ConflictError(f"{e['meal']} is not a meal.")
+            key = (int(e["weekday"]), meal)
+            items = (e.get("items") or "").strip()
+            row = existing.get(key)
+            if not items:
+                if row is not None:
+                    self.db.delete(row)
+                    existing.pop(key)
+                continue
+            if row is None:
+                row = FoodWeekMenu(organization_id=self.org_id, branch_id=branch_id,
+                                   weekday=key[0], meal=meal, items=items)
+                self.db.add(row)
+                existing[key] = row
+            row.items = items
+            row.notes = (e.get("notes") or "").strip() or None
+        self.db.flush()
+        prune_old_specials(self.db, self.org_id)
+        self.audit.record(
+            scope=self.scope, module="Food", action=AuditAction.UPDATE,
+            description="Updated the weekly menu", entity_type="food_week_menu",
+            entity_id=None, branch_id=branch_id)
+        return self.week_menu(branch_id)
+
+    def effective(self, branch_id: uuid.UUID, from_date: date, to_date: date) -> list[dict]:
+        self._own_branch(branch_id)
+        if (to_date - from_date).days > 31:
+            raise ConflictError("Ask for 31 days or fewer.")
+        return effective_menus(self.db, self.org_id, branch_id, from_date, to_date,
+                               self.meal_schedule())
 
     def set_meal(self, data: dict) -> MealAttendance:
         """Upsert by (resident, day, meal). Opt-outs and attendance share a row."""

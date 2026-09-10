@@ -28,6 +28,19 @@ export default function MyHome() {
       <PageHeader title={`Hello, ${resident.name.split(' ')[0]}`}
         subtitle="Your room, your rent and anything that needs you." />
 
+      {data.queries_needing_reply > 0 && (
+        <InlineAlert tone="warn" className="mb-4" title="The office is waiting for your reply">
+          {data.queries_needing_reply} question{data.queries_needing_reply === 1 ? '' : 's'} from the PG need an answer.{' '}
+          <Link to="/me/queries" className="font-medium underline">Open questions</Link>
+        </InlineAlert>
+      )}
+      {data.notice && (
+        <InlineAlert tone="info" className="mb-4" title={`Moving out on ${dateFmt(data.notice.planned_checkout_date)}`}>
+          {data.notice.status === 'ACKNOWLEDGED' ? 'The office has confirmed your date.' : 'The office has been told.'}{' '}
+          <Link to="/me/moving-out" className="font-medium underline">Details</Link>
+        </InlineAlert>
+      )}
+
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
         <StatCard label="Room" value={placement.room || '—'} icon={Home} tone="brand"
           sub={placement.bed ? `Bed ${placement.bed}` : 'No bed assigned yet'} />

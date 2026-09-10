@@ -169,25 +169,56 @@ export function Checkbox({ label, description, className, ...rest }) {
   )
 }
 
-export function Toggle({ checked, onChange, label, description, disabled, ariaLabel }) {
+/**
+ * The on/off switch used everywhere.
+ *
+ * The knob used to be absolutely positioned with no `left`. Inside a <button>
+ * Chrome and the Android WebView centre the content, so the knob started in the
+ * middle of the track: "off" sat halfway and "on" hung ~10px past the right
+ * edge. Every toggle in the product looked broken. Now the track is a flex row
+ * with 2px padding and the knob only ever moves by transform, so its position
+ * cannot depend on how a browser lays out button content.
+ */
+const SWITCH_SIZE = {
+  sm: { track: 'h-5 w-9', knob: 'h-4 w-4', on: 'translate-x-4' },
+  md: { track: 'h-6 w-11', knob: 'h-5 w-5', on: 'translate-x-5' },
+}
+
+export function Switch({ checked, onChange, disabled, ariaLabel, size = 'md', className }) {
+  const s = SWITCH_SIZE[size] || SWITCH_SIZE.md
+  return (
+    <button type="button" role="switch" aria-checked={!!checked} aria-label={ariaLabel}
+      disabled={disabled} onClick={() => onChange?.(!checked)}
+      className={cx('relative inline-flex shrink-0 items-center rounded-full p-0.5',
+        'transition-colors duration-200 ease-out cursor-pointer',
+        'focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2',
+        'disabled:cursor-not-allowed disabled:opacity-50',
+        s.track, checked ? 'bg-brand-700' : 'bg-slate-300 hover:bg-slate-400/80', className)}>
+      <span aria-hidden="true"
+        className={cx('pointer-events-none block rounded-full bg-white shadow-sm ring-1 ring-black/5',
+          'transition-transform duration-200 ease-out', s.knob,
+          checked ? s.on : 'translate-x-0')} />
+    </button>
+  )
+}
+
+export function Toggle({ checked, onChange, label, description, disabled, ariaLabel, size }) {
   // `label` may be a node (a name plus a status chip, say), but aria-label must
   // be a string — passing a node there renders "[object Object]" to a screen
   // reader. Callers using a node label pass `ariaLabel` as well.
   const accessibleName = ariaLabel ?? (typeof label === 'string' ? label : undefined)
+  if (!label && !description) {
+    return <Switch checked={checked} onChange={onChange} disabled={disabled}
+      ariaLabel={accessibleName} size={size} />
+  }
   return (
-    <div className="flex items-start justify-between gap-4 py-2">
+    <div className={cx('flex items-center justify-between gap-4 py-2.5', disabled && 'opacity-80')}>
       <div className="min-w-0">
-        <p className="text-sm font-medium text-slate-800">{label}</p>
-        {description && <p className="text-xs text-slate-500 mt-0.5">{description}</p>}
+        <div className="text-sm font-medium text-slate-800">{label}</div>
+        {description && <p className="text-xs text-slate-500 mt-0.5 leading-relaxed">{description}</p>}
       </div>
-      <button type="button" role="switch" aria-checked={!!checked} aria-label={accessibleName}
-        disabled={disabled}
-        onClick={() => onChange?.(!checked)}
-        className={cx('relative h-6 w-11 shrink-0 rounded-full transition-colors disabled:opacity-50',
-          checked ? 'bg-brand-700' : 'bg-slate-300')}>
-        <span className={cx('absolute top-0.5 h-5 w-5 rounded-full bg-white shadow transition-transform',
-          checked ? 'translate-x-[1.375rem]' : 'translate-x-0.5')} />
-      </button>
+      <Switch checked={checked} onChange={onChange} disabled={disabled}
+        ariaLabel={accessibleName} size={size} />
     </div>
   )
 }

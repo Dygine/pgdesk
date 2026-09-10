@@ -11,6 +11,7 @@ import {
   StatusBadge, InlineAlert, Skeleton, ProgressBar, Tabs,
 } from '@/components/ui'
 import { inr, num, dateFmt } from '@/lib/format'
+import PaymentSetup from './PaymentSetup'
 
 const SEVERITY = { ok: 'emerald', warn: 'amber', high: 'amber', critical: 'rose' }
 
@@ -45,7 +46,8 @@ export default function Settings() {
         visitor_approval_required: !!f.visitor_approval_required,
         gate_pass_approval_required: !!f.gate_pass_approval_required,
         food_enabled: !!f.food_enabled, laundry_enabled: !!f.laundry_enabled,
-        meal_optout_cutoff_hours: Number(f.meal_optout_cutoff_hours) || 0 })
+        meal_optout_cutoff_hours: Number(f.meal_optout_cutoff_hours) || 0,
+        checkout_notice_days: Number(f.checkout_notice_days) || 0 })
       success('Settings saved')
       settings.reload()
     } catch (err) { error('Could not save', err.message) }
@@ -58,7 +60,7 @@ export default function Settings() {
     <>
       <PageHeader title="Settings"
         subtitle="How your PG runs — billing, the gate, food and laundry."
-        actions={<PermissionGuard perm="settings.manage">
+        actions={tab !== 'payments' && tab !== 'plan' && <PermissionGuard perm="settings.manage">
           <Button variant="primary" icon={Save} loading={busy} onClick={save}
             disabled={!f}>Save changes</Button>
         </PermissionGuard>} />
@@ -80,6 +82,7 @@ export default function Settings() {
       <Tabs value={tab} onChange={setTab} tabs={[
         { value: 'operations', label: 'Operations' },
         { value: 'billing', label: 'Billing' },
+        { value: 'payments', label: 'Payments' },
         { value: 'plan', label: 'Plan usage' },
       ]} />
 
@@ -172,6 +175,11 @@ export default function Settings() {
                     <Input inputMode="numeric" className="tnum" value={f.late_fee_after_days}
                       onChange={set('late_fee_after_days')} />
                   </FormField>
+                  <FormField label="Notice period for moving out"
+                    hint="Days of notice residents should give. Shorter notice is allowed but flagged.">
+                    <Input inputMode="numeric" className="tnum" value={f.checkout_notice_days ?? 30}
+                      onChange={set('checkout_notice_days')} />
+                  </FormField>
                 </div>
                 <div className="px-5 pb-5">
                   <InlineAlert tone="info">
@@ -181,6 +189,8 @@ export default function Settings() {
                 </div>
               </Card>
             )}
+
+            {tab === 'payments' && <PaymentSetup />}
 
             {tab === 'plan' && (p ? (
               <Card>

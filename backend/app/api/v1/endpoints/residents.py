@@ -8,9 +8,11 @@ from app.core.dependencies import CurrentScope, DbSession, require, require_tena
 from app.core.responses import ok, paginated
 from app.models import Bed, Branch, Building, Customer, Floor, Room
 from app.schemas.operations import (
+    NoticeCreate, NoticeDecision,
     BedAssignment, CheckInRequest, CheckoutRequest, KycCreate, KycDecision,
     PortalAccessRequest, ResidentCreate, ResidentUpdate, TransferRequest,
 )
+from app.services.notice_service import CheckoutNoticeService, notice_payload
 from app.services.resident_service import ResidentService
 
 router = APIRouter(tags=["residents"])
@@ -310,3 +312,45 @@ def verify_kyc(kyc_id: uuid.UUID, body: KycDecision, db: DbSession, scope: Tenan
     db.commit()
     return ok({"id": str(row.id), "status": row.status},
               message=f"Document {row.status.lower()}.")
+
+
+# ------------------------------------------------------- checkout notices
+@router.get("/checkout-notices", summary="Residents who have given notice")
+def list_notices(db: DbSession, scope: Tenant,
+                 _: None = Depends(require("customers.view")),
+                 status_filter: str | None = Query(default="open", alias="status"),
+                 branch_id: uuid.UUID | None = None) -> dict:
+    rows = CheckoutNoticeService(db).list(scope, status=status_filter, branch_id=branch_id)
+    return ok([notice_payload(db, n) for n in rows])
+
+
+@router.post("/checkout-notices/{notice_id}/acknowledge", summary="Accept a notice")
+def acknowledge_notice(notice_id: uuid.UUID, db: DbSession, scope: Tenant,
+                       body: NoticeDecision | None = None,
+                       _: None = Depends(require("customers.checkout"))) -> dict:
+    notice = CheckoutNoticeService(db).acknowledge(
+        scope, notice_id, note=body.note if body else None,
+        planned_date=body.planned_checkout_date if body else None)
+    db.commit()
+    return ok(notice_payload(db, notice), message="Notice acknowledged. The resident was told.")
+
+
+@router.post("/checkout-notices/{notice_id}/cancel", summary="Cancel a notice")
+def cancel_notice(notice_id: uuid.UUID, db: DbSession, scope: Tenant,
+                  body: NoticeDecision | None = None,
+                  _: None = Depends(require("customers.checkout"))) -> dict:
+    notice = CheckoutNoticeService(db).cancel(scope, notice_id,
+                                              note=body.note if body else None)
+    db.commit()
+    return ok(notice_payload(db, notice), message="Notice cancelled.")
+
+
+@router.post("/residents/{resident_id}/checkout-notice", status_code=status.HTTP_201_CREATED,
+             summary="Record notice a resident gave in person")
+def record_notice(resident_id: uuid.UUID, body: NoticeCreate, db: DbSession, scope: Tenant,
+                  _: None = Depends(require("customers.checkout"))) -> dict:
+    resident = _svc(db, scope).get(resident_id)
+    notice = CheckoutNoticeService(db).give(
+        resident, planned_date=body.planned_checkout_date, reason=body.reason, scope=scope)
+    db.commit()
+    return ok(notice_payload(db, notice), message=f"Notice recorded for {resident.full_name}.")

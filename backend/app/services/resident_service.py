@@ -666,6 +666,8 @@ class ResidentService:
         # The placement is kept for history; only the live pointers are cleared.
         released = resident.bed_id
         self._place(resident, None)
+        from app.services.notice_service import CheckoutNoticeService
+        CheckoutNoticeService(self.db).complete_for(resident)
         resident.status = CustomerStatus.CHECKED_OUT
         resident.actual_checkout_date = checkout_date or date.today()
         resident.is_active = False

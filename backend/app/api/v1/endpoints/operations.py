@@ -11,6 +11,7 @@ from app.models import (
     Attendance, FoodMenu, GateLog, GatePass, LaundryRequest, LaundrySlot, Visitor,
 )
 from app.schemas.operations import (
+    MealScheduleIn, WeekMenuSave,
     ApprovalDecision, AttendanceMark, GatePassCreate, MealMark, MenuUpsert,
     ScanRequest, SlotBooking, SlotCreate, StatusChange, VisitorCreate,
 )
@@ -342,3 +343,83 @@ def set_laundry_status(request_id: uuid.UUID, body: StatusChange, db: DbSession,
     request = _svc(db, scope).set_laundry_status(request_id, body.status)
     db.commit()
     return ok(_laundry(request), message=f"Marked {body.status.lower()}.")
+
+
+# --------------------------------------------------------------- gate codes
+@router.get("/scan/gate-codes", summary="The gate QR residents scan, per branch")
+def gate_codes(db: DbSession, scope: Tenant,
+               _: None = Depends(require("attendance.mark", "scan.view", "scan.manage"))) -> dict:
+    """
+    For the gate desk screen. Security scanning a resident's card and a resident
+    scanning the gate are two directions of the same check-in; this is what the
+    second direction needs on display.
+    """
+    from sqlalchemy import select as _select
+    from app.models import Branch
+    from app.utils import qr_payload
+
+    rows = db.scalars(_select(Branch).where(
+        Branch.organization_id == scope.organization_id,
+        Branch.id.in_(scope.branch_ids or [uuid.UUID(int=0)])).order_by(Branch.name)).all()
+    return ok([
+        {"id": str(b.id), "name": b.name, "code": b.code,
+         "self_checkin_enabled": bool(b.self_checkin_enabled),
+         "has_location": b.latitude is not None and b.longitude is not None,
+         "geofence_radius_m": b.geofence_radius_m,
+         "gate_payload": (qr_payload.encode(qr_payload.KIND_GATE, b.gate_qr_token)
+                          if b.gate_qr_token else None)}
+        for b in rows])
+
+
+# -------------------------------------------------------- weekly food menu
+def _week_row(w) -> dict:
+    return {"id": str(w.id), "weekday": w.weekday, "meal": w.meal,
+            "items": w.items, "notes": w.notes}
+
+
+@router.get("/food/week", summary="The menu that repeats every week")
+def get_week_menu(branch_id: uuid.UUID, db: DbSession, scope: Tenant,
+                  _: None = Depends(require("food.view"))) -> dict:
+    svc = _svc(db, scope)
+    return ok({"entries": [_week_row(w) for w in svc.week_menu(branch_id)],
+               "schedule": svc.meal_schedule()})
+
+
+@router.put("/food/week", summary="Save the weekly menu")
+def save_week_menu(body: WeekMenuSave, db: DbSession, scope: Tenant,
+                   _: None = Depends(require("food.manage"))) -> dict:
+    rows = _svc(db, scope).save_week_menu(
+        body.branch_id, [e.model_dump() for e in body.entries])
+    db.commit()
+    return ok({"entries": [_week_row(w) for w in rows]}, message="Weekly menu saved.")
+
+
+@router.get("/food/schedule", summary="Which meals are served, what they are called, when")
+def get_meal_schedule(db: DbSession, scope: Tenant,
+                      _: None = Depends(require("food.view"))) -> dict:
+    return ok(_svc(db, scope).meal_schedule())
+
+
+@router.put("/food/schedule", summary="Change which meals are served")
+def set_meal_schedule(body: MealScheduleIn, db: DbSession, scope: Tenant,
+                      _: None = Depends(require("food.manage"))) -> dict:
+    result = _svc(db, scope).set_meal_schedule(body.meals)
+    db.commit()
+    return ok(result, message="Meal times saved.")
+
+
+@router.get("/food/menus/effective", summary="What is actually served, day by day")
+def effective_menus(branch_id: uuid.UUID, db: DbSession, scope: Tenant,
+                    _: None = Depends(require("food.view")),
+                    from_date: date | None = None, to_date: date | None = None) -> dict:
+    from datetime import timedelta as _td
+    start = from_date or date.today()
+    return ok(_svc(db, scope).effective(branch_id, start, to_date or start + _td(days=6)))
+
+
+@router.delete("/food/menus/{menu_id}", summary="Remove a one-day special")
+def delete_special(menu_id: uuid.UUID, db: DbSession, scope: Tenant,
+                   _: None = Depends(require("food.manage"))) -> dict:
+    _svc(db, scope).delete_special(menu_id)
+    db.commit()
+    return ok(None, message="Special removed. The weekly menu applies again.")

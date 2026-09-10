@@ -12,7 +12,9 @@ import {
 } from '@/components/ui'
 import { num, relative } from '@/lib/format'
 
-const TONE = { OPEN: 'amber', ANSWERED: 'emerald', CLOSED: 'slate' }
+const TONE = { OPEN: 'amber', ANSWERED: 'blue', CLOSED: 'slate' }
+/** Whose move it is. OPEN = the office owes a reply; ANSWERED = the resident does. */
+const SAYS = { OPEN: 'Needs a reply', ANSWERED: 'Waiting on resident', CLOSED: 'Closed' }
 
 export default function Queries() {
   const { activeBranchId, can } = useAuth()
@@ -61,7 +63,8 @@ export default function Queries() {
       await queryApi.create({
         resident_id: f.resident_id || null, category: f.category || 'General',
         subject: f.subject.trim(), message: f.message || null })
-      success('Query logged')
+      success(f.resident_id ? 'Query sent' : 'Note saved',
+        f.resident_id ? 'The resident has been notified and can reply from their app.' : undefined)
       setOpen(false); setF({})
       queries.reload()
     } catch (err) { error('Could not log it', err.message) }
@@ -70,17 +73,18 @@ export default function Queries() {
 
   return (
     <>
-      <PageHeader title="Queries" subtitle="Questions from residents, and the answers given."
+      <PageHeader title="Queries"
+        subtitle="Questions residents ask, and questions you send them. Everything here shows up in the resident's app."
         actions={<PermissionGuard perm={['queries.create', 'queries.manage']}>
           <Button variant="primary" icon={Plus}
-            onClick={() => { setF({ category: 'General' }); setOpen(true) }}>Log a query</Button>
+            onClick={() => { setF({ category: 'General' }); setOpen(true) }}>New query</Button>
         </PermissionGuard>} />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
-        <StatCard label="Open" value={num(rows.filter((q) => q.status === 'OPEN').length)}
+        <StatCard label="Needs a reply" value={num(rows.filter((q) => q.status === 'OPEN').length)}
           icon={MessageCircleQuestion} tone="amber" />
-        <StatCard label="Answered"
-          value={num(rows.filter((q) => q.status === 'ANSWERED').length)} tone="emerald" />
+        <StatCard label="Waiting on resident"
+          value={num(rows.filter((q) => q.status === 'ANSWERED').length)} tone="blue" />
         <StatCard label="Closed"
           value={num(rows.filter((q) => q.status === 'CLOSED').length)} tone="slate" />
         <StatCard label="Total" value={num(rows.length)} tone="brand" />
@@ -107,14 +111,17 @@ export default function Queries() {
                   <p className="text-xs text-slate-500 truncate">{q.subject}</p></div> },
               { key: 'category', header: 'Topic',
                 render: (q) => <StatusBadge status={q.category} tone="slate" /> },
-              { key: 'resident', header: 'From', sortable: false,
-                render: (q) => <span className="text-sm text-slate-700">{q.resident || 'Staff'}</span> },
+              { key: 'resident', header: 'With', sortable: false,
+                render: (q) => <div>
+                  <p className="text-sm text-slate-700">{q.resident || 'Internal note'}</p>
+                  <p className="text-2xs text-slate-500">{q.opened_by === 'staff'
+                    ? (q.resident ? 'Sent by the office' : 'Office only') : 'Asked by resident'}</p></div> },
               { key: 'message_count', header: 'Messages', align: 'right',
                 render: (q) => <span className="tnum text-slate-600">{q.message_count}</span> },
               { key: 'created_at', header: 'Age',
                 render: (q) => <span className="text-xs text-slate-500">{relative(q.created_at)}</span> },
               { key: 'status', header: 'Status',
-                render: (q) => <StatusBadge status={q.status} tone={TONE[q.status]} dot /> },
+                render: (q) => <StatusBadge status={SAYS[q.status] || q.status} tone={TONE[q.status]} dot /> },
             ]}
             mobileCard={(q) => (
               <div className="space-y-1.5">
@@ -123,25 +130,29 @@ export default function Queries() {
                     <p className="text-sm font-medium text-slate-900 truncate">{q.subject}</p>
                     <p className="text-xs text-slate-500">{q.ticket_number} · {q.category}</p>
                   </div>
-                  <StatusBadge status={q.status} tone={TONE[q.status]} />
+                  <StatusBadge status={SAYS[q.status] || q.status} tone={TONE[q.status]} />
                 </div>
                 <p className="text-2xs text-slate-400">
-                  {q.resident || 'Staff'} · {relative(q.created_at)}</p>
+                  {q.resident ? `${q.opened_by === 'staff' ? 'To' : 'From'} ${q.resident}` : 'Internal note'} · {relative(q.created_at)}</p>
               </div>
             )}
             empty={<EmptyState icon={MessageCircleQuestion} title="No queries"
-              message="Residents ask questions from their own portal." />} />
+              message="Residents ask from their app. To ask a resident something, use New query." />} />
         )}
       </Card>
 
-      <Modal open={open} onClose={() => setOpen(false)} size="sm" title="Log a query"
+      <Modal open={open} onClose={() => setOpen(false)} size="sm" title="New query"
+        subtitle="Ask a resident something - it appears in their app under Ask the PG, with a notification."
         footer={<><Button onClick={() => setOpen(false)}>Cancel</Button>
-          <Button variant="primary" loading={busy} onClick={create}>Log it</Button></>}>
+          <Button variant="primary" icon={Send} loading={busy} onClick={create}>
+            {f.resident_id ? 'Send to resident' : 'Save note'}</Button></>}>
         <div className="space-y-4">
-          <FormField label="Resident" hint="Leave blank for a general note.">
+          <FormField label="Send to" hint={f.resident_id
+            ? 'They get a notification and can reply from their app.'
+            : 'Without a resident this is an internal note nobody else sees.'}>
             <Select value={f.resident_id || ''}
               onChange={(e) => setF({ ...f, resident_id: e.target.value })}>
-              <option value="">Not resident-specific</option>
+              <option value="">Nobody - internal note</option>
               {(residents.data?.items || []).map((r) => (
                 <option key={r.id} value={r.id}>{r.full_name}</option>
               ))}
@@ -156,9 +167,10 @@ export default function Queries() {
           <FormField label="Subject" required>
             <Input value={f.subject || ''} onChange={(e) => setF({ ...f, subject: e.target.value })} />
           </FormField>
-          <FormField label="Details">
+          <FormField label="Message">
             <Textarea rows={3} value={f.message || ''}
-              onChange={(e) => setF({ ...f, message: e.target.value })} />
+              onChange={(e) => setF({ ...f, message: e.target.value })}
+              placeholder="Please drop a copy of your Aadhaar at the desk this week." />
           </FormField>
         </div>
       </Modal>
@@ -171,7 +183,11 @@ export default function Queries() {
           </PermissionGuard></>}>
         {detail && (
           <div className="space-y-4">
-            <StatusBadge status={detail.status} tone={TONE[detail.status]} dot />
+            <div className="flex items-center gap-2 flex-wrap">
+              <StatusBadge status={SAYS[detail.status] || detail.status} tone={TONE[detail.status]} dot />
+              <span className="text-xs text-slate-500">
+                {detail.resident ? `${detail.opened_by === 'staff' ? 'Sent to' : 'Asked by'} ${detail.resident}` : 'Internal note'}</span>
+            </div>
             <div className="space-y-3 max-h-64 overflow-y-auto">
               {detail.messages?.map((m) => (
                 <div key={m.id}

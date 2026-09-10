@@ -210,6 +210,35 @@ class FoodMenu(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
     )
 
 
+class FoodWeekMenu(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
+    """
+    The menu that repeats every week: Monday breakfast, Monday lunch, ...
+
+    This is what a PG kitchen actually works from - the same weekly chart on
+    the mess wall, month after month. A `FoodMenu` row for a specific date is
+    now a *special* that overrides this for one day (a festival lunch), and
+    specials older than a week are deleted automatically.
+    """
+
+    __tablename__ = "food_week_menus"
+
+    branch_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("branches.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    weekday: Mapped[int] = mapped_column(Integer, nullable=False)    # 0 = Monday
+    meal: Mapped[str] = mapped_column(
+        SAEnum(MealType, native_enum=False, length=12, validate_strings=True),
+        nullable=False)
+    items: Mapped[str] = mapped_column(Text, nullable=False)
+    notes: Mapped[str | None] = mapped_column(String(300))
+
+    __table_args__ = (
+        UniqueConstraint("branch_id", "weekday", "meal",
+                         name="uq_food_week_menu_branch_day_meal"),
+        CheckConstraint("weekday BETWEEN 0 AND 6", name="ck_food_week_menus_weekday"),
+    )
+
+
 class MealAttendance(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
     """One row per resident per meal. The unique key is what stops double counting."""
 

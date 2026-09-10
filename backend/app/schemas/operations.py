@@ -446,4 +446,117 @@ class SettingsUpdate(BaseModel):
     food_enabled: bool | None = None
     laundry_enabled: bool | None = None
     meal_optout_cutoff_hours: int | None = Field(default=None, ge=0, le=48)
+    checkout_notice_days: int | None = Field(default=None, ge=0, le=180)
     extra: dict | None = None
+
+
+# ------------------------------------------------------------------- staff
+class StaffCreate(BaseModel):
+    branch_id: uuid.UUID
+    full_name: str = Field(min_length=2, max_length=160)
+    designation: str = Field(default="Other", min_length=2, max_length=60)
+    phone: str | None = Field(default=None, max_length=20)
+    shift: str | None = Field(default=None, max_length=60)
+    monthly_salary: float = Field(default=0, ge=0, le=10_000_000)
+    joining_date: date | None = None
+    user_id: uuid.UUID | None = None
+    id_proof_reference: str | None = Field(default=None, max_length=120)
+    address: str | None = Field(default=None, max_length=400)
+    emergency_contact_name: str | None = Field(default=None, max_length=160)
+    emergency_contact_phone: str | None = Field(default=None, max_length=20)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class StaffUpdate(BaseModel):
+    branch_id: uuid.UUID | None = None
+    full_name: str | None = Field(default=None, min_length=2, max_length=160)
+    designation: str | None = Field(default=None, min_length=2, max_length=60)
+    phone: str | None = Field(default=None, max_length=20)
+    shift: str | None = Field(default=None, max_length=60)
+    monthly_salary: float | None = Field(default=None, ge=0, le=10_000_000)
+    joining_date: date | None = None
+    user_id: uuid.UUID | None = None
+    status: str | None = Field(default=None, pattern="^(ACTIVE|ON_LEAVE|LEFT)$")
+    left_on: date | None = None
+    id_proof_reference: str | None = Field(default=None, max_length=120)
+    address: str | None = Field(default=None, max_length=400)
+    emergency_contact_name: str | None = Field(default=None, max_length=160)
+    emergency_contact_phone: str | None = Field(default=None, max_length=20)
+    notes: str | None = Field(default=None, max_length=2000)
+
+
+class SalaryPayment(BaseModel):
+    period: date
+    amount: float | None = Field(default=None, gt=0, le=10_000_000)
+    paid_on: date | None = None
+    payment_method: str | None = Field(default=None, max_length=20)
+    reference: str | None = Field(default=None, max_length=120)
+    notes: str | None = Field(default=None, max_length=300)
+
+
+# --------------------------------------------------------- checkout notice
+class NoticeCreate(BaseModel):
+    planned_checkout_date: date
+    reason: str | None = Field(default=None, max_length=300)
+
+
+class NoticeDecision(BaseModel):
+    note: str | None = Field(default=None, max_length=300)
+    planned_checkout_date: date | None = None
+
+
+# --------------------------------------------------------- paying online
+class PaymentSettingsUpdate(BaseModel):
+    razorpay_enabled: bool | None = None
+    razorpay_key_id: str | None = Field(default=None, max_length=60)
+    # Write-only. Absent or null keeps the stored one; "" removes it.
+    razorpay_key_secret: str | None = Field(default=None, max_length=200)
+    razorpay_webhook_secret: str | None = Field(default=None, max_length=200)
+    upi_enabled: bool | None = None
+    upi_id: str | None = Field(default=None, max_length=100)
+    upi_payee_name: str | None = Field(default=None, max_length=100)
+    qr_image: str | None = Field(default=None, max_length=400_000)
+    bank_enabled: bool | None = None
+    bank_account_name: str | None = Field(default=None, max_length=120)
+    bank_account_number: str | None = Field(default=None, max_length=40)
+    bank_ifsc: str | None = Field(default=None, max_length=20)
+    bank_name: str | None = Field(default=None, max_length=120)
+    instructions: str | None = Field(default=None, max_length=500)
+
+
+class ManualPaymentIn(BaseModel):
+    invoice_id: uuid.UUID
+    amount: float | None = Field(default=None, gt=0)
+    method: str = "UPI"
+    # Validated in the service so the resident gets a sentence, not a 422.
+    utr: str = Field(default="", max_length=40)
+    paid_on: date | None = None
+    note: str | None = Field(default=None, max_length=300)
+
+
+class GatewayOrderIn(BaseModel):
+    invoice_id: uuid.UUID
+    amount: float | None = Field(default=None, gt=0)
+
+
+class GatewayVerifyIn(BaseModel):
+    razorpay_order_id: str = Field(min_length=4, max_length=60)
+    razorpay_payment_id: str = Field(min_length=4, max_length=60)
+    razorpay_signature: str = Field(min_length=10, max_length=200)
+
+
+# --------------------------------------------------------------- food week
+class WeekMenuEntry(BaseModel):
+    weekday: int = Field(ge=0, le=6)
+    meal: str
+    items: str = Field(default="", max_length=1000)
+    notes: str | None = Field(default=None, max_length=300)
+
+
+class WeekMenuSave(BaseModel):
+    branch_id: uuid.UUID
+    entries: list[WeekMenuEntry] = Field(max_length=28)
+
+
+class MealScheduleIn(BaseModel):
+    meals: dict[str, dict]

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import { NavLink, useLocation, useNavigate, Link } from 'react-router-dom'
 import {
   Menu, X, Bell, ChevronDown, LogOut, User, Lock, ShieldAlert, Check,
@@ -130,19 +131,79 @@ function BranchSelector({ compact }) {
 /** How often the bell re-checks for new notifications while the app is open. */
 const NOTIFICATION_POLL_MS = 60_000
 
+/**
+ * Where a notification should take you. Most producers set `link`; the ones
+ * addressed by permission ("payment to verify", "checkout notice") carry only
+ * an entity type, so the list page for that type is the destination.
+ */
+const ENTITY_ROUTES = {
+  org: {
+    payment: '/app/payments', invoice: '/app/invoices', checkout_notice: '/app/checkout',
+    query: '/app/queries', complaint: '/app/complaints', visitor: '/app/visitors',
+    gate_pass: '/app/gate-passes', customer: '/app/residents', enquiry: '/app/enquiries',
+  },
+  customer: {
+    payment: '/me/rent', invoice: '/me/rent', checkout_notice: '/me/moving-out',
+    query: '/me/queries', complaint: '/me/complaints', visitor: '/me/visitors',
+    gate_pass: '/me/gate-pass',
+  },
+}
+const linkFor = (n, portal) => {
+  const routes = ENTITY_ROUTES[portal] || {}
+  const prefix = portal === 'customer' ? '/me' : portal === 'org' ? '/app' : null
+  if (n.link && (!prefix || n.link.startsWith(prefix))) return n.link
+  return routes[n.entity_type] || null
+}
+
+/**
+ * The panel is rendered into <body> and placed from the bell's own position.
+ *
+ * It used to be `absolute right-0` inside the topbar, 22rem wide. On a phone the
+ * bell is not at the screen edge - the avatar sits to its right - so a panel
+ * that wide, anchored to the bell, ran off the side of the screen in the app.
+ * On a phone it is now a sheet with an 8px margin on both sides; from `sm` up it
+ * is a 22rem dropdown whose right edge lines up with the bell.
+ */
 function NotificationBell() {
+  const { portal } = useAuth()
+  const navigate = useNavigate()
   const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState(null)
   const [items, setItems] = useState([])
   const [unread, setUnread] = useState(0)
   const [loading, setLoading] = useState(true)
   const [failed, setFailed] = useState(false)
-  const ref = useRef(null)
+  const buttonRef = useRef(null)
+  const panelRef = useRef(null)
+
+  const place = useCallback(() => {
+    const r = buttonRef.current?.getBoundingClientRect()
+    if (!r) return
+    const vw = window.innerWidth
+    setPos(vw < 640
+      ? { top: r.bottom + 8, left: 8, right: 8 }
+      : { top: r.bottom + 6, right: Math.max(8, vw - r.right), width: Math.min(352, vw - 16) })
+  }, [])
 
   useEffect(() => {
-    const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
-    document.addEventListener('mousedown', h)
-    return () => document.removeEventListener('mousedown', h)
-  }, [])
+    if (!open) return undefined
+    place()
+    const outside = (e) => {
+      if (buttonRef.current?.contains(e.target) || panelRef.current?.contains(e.target)) return
+      setOpen(false)
+    }
+    const onKey = (e) => { if (e.key === 'Escape') setOpen(false) }
+    document.addEventListener('mousedown', outside)
+    document.addEventListener('touchstart', outside, { passive: true })
+    document.addEventListener('keydown', onKey)
+    window.addEventListener('resize', place)
+    return () => {
+      document.removeEventListener('mousedown', outside)
+      document.removeEventListener('touchstart', outside)
+      document.removeEventListener('keydown', onKey)
+      window.removeEventListener('resize', place)
+    }
+  }, [open, place])
 
   /**
    * The API scopes notifications to the authenticated caller - staff see their
@@ -165,17 +226,22 @@ function NotificationBell() {
   useEffect(() => {
     load()
     const timer = setInterval(load, NOTIFICATION_POLL_MS)
-    return () => clearInterval(timer)
+    const onResume = () => load()
+    window.addEventListener('pgdesk:resume', onResume)
+    return () => { clearInterval(timer); window.removeEventListener('pgdesk:resume', onResume) }
   }, [load])
 
   // Reading one is optimistic: the badge should drop the instant it is clicked,
   // and a failed mark-read is corrected by the next poll rather than by an
   // error message about something the user did not ask to do.
-  const readOne = async (n) => {
-    if (n.read) return
-    setItems((xs) => xs.map((x) => (x.id === n.id ? { ...x, read: true } : x)))
-    setUnread((u) => Math.max(0, u - 1))
-    try { await notificationApi.markRead(n.id) } catch { load() }
+  const openOne = async (n) => {
+    const to = linkFor(n, portal)
+    if (!n.read) {
+      setItems((xs) => xs.map((x) => (x.id === n.id ? { ...x, read: true } : x)))
+      setUnread((u) => Math.max(0, u - 1))
+      notificationApi.markRead(n.id).catch(() => load())
+    }
+    if (to) { setOpen(false); navigate(to) }
   }
 
   const readAll = async () => {
@@ -184,9 +250,53 @@ function NotificationBell() {
     try { await notificationApi.markAllRead() } catch { load() }
   }
 
+  const panel = open && pos && createPortal(
+    <div ref={panelRef} role="dialog" aria-label="Notifications"
+      style={{ top: pos.top, left: pos.left, right: pos.right, width: pos.width }}
+      className="fixed z-[60] card shadow-pop animate-popIn overflow-hidden flex flex-col max-h-[min(32rem,calc(100dvh-6rem))]">
+      <div className="flex items-center justify-between px-4 py-2.5 border-b border-line shrink-0">
+        <p className="text-sm font-semibold text-slate-900">Notifications</p>
+        <div className="flex items-center gap-3">
+          {unread > 0 && (
+            <button onClick={readAll} className="text-xs text-brand-700 hover:underline">
+              Mark all read
+            </button>
+          )}
+          <button onClick={() => setOpen(false)} aria-label="Close notifications"
+            className="sm:hidden text-slate-400 hover:text-slate-700 p-0.5"><X size={16} /></button>
+        </div>
+      </div>
+      <div className="overflow-y-auto overscroll-contain">
+        {loading ? (
+          <p className="px-4 py-8 text-sm text-slate-500 text-center">Loading…</p>
+        ) : failed ? (
+          <p className="px-4 py-8 text-sm text-slate-500 text-center">
+            Could not load notifications.{' '}
+            <button onClick={load} className="text-brand-700 hover:underline">Retry</button>
+          </p>
+        ) : items.length === 0 ? (
+          <p className="px-4 py-8 text-sm text-slate-500 text-center">You&rsquo;re all caught up.</p>
+        ) : items.map((n) => (
+          <button key={n.id} onClick={() => openOne(n)}
+            className={cx('w-full text-left px-4 py-3 border-b border-line last:border-0 hover:bg-slate-50 flex gap-3',
+              !n.read && 'bg-brand-50/40')}>
+            <span className={cx('mt-1.5 h-2 w-2 rounded-full shrink-0', n.read ? 'bg-transparent' : 'bg-brand-600')} />
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-slate-900 break-words">{n.title}</span>
+              <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed break-words">{n.message}</span>
+              <span className="block text-2xs text-slate-400 mt-1">{relative(n.created_at)}</span>
+            </span>
+          </button>
+        ))}
+      </div>
+    </div>,
+    document.body,
+  )
+
   return (
-    <div className="relative" ref={ref}>
-      <button onClick={() => setOpen((v) => !v)} aria-label={`Notifications, ${unread} unread`}
+    <div className="relative">
+      <button ref={buttonRef} onClick={() => setOpen((v) => !v)} aria-expanded={open}
+        aria-label={`Notifications, ${unread} unread`}
         className="relative h-9 w-9 inline-flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 transition-colors">
         <Bell size={18} />
         {unread > 0 && (
@@ -195,41 +305,7 @@ function NotificationBell() {
           </span>
         )}
       </button>
-      {open && (
-        <div className="absolute right-0 top-full mt-1.5 w-[min(22rem,calc(100vw-1.5rem))] card shadow-pop z-50 animate-popIn overflow-hidden">
-          <div className="flex items-center justify-between px-4 py-2.5 border-b border-line">
-            <p className="text-sm font-semibold text-slate-900">Notifications</p>
-            {unread > 0 && (
-              <button onClick={readAll} className="text-xs text-brand-700 hover:underline">
-                Mark all read
-              </button>
-            )}
-          </div>
-          <div className="max-h-80 overflow-y-auto">
-            {loading ? (
-              <p className="px-4 py-8 text-sm text-slate-500 text-center">Loading…</p>
-            ) : failed ? (
-              <p className="px-4 py-8 text-sm text-slate-500 text-center">
-                Could not load notifications.{' '}
-                <button onClick={load} className="text-brand-700 hover:underline">Retry</button>
-              </p>
-            ) : items.length === 0 ? (
-              <p className="px-4 py-8 text-sm text-slate-500 text-center">You&rsquo;re all caught up.</p>
-            ) : items.map((n) => (
-              <button key={n.id} onClick={() => readOne(n)}
-                className={cx('w-full text-left px-4 py-3 border-b border-line last:border-0 hover:bg-slate-50 flex gap-3',
-                  !n.read && 'bg-brand-50/40')}>
-                <span className={cx('mt-1.5 h-2 w-2 rounded-full shrink-0', n.read ? 'bg-transparent' : 'bg-brand-600')} />
-                <span className="min-w-0">
-                  <span className="block text-sm font-medium text-slate-900">{n.title}</span>
-                  <span className="block text-xs text-slate-500 mt-0.5 leading-relaxed">{n.message}</span>
-                  <span className="block text-2xs text-slate-400 mt-1">{relative(n.created_at)}</span>
-                </span>
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
+      {panel}
     </div>
   )
 }

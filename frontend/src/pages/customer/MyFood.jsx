@@ -64,8 +64,8 @@ export default function MyFood() {
         <div className="space-y-4">
           {Object.entries(byDate).map(([on_date, menus]) => (
             <Card key={on_date}>
-              <CardHeader title={dateFmt(on_date)}
-                subtitle={`${menus.length} meals`} />
+              <CardHeader title={`${new Date(`${on_date}T00:00:00`).toLocaleDateString('en-IN', { weekday: 'long' })}, ${dateFmt(on_date)}`}
+                subtitle={`${menus.length} meal${menus.length === 1 ? '' : 's'}`} />
               <div className="p-4 grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
                 {MEALS.map((meal) => {
                   const m = menus.find((x) => x.meal === meal)
@@ -74,13 +74,18 @@ export default function MyFood() {
                   return (
                     <div key={meal} className="rounded-lg border border-line p-3.5">
                       <div className="flex items-center justify-between gap-2 mb-1">
-                        <p className="text-xs font-semibold text-slate-800">{meal}</p>
+                        <p className="text-xs font-semibold text-slate-800">
+                          {m.label || meal}
+                          {m.serve_from && <span className="font-normal text-slate-500 tnum"> · {m.serve_from}{m.serve_to ? `–${m.serve_to}` : ''}</span>}
+                          {m.source === 'special' && <span className="ml-1.5 text-violet-700">· Special</span>}
+                        </p>
                         {m.my_status && (
                           <StatusBadge status={m.my_status.replace('_', ' ')}
                             tone={TONE[m.my_status]} />
                         )}
                       </div>
-                      <p className="text-sm text-slate-700 min-h-[2.5rem]">{m.items}</p>
+                      <p className="text-sm text-slate-700 min-h-[2.5rem] whitespace-pre-line">{m.items}</p>
+                      {m.notes && <p className="text-2xs text-violet-700 mt-1">{m.notes}</p>}
                       {m.calories && (
                         <p className="text-2xs text-slate-400 tnum mt-1">{m.calories} kcal</p>
                       )}

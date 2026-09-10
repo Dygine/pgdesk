@@ -3,7 +3,7 @@ import uuid
 from datetime import date
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, Query, status
+from fastapi import APIRouter, Depends, Query, Request, status
 
 from app.core.dependencies import CurrentScope, DbSession, require, require_tenant
 from app.core.exceptions import PermissionDeniedError
@@ -11,8 +11,9 @@ from app.core.responses import ok, paginated
 from app.models import Invoice, Payment
 from app.schemas.operations import (
     InvoiceCancel, InvoiceCreate, InvoiceUpdate, PaymentCreate, PaymentDecision,
-    RefundRequest, RentRun,
+    PaymentSettingsUpdate, RefundRequest, RentRun,
 )
+from app.services.payment_gateway_service import PaymentSettingsService, handle_webhook
 from app.services.billing_service import BillingService
 
 router = APIRouter(tags=["billing"])
@@ -63,6 +64,8 @@ def _payment(p: Payment) -> dict:
         "payment_date": p.payment_date.isoformat(), "method": p.method,
         "reference": p.reference, "notes": p.notes, "status": p.status,
         "verified_at": p.verified_at.isoformat() if p.verified_at else None,
+        # desk | resident | razorpay - who put this payment in.
+        "source": p.source, "gateway_payment_id": p.gateway_payment_id,
     }
 
 
@@ -207,3 +210,44 @@ def refund_payment(payment_id: uuid.UUID, body: RefundRequest, db: DbSession,
     payment = _svc(db, scope).refund_payment(payment_id, body.reason)
     db.commit()
     return ok(_payment(payment), message="Payment refunded.")
+
+
+# ------------------------------------------------------- how residents pay
+@router.get("/payment-settings", summary="How residents can pay")
+def get_payment_settings(db: DbSession, scope: Tenant,
+                         _: None = Depends(require("settings.view"))) -> dict:
+    """Reports whether the Razorpay secrets are stored. Never returns them."""
+    payload = PaymentSettingsService(db, scope).view()
+    db.commit()
+    return ok(payload)
+
+
+@router.put("/payment-settings", summary="Change how residents can pay")
+def update_payment_settings(body: PaymentSettingsUpdate, db: DbSession, scope: Tenant,
+                            _: None = Depends(require("settings.manage"))) -> dict:
+    svc = PaymentSettingsService(db, scope)
+    svc.update(body.model_dump(exclude_unset=True))
+    db.commit()
+    return ok(svc.view(), message="Payment settings saved.")
+
+
+@router.post("/payment-settings/test-razorpay", summary="Check the Razorpay keys work")
+def test_razorpay(db: DbSession, scope: Tenant,
+                  _: None = Depends(require("settings.manage"))) -> dict:
+    result = PaymentSettingsService(db, scope).test_razorpay()
+    return ok(result, message=f"Razorpay accepted the {result['mode']} keys.")
+
+
+@router.post("/payments/razorpay/webhook/{organization_id}",
+             summary="Razorpay webhook (called by Razorpay, not by people)")
+async def razorpay_webhook(organization_id: uuid.UUID, request: Request, db: DbSession) -> dict:
+    """
+    Public on purpose - Razorpay has no PGDesk login. Authenticity comes from the
+    X-Razorpay-Signature HMAC over the raw body, keyed with this PG's webhook
+    secret; anything that fails it is refused before the body is even parsed.
+    """
+    raw = await request.body()
+    result = handle_webhook(db, organization_id, raw,
+                            request.headers.get("X-Razorpay-Signature"))
+    db.commit()
+    return ok(result)

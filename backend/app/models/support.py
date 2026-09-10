@@ -155,6 +155,12 @@ class Expense(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
     reference: Mapped[str | None] = mapped_column(String(120))
     description: Mapped[str | None] = mapped_column(Text)
     attachment_reference: Mapped[str | None] = mapped_column(String(300))
+    # Set when this expense is a staff salary, so the staff screen can show
+    # who has been paid for which month and refuse paying the same month twice.
+    staff_member_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("staff_members.id", ondelete="SET NULL"),
+        index=True)
+    salary_period: Mapped[date | None] = mapped_column(Date)
     created_by_id: Mapped[uuid.UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
 
@@ -349,6 +355,14 @@ class OrganizationSettings(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
     food_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     laundry_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     meal_optout_cutoff_hours: Mapped[int] = mapped_column(Integer, nullable=False, default=4)
+    # Days of notice a resident is expected to give before moving out. A notice
+    # shorter than this is accepted but flagged, because the deposit is
+    # usually settled against it.
+    checkout_notice_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=30, server_default="30")
+    # Which meals this PG serves, what it calls them and when. Null means the
+    # defaults in operations_service.DEFAULT_MEAL_SCHEDULE.
+    meal_schedule: Mapped[dict | None] = mapped_column(JSON)
 
     extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
 

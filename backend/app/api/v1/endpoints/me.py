@@ -28,8 +28,14 @@ from app.models.enums import (
     TicketPriority, VisitorStatus,
 )
 from app.schemas.operations import (
-    ComplaintCreate, GatePassCreate, MealMark, QueryCreate, QueryReply,
-    SelfScanRequest, SlotBooking, VisitorCreate,
+    ComplaintCreate, GatePassCreate, GatewayOrderIn, GatewayVerifyIn, ManualPaymentIn,
+    MealMark, NoticeCreate, QueryCreate, QueryReply, SelfScanRequest, SlotBooking,
+    VisitorCreate,
+)
+from app.services.notice_service import CheckoutNoticeService, notice_days, notice_payload
+from app.services.operations_service import effective_menus, meal_schedule_for
+from app.services.payment_gateway_service import (
+    ResidentPaymentService, resident_options, settings_row,
 )
 from app.services.notification_service import NotificationService
 from app.services.self_checkin_service import SelfCheckInError, SelfCheckInService
@@ -102,6 +108,13 @@ def my_home(db: DbSession, me: CurrentCustomer) -> dict:
             "next_due_amount": float(next_due.balance) if next_due else 0,
         },
         "open_complaints": open_complaints,
+        "notice": (notice_payload(db, n, for_staff=False)
+                   if (n := CheckoutNoticeService(db).open_notice(me)) else None),
+        "queries_needing_reply": sum(
+            1 for q in db.scalars(select(SupportQuery).where(
+                SupportQuery.resident_id == me.id,
+                SupportQuery.status == QueryStatus.ANSWERED)).all()
+            if q.messages and max(q.messages, key=lambda m: m.created_at).is_staff),
         "unread_notifications": NotificationService(db).unread_count(
             me.organization_id, resident_id=me.id),
         "announcements": [
@@ -204,13 +217,19 @@ def my_rent(db: DbSession, me: CurrentCustomer) -> dict:
              "due_date": i.due_date.isoformat(), "total": float(i.total),
              "paid_amount": float(i.paid_amount), "balance": float(i.balance),
              "status": i.status,
+             # Claims the office has not confirmed yet. The app uses this to
+             # say "Rs X waiting for confirmation" rather than offer to take
+             # the same money twice.
+             "pending_amount": round(sum(float(p.amount) for p in i.payments
+                                         if p.status == PaymentStatus.PENDING), 2),
              "items": [{"description": it.description, "amount": float(it.amount)}
                        for it in i.items]}
             for i in invoices],
         "payments": [
             {"id": str(p.id), "payment_number": p.payment_number,
              "amount": float(p.amount), "method": p.method, "status": p.status,
-             "payment_date": p.payment_date.isoformat(), "reference": p.reference}
+             "payment_date": p.payment_date.isoformat(), "reference": p.reference,
+             "source": p.source}
             for p in payments],
     })
 
@@ -313,10 +332,10 @@ def my_food(db: DbSession, me: CurrentCustomer,
             days: int = Query(default=7, ge=1, le=31)) -> dict:
     today = date.today()
     until = today + timedelta(days=days)
-    menus = db.scalars(
-        select(FoodMenu).where(FoodMenu.branch_id == me.branch_id,
-                               FoodMenu.on_date.between(today - timedelta(days=1), until))
-        .order_by(FoodMenu.on_date, FoodMenu.meal)).all()
+    # The weekly menu, with any one-day specials laid over it.
+    schedule = meal_schedule_for(_settings(db, me.organization_id))
+    menus = (effective_menus(db, me.organization_id, me.branch_id, today, until, schedule)
+             if me.branch_id else [])
     mine = db.scalars(
         select(MealAttendance).where(
             MealAttendance.resident_id == me.id,
@@ -324,12 +343,8 @@ def my_food(db: DbSession, me: CurrentCustomer,
     chosen = {(m.on_date.isoformat(), m.meal): m.status for m in mine}
 
     return ok({
-        "menus": [
-            {"id": str(m.id), "on_date": m.on_date.isoformat(), "meal": m.meal,
-             "items": m.items, "calories": m.calories,
-             "serve_from": m.serve_from.isoformat() if m.serve_from else None,
-             "my_status": chosen.get((m.on_date.isoformat(), m.meal))}
-            for m in menus],
+        "menus": [{**m, "my_status": chosen.get((m["on_date"], m["meal"]))} for m in menus],
+        "schedule": schedule,
         "history": [
             {"on_date": m.on_date.isoformat(), "meal": m.meal, "status": m.status}
             for m in sorted(mine, key=lambda x: x.on_date, reverse=True)],
@@ -515,6 +530,11 @@ def my_queries(db: DbSession, me: CurrentCustomer) -> dict:
         {"id": str(q.id), "ticket_number": q.ticket_number, "subject": q.subject,
          "category": q.category, "status": q.status,
          "created_at": q.created_at.isoformat(),
+         # Opened by the office (a message sent to me) or by me.
+         "opened_by": ("staff" if q.messages and min(
+             q.messages, key=lambda x: x.created_at).is_staff else "resident"),
+         "needs_reply": (q.status == QueryStatus.ANSWERED and bool(q.messages)
+                         and max(q.messages, key=lambda x: x.created_at).is_staff),
          "messages": [
              {"author": m.author_name, "is_staff": m.is_staff, "message": m.message,
               "created_at": m.created_at.isoformat()}
@@ -536,6 +556,10 @@ def ask(body: QueryCreate, db: DbSession, me: CurrentCustomer) -> dict:
         organization_id=me.organization_id, query_id=query.id,
         author_resident_id=me.id, author_name=me.full_name, is_staff=False,
         message=body.message or body.subject))
+    NotificationService(db).to_permission_holders(
+        me.organization_id, "queries.respond", "SYSTEM", "New question from a resident",
+        f"{query.ticket_number}: {me.full_name} asked \"{query.subject}\"",
+        branch_id=me.branch_id, entity_type="query", entity_id=query.id)
     db.commit()
     return ok({"id": str(query.id), "ticket_number": query.ticket_number},
               message="Query sent.")
@@ -553,6 +577,10 @@ def reply(query_id: uuid.UUID, body: QueryReply, db: DbSession,
         author_resident_id=me.id, author_name=me.full_name, is_staff=False,
         message=body.message))
     query.status = QueryStatus.OPEN
+    NotificationService(db).to_permission_holders(
+        me.organization_id, "queries.respond", "SYSTEM", "Resident replied",
+        f"{query.ticket_number}: {me.full_name} replied on \"{query.subject}\"",
+        branch_id=me.branch_id, entity_type="query", entity_id=query.id)
     db.commit()
     return ok(None, message="Reply sent.")
 
@@ -654,3 +682,76 @@ def my_announcements(db: DbSession, me: CurrentCustomer) -> dict:
          "priority": a.priority, "starts_on": a.starts_on.isoformat() if a.starts_on else None,
          "created_at": a.created_at.isoformat()}
         for a in rows])
+
+
+# -------------------------------------------------------- moving out
+@router.get("/checkout-notice", summary="My moving-out notice, if I have given one")
+def my_notice(db: DbSession, me: CurrentCustomer) -> dict:
+    service = CheckoutNoticeService(db)
+    current = service.open_notice(me)
+    latest = current or service.latest(me)
+    return ok({
+        "notice": notice_payload(db, current, for_staff=False) if current else None,
+        "last": (notice_payload(db, latest, for_staff=False)
+                 if latest is not None and current is None else None),
+        "notice_days": notice_days(db, me.organization_id),
+        "can_give": current is None and me.status in ("ACTIVE", "NOTICE") and me.is_active,
+        "security_deposit": float(me.security_deposit or 0),
+    })
+
+
+@router.post("/checkout-notice", status_code=status.HTTP_201_CREATED,
+             summary="Tell the PG I am moving out")
+def give_notice(body: NoticeCreate, db: DbSession, me: CurrentCustomer) -> dict:
+    notice = CheckoutNoticeService(db).give(
+        me, planned_date=body.planned_checkout_date, reason=body.reason)
+    db.commit()
+    return ok(notice_payload(db, notice, for_staff=False),
+              message="Notice sent. The office has been told.")
+
+
+@router.post("/checkout-notice/withdraw", summary="I am not moving out after all")
+def withdraw_notice(db: DbSession, me: CurrentCustomer) -> dict:
+    notice = CheckoutNoticeService(db).withdraw(me)
+    db.commit()
+    return ok(notice_payload(db, notice, for_staff=False), message="Notice withdrawn.")
+
+
+# --------------------------------------------------------------- paying
+@router.get("/payments/options", summary="How I can pay this PG")
+def payment_options(db: DbSession, me: CurrentCustomer) -> dict:
+    """Only what a resident needs to pay. The Razorpay secret never leaves the server."""
+    return ok(resident_options(settings_row(db, me.organization_id)))
+
+
+@router.post("/payments/manual", status_code=status.HTTP_201_CREATED,
+             summary="I paid by UPI or bank transfer - here is the UTR")
+def submit_manual_payment(body: ManualPaymentIn, db: DbSession, me: CurrentCustomer) -> dict:
+    payment = ResidentPaymentService(db, me).submit_manual(
+        invoice_id=body.invoice_id, amount=body.amount, method=body.method,
+        utr=body.utr, paid_on=body.paid_on, note=body.note)
+    db.commit()
+    return ok({"id": str(payment.id), "payment_number": payment.payment_number,
+               "amount": float(payment.amount), "status": payment.status},
+              message="Payment sent for confirmation. It shows as pending until the "
+                      "office checks it.")
+
+
+@router.post("/payments/razorpay/order", summary="Start an online payment")
+def start_online_payment(body: GatewayOrderIn, db: DbSession, me: CurrentCustomer) -> dict:
+    order = ResidentPaymentService(db, me).create_order(
+        invoice_id=body.invoice_id, amount=body.amount)
+    db.commit()
+    return ok(order)
+
+
+@router.post("/payments/razorpay/verify", summary="Confirm an online payment")
+def confirm_online_payment(body: GatewayVerifyIn, db: DbSession, me: CurrentCustomer) -> dict:
+    """Recorded only after the HMAC signature checks out with the PG's key secret."""
+    payment = ResidentPaymentService(db, me).verify(
+        order_id=body.razorpay_order_id, payment_id=body.razorpay_payment_id,
+        signature=body.razorpay_signature)
+    db.commit()
+    return ok({"id": str(payment.id), "payment_number": payment.payment_number,
+               "amount": float(payment.amount), "status": payment.status},
+              message="Payment received. Thank you.")

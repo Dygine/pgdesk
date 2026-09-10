@@ -15,8 +15,8 @@ see another's data. Three portals share one React bundle:
 
 | Portal | Route | Who |
 |---|---|---|
-| Owner / staff | `/app` | 34 screens — rooms, residents, rent, complaints, gate |
-| Resident | `/me` | 9 screens — their rent, food, laundry, gate QR |
+| Owner / staff | `/app` | 35 screens — rooms, residents, rent, accounts, complaints, gate |
+| Resident | `/me` | 10 screens — rent (pay in app), food, laundry, gate QR, moving out |
 | Platform admin | `/master` | 9 screens — tenants, subscriptions, platform settings |
 | Public | `/signup`, `/find-pg`, `/login`, `/forgot-password` | no account needed |
 
@@ -35,7 +35,7 @@ pgdesk/
 │   │   ├── schemas/            Pydantic request/response
 │   │   └── permissions/        the permission catalogue
 │   ├── alembic/versions/       12 migrations, 0001 → 0012
-│   ├── tests/                  265 test functions, 301 test cases
+│   ├── tests/                  329 test cases
 │   ├── seed.py                 demo tenants + accounts
 │   └── expire_subscriptions.py daily cron: trial → expired → suspended
 │
@@ -115,7 +115,7 @@ demo passwords into the bundle.
 
 ```powershell
 cd backend
-python -m pytest          # 301 pass
+python -m pytest          # 329 pass
 ```
 
 There are **no frontend tests**. Only a build check.
@@ -478,3 +478,35 @@ defaults it on for debug builds, off for release, which is correct).
 3. **Verify `dygine.com` in Brevo** — real sender domain on password resets.
 4. **Push notifications** — needs Firebase from the owner.
 5. **KYC file storage** — the oldest outstanding gap.
+
+---
+
+## 15. September 2026 update
+
+Full list in `CHANGELOG-2026-09.md`. What matters operationally:
+
+- **Migration 0013** runs on API boot like the others. Additive only: five new
+  tables, new nullable/defaulted columns. Safe on the existing Neon database.
+- **No new APK.** Nothing native changed. `npm version patch`, then
+  `npm run build:update -- --notes "Staff, notices, payments, P&L, weekly menu"`.
+- **Razorpay is per PG, and the money goes to the PG.** Each owner pastes their
+  own key id and key secret under Settings → Payments ("Check the keys work"
+  calls Razorpay). The secret is write-only, like the Brevo key. For the webhook,
+  the owner adds `https://pgdesk-api.onrender.com/api/v1/payments/razorpay/webhook/<their org id>`
+  in Razorpay with events `payment.captured` and `payment.failed` - the exact
+  URL is shown on the settings screen with a copy button.
+- **Only verified payments move a balance** - unchanged. Razorpay payments are
+  verified by signature. UPI/bank payments carry a mandatory UTR and wait in
+  Payments for someone with `payments.verify`.
+- **Honest limit on UPI inside Razorpay Checkout in the app:** cards, net
+  banking and UPI ID/QR work in the WebView. Razorpay's "pay with installed UPI
+  app" intent may not open apps from inside the WebView. The separate UPI option
+  (drawn QR plus `upi://` link) does not depend on this. If owners need the
+  in-checkout app intent, that is a small native change (URL interception in
+  `MainActivity`) and therefore a new APK.
+- **Menus:** the weekly menu is the menu. One-day specials older than 7 days are
+  deleted on every menu save and by `expire_subscriptions.py`. Meal attendance
+  history is untouched - it never pointed at menu rows.
+- **Staff vs Users:** Staff = the workforce (no login needed), Users = logins.
+  Salaries paid from Staff are ordinary `Salary` expenses tagged with the staff
+  member and month.

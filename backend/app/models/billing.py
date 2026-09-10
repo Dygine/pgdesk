@@ -19,7 +19,7 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (
-    CheckConstraint, Date, DateTime, Enum as SAEnum, ForeignKey, Index, Integer,
+    Boolean, CheckConstraint, Date, DateTime, Enum as SAEnum, ForeignKey, Index, Integer,
     Numeric, String, Text, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
@@ -28,7 +28,8 @@ from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.core.database import Base
 from app.models.base import TenantMixin, Timestamps, UUIDPrimaryKey
 from app.models.enums import (
-    InvoiceItemKind, InvoiceStatus, PaymentMethod, PaymentStatus,
+    GatewayOrderStatus, InvoiceItemKind, InvoiceStatus, PaymentMethod, PaymentSource,
+    PaymentStatus,
 )
 
 
@@ -174,6 +175,16 @@ class Payment(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
         PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # desk | resident | razorpay. A resident-submitted UPI payment and one the
+    # desk typed in look identical otherwise, and the verifier needs to know
+    # which claim they are checking.
+    source: Mapped[str] = mapped_column(
+        String(20), nullable=False, default=PaymentSource.DESK, server_default="desk")
+    gateway_order_id: Mapped[str | None] = mapped_column(String(60), index=True)
+    # Unique: the same Razorpay payment can never be recorded twice, whichever
+    # of the browser callback and the webhook arrives first.
+    gateway_payment_id: Mapped[str | None] = mapped_column(String(60), unique=True)
+
     invoice: Mapped[Invoice | None] = relationship(back_populates="payments")
     resident: Mapped["Customer"] = relationship()
 
@@ -181,4 +192,81 @@ class Payment(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
         UniqueConstraint("organization_id", "payment_number", name="uq_payments_org_number"),
         Index("ix_payments_org_branch_date", "organization_id", "branch_id", "payment_date"),
         CheckConstraint("amount > 0", name="ck_payments_amount_positive"),
+    )
+
+
+class PaymentSettings(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
+    """
+    How this PG's residents can pay. One row per organisation.
+
+    The Razorpay key secret and webhook secret are encrypted at rest with the
+    same Fernet box as the platform's mail password, and have no read path: the
+    API reports whether one is stored, never what it is. The key *id* is public
+    by design - Razorpay Checkout needs it in the browser.
+
+    Money paid through Razorpay lands in the PG owner's own Razorpay account.
+    PGDesk never holds it.
+    """
+
+    __tablename__ = "payment_settings"
+
+    razorpay_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    razorpay_key_id: Mapped[str | None] = mapped_column(String(60))
+    razorpay_key_secret_encrypted: Mapped[str | None] = mapped_column(Text)
+    razorpay_webhook_secret_encrypted: Mapped[str | None] = mapped_column(Text)
+
+    upi_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    upi_id: Mapped[str | None] = mapped_column(String(100))
+    upi_payee_name: Mapped[str | None] = mapped_column(String(100))
+    # Optional photo of the shop's printed QR, as a small data URL. Most PGs do
+    # not need it - the app draws a UPI QR from the UPI id with the amount
+    # already filled in - but some owners only have the printed standee.
+    qr_image: Mapped[str | None] = mapped_column(Text)
+
+    bank_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    bank_account_name: Mapped[str | None] = mapped_column(String(120))
+    bank_account_number: Mapped[str | None] = mapped_column(String(40))
+    bank_ifsc: Mapped[str | None] = mapped_column(String(20))
+    bank_name: Mapped[str | None] = mapped_column(String(120))
+
+    instructions: Mapped[str | None] = mapped_column(String(500))
+
+    __table_args__ = (
+        UniqueConstraint("organization_id", name="uq_payment_settings_org"),
+    )
+
+
+class GatewayOrder(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
+    """
+    A Razorpay order we created for a resident, before and after they pay.
+
+    Kept so the webhook and the browser callback can both find the invoice an
+    order was for, and so completing an order is idempotent: whichever arrives
+    second finds it PAID and returns the payment the first one recorded.
+    """
+
+    __tablename__ = "payment_gateway_orders"
+
+    branch_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("branches.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    resident_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    invoice_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("invoices.id", ondelete="SET NULL"), index=True)
+
+    gateway: Mapped[str] = mapped_column(String(20), nullable=False, default="razorpay")
+    order_id: Mapped[str] = mapped_column(String(60), nullable=False, unique=True)
+    amount: Mapped[float] = mapped_column(Numeric(12, 2), nullable=False)
+    status: Mapped[str] = mapped_column(
+        SAEnum(GatewayOrderStatus, native_enum=False, length=20, validate_strings=True),
+        nullable=False, default=GatewayOrderStatus.CREATED, index=True)
+    payment_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("payments.id", ondelete="SET NULL"))
+    gateway_payment_id: Mapped[str | None] = mapped_column(String(60))
+    failure_reason: Mapped[str | None] = mapped_column(String(300))
+
+    __table_args__ = (
+        CheckConstraint("amount > 0", name="ck_payment_gateway_orders_amount_positive"),
     )

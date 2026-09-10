@@ -3,7 +3,7 @@ import {
   Repeat, ReceiptIndianRupee, Wallet, TrendingDown, MessageSquareWarning, UtensilsCrossed,
   WashingMachine, CalendarCheck, QrCode, UserCheck, TicketCheck, Megaphone, MessagesSquare,
   Package, Boxes, BarChart3, ScrollText, Settings, ShieldCheck, UsersRound, Building,
-  CreditCard, Gauge, Home, Bell, User, Map, Inbox,
+  CreditCard, Gauge, Home, Bell, User, Map, Inbox, Scale, KeyRound, DoorClosed,
 } from 'lucide-react'
 
 /**
@@ -15,6 +15,7 @@ export const ORG_NAV = [
     group: 'Overview',
     items: [
       { label: 'Dashboard', to: '/app', icon: LayoutDashboard, perm: 'dashboard.view', end: true },
+      { label: 'Floor plan', to: '/app/blueprint', icon: Map, perm: 'rooms.view' },
       { label: 'Reports', to: '/app/reports', icon: BarChart3, perm: 'reports.view' },
     ],
   },
@@ -22,7 +23,6 @@ export const ORG_NAV = [
     group: 'Property',
     items: [
       { label: 'Branches', to: '/app/branches', icon: Building2, perm: 'branches.view' },
-      { label: 'Floor plan', to: '/app/blueprint', icon: Map, perm: 'rooms.view' },
       { label: 'Buildings & floors', to: '/app/property', icon: Layers3, perm: 'property.view' },
       { label: 'Rooms', to: '/app/rooms', icon: DoorOpen, perm: 'rooms.view' },
       { label: 'Beds', to: '/app/beds', icon: BedDouble, perm: 'beds.view' },
@@ -31,8 +31,8 @@ export const ORG_NAV = [
   {
     group: 'Residents',
     items: [
-      { label: 'All residents', to: '/app/residents', icon: Users, perm: 'customers.view' },
       { label: 'Enquiries', to: '/app/enquiries', icon: Inbox, perm: 'customers.view' },
+      { label: 'All residents', to: '/app/residents', icon: Users, perm: 'customers.view' },
       { label: 'Check-in', to: '/app/check-in', icon: UserPlus, perm: 'customers.checkin' },
       { label: 'Room transfer', to: '/app/transfer', icon: Repeat, perm: 'customers.transfer' },
       { label: 'Checkout', to: '/app/checkout', icon: CheckoutIcon, perm: 'customers.checkout' },
@@ -44,6 +44,7 @@ export const ORG_NAV = [
       { label: 'Rent & invoices', to: '/app/invoices', icon: ReceiptIndianRupee, perm: 'invoices.view' },
       { label: 'Payments', to: '/app/payments', icon: Wallet, perm: 'payments.view' },
       { label: 'Expenses', to: '/app/expenses', icon: TrendingDown, perm: 'expenses.view' },
+      { label: 'Accounts (P&L)', to: '/app/accounts', icon: Scale, perm: 'reports.view' },
     ],
   },
   {
@@ -81,7 +82,7 @@ export const ORG_NAV = [
     group: 'Administration',
     items: [
       { label: 'Staff', to: '/app/staff', icon: UsersRound, perm: 'staff.view' },
-      { label: 'Users', to: '/app/users', icon: Users, perm: 'users.view' },
+      { label: 'Users & logins', to: '/app/users', icon: KeyRound, perm: 'users.view' },
       { label: 'Roles & permissions', to: '/app/roles', icon: ShieldCheck, perm: 'roles.view' },
       { label: 'Audit log', to: '/app/audit', icon: ScrollText, perm: 'audit.view' },
       { label: 'Settings', to: '/app/settings', icon: Settings, perm: 'settings.view' },
@@ -132,6 +133,7 @@ export const CUSTOMER_NAV = [
     group: 'Account',
     items: [
       { label: 'Announcements', to: '/me/announcements', icon: Megaphone },
+      { label: 'Moving out', to: '/me/moving-out', icon: DoorClosed },
       { label: 'My profile', to: '/me/profile', icon: User },
     ],
   },

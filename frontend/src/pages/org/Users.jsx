@@ -178,8 +178,8 @@ export default function Users() {
 
   return (
     <>
-      <PageHeader title="Users"
-        subtitle="Staff accounts, the role each holds and the branches they can reach."
+      <PageHeader title="Users & logins"
+        subtitle="Who can sign in to PGDesk and what each role can do. The people who work here - including those with no login - are under Staff."
         actions={<PermissionGuard perm="users.create">
           <Button variant="primary" icon={Plus} onClick={openNew} disabled={atLimit}>Add user</Button>
         </PermissionGuard>} />

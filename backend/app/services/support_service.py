@@ -241,19 +241,34 @@ class SupportService:
             resident_id=resident.id if resident else None,
             ticket_number=self._next_number(SupportQuery, SupportQuery.ticket_number, "QRY"),
             category=data.get("category") or "General",
-            subject=data["subject"], status=QueryStatus.OPEN)
+            subject=data["subject"],
+            # Opened by the office TO a resident, the next move is theirs:
+            # ANSWERED is "waiting on the resident" everywhere else in this module.
+            status=QueryStatus.ANSWERED if (resident and author_resident_id is None)
+            else QueryStatus.OPEN)
         self.db.add(query)
         self.db.flush()
 
+        from_resident = author_resident_id is not None
         self.db.add(QueryMessage(
             organization_id=self.org_id, query_id=query.id,
             author_resident_id=author_resident_id,
-            author_user_id=None if author_resident_id else (
+            author_user_id=None if from_resident else (
                 self.scope.user.id if self.scope.user else None),
+            # The author is whoever typed it. This used to put the resident's
+            # name on a message the office wrote, so in the resident's app it
+            # looked as though they had asked it themselves.
             author_name=author_name or (
-                resident.full_name if resident else self.scope.user.name),
-            is_staff=author_resident_id is None,
+                resident.full_name if (from_resident and resident) else self.scope.user.name),
+            is_staff=not from_resident,
             message=data.get("message") or data["subject"]))
+
+        if resident and not from_resident:
+            # Without this the resident had no way of knowing a query existed.
+            self.notify.to_resident(
+                resident, NotificationType.SYSTEM, "Message from the office",
+                f"{query.ticket_number}: {query.subject}",
+                entity_type="query", entity_id=query.id, link="/me/queries")
 
         self.audit.record(
             scope=self.scope, module="Queries", action=AuditAction.CREATE,
@@ -642,7 +657,8 @@ class SupportService:
                       "rent_due_day", "late_fee_amount", "late_fee_after_days",
                       "invoice_prefix", "gate_duplicate_window_seconds",
                       "visitor_approval_required", "gate_pass_approval_required",
-                      "food_enabled", "laundry_enabled", "meal_optout_cutoff_hours"):
+                      "food_enabled", "laundry_enabled", "meal_optout_cutoff_hours",
+                      "checkout_notice_days"):
             if data.get(field) is not None:
                 setattr(row, field, data[field])
         if data.get("extra") is not None:

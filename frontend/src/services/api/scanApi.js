@@ -9,4 +9,6 @@ export const scanApi = {
   scan: (token, direction, gate) =>
     api.post('/scan', { token, direction, gate }).then(unwrap),
   logs: (params) => api.get('/gate-logs', params).then(unwrapList),
+  /** The gate QR per branch - what residents scan to check themselves in. */
+  gateCodes: () => api.get('/scan/gate-codes').then(unwrap),
 }

@@ -56,6 +56,11 @@ def _complaint(c: Complaint, *, detail: bool = False) -> dict:
     return payload
 
 
+def _opened_by(q: SupportQuery) -> str:
+    first = min(q.messages, key=lambda m: m.created_at) if q.messages else None
+    return "staff" if (first is not None and first.is_staff) else "resident"
+
+
 def _query(q: SupportQuery, *, detail: bool = False) -> dict:
     payload = {
         "id": str(q.id), "ticket_number": q.ticket_number, "category": q.category,
@@ -64,6 +69,8 @@ def _query(q: SupportQuery, *, detail: bool = False) -> dict:
         "resident": q.resident.full_name if q.resident else None,
         "created_at": q.created_at.isoformat(),
         "message_count": len(q.messages),
+        # Who started it: the office (a message sent to a resident) or the resident.
+        "opened_by": _opened_by(q),
     }
     if detail:
         payload["messages"] = [
@@ -470,6 +477,7 @@ def get_settings(db: DbSession, scope: Tenant,
         "gate_pass_approval_required": s.gate_pass_approval_required,
         "food_enabled": s.food_enabled, "laundry_enabled": s.laundry_enabled,
         "meal_optout_cutoff_hours": s.meal_optout_cutoff_hours,
+        "checkout_notice_days": s.checkout_notice_days,
         "extra": s.extra or {},
     })
 

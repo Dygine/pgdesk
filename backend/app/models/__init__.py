@@ -7,7 +7,9 @@ model is re-exported here and `alembic/env.py` imports this package.
 from app.models.audit import AuditLog
 from app.models.base import BranchMixin, TenantMixin, Timestamps, UUIDPrimaryKey
 from app.models.branch import Branch
-from app.models.billing import Invoice, InvoiceItem, Payment
+from app.models.billing import (
+    GatewayOrder, Invoice, InvoiceItem, Payment, PaymentSettings,
+)
 from app.models.customer import Customer, ResidentKyc
 from app.models.enums import (
     AuditAction, BedStatus, BillingCycle, BranchStatus, BuildingStatus, CustomerStatus,
@@ -20,9 +22,11 @@ from app.models.otp import OtpCode, OtpPurpose
 from app.models.organization import Organization
 from app.models.platform import SINGLETON_ID, LoginAttempt, PlatformSettings
 from app.models.operations import (
-    Attendance, FoodMenu, GateLog, GatePass, LaundryRequest, LaundrySlot,
+    Attendance, FoodMenu, FoodWeekMenu, GateLog, GatePass, LaundryRequest, LaundrySlot,
     MealAttendance, Visitor,
 )
+from app.models.notice import CheckoutNotice
+from app.models.staff import StaffMember
 from app.models.property import Bed, Building, Floor, Room
 from app.models.support import (
     Announcement, Asset, Complaint, ComplaintUpdate, Expense, InventoryItem,
@@ -41,6 +45,7 @@ __all__ = [
     "Invoice", "InvoiceItem", "LaundryRequest", "LaundrySlot", "MealAttendance",
     "Notification", "OrganizationSettings", "Payment", "QueryMessage", "ResidentKyc",
     "SupportQuery", "Visitor",
+    "CheckoutNotice", "FoodWeekMenu", "GatewayOrder", "PaymentSettings", "StaffMember",
     "BranchStatus", "Building", "BuildingStatus", "Floor", "FloorStatus", "GenderPolicy",
     "Room", "RoomStatus",
     "Customer", "CustomerStatus", "Organization",

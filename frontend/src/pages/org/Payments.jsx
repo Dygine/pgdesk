@@ -100,7 +100,12 @@ export default function Payments() {
         {dateFmt(p.payment_date)}</span> },
     { key: 'method', header: 'Method',
       render: (p) => <StatusBadge status={p.method.replace('_', ' ')} tone="slate" /> },
-    { key: 'reference', header: 'Reference', sortable: false,
+    { key: 'source', header: 'Paid by', sortable: false,
+      render: (p) => p.source === 'razorpay' ? <StatusBadge status="Razorpay" tone="emerald" />
+        : p.source === 'resident' ? <StatusBadge status={p.status === 'PENDING' ? 'Resident · check UTR' : 'Resident'}
+          tone={p.status === 'PENDING' ? 'amber' : 'slate'} />
+          : <StatusBadge status="Desk" tone="slate" /> },
+    { key: 'reference', header: 'UTR / reference', sortable: false,
       render: (p) => <span className="text-xs text-slate-500 font-mono">
         {p.reference || '—'}</span> },
     { key: 'amount', header: 'Amount', align: 'right',

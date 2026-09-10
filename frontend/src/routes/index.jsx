@@ -37,6 +37,7 @@ import Checkout from '@/pages/org/Checkout'
 import Invoices from '@/pages/org/Invoices'
 import Payments from '@/pages/org/Payments'
 import Expenses from '@/pages/org/Expenses'
+import Accounts from '@/pages/org/Accounts'
 import Complaints from '@/pages/org/Complaints'
 import Attendance from '@/pages/org/Attendance'
 import Scan from '@/pages/org/Scan'
@@ -63,6 +64,7 @@ import MyAttendance from '@/pages/customer/MyAttendance'
 import MyScan from '@/pages/customer/MyScan'
 import MyComplaints from '@/pages/customer/MyComplaints'
 import MyLaundry from '@/pages/customer/MyLaundry'
+import MyMoveOut from '@/pages/customer/MyMoveOut'
 import { MyGatePass, MyVisitors, MyQueries } from '@/pages/customer/MyRequests'
 import { MyAnnouncements, MyProfile } from '@/pages/customer/MyAccount'
 
@@ -201,6 +203,7 @@ export const router = createBrowserRouter([
       { path: 'invoices', element: guard('invoices.view', <Invoices />) },
       { path: 'payments', element: guard('payments.view', <Payments />) },
       { path: 'expenses', element: guard('expenses.view', <Expenses />) },
+      { path: 'accounts', element: guard('reports.view', <Accounts />) },
       { path: 'complaints', element: guard('complaints.view', <Complaints />) },
       { path: 'attendance', element: guard('attendance.view', <Attendance />) },
       { path: 'scan', element: guard('attendance.mark', <Scan />) },
@@ -236,6 +239,7 @@ export const router = createBrowserRouter([
       { path: 'gate-pass', element: <MyGatePass /> },
       { path: 'queries', element: <MyQueries /> },
       { path: 'announcements', element: <MyAnnouncements /> },
+      { path: 'moving-out', element: <MyMoveOut /> },
       { path: 'profile', element: <MyProfile /> },
     ],
   },

@@ -319,3 +319,38 @@ class AuditAction(StrEnum):
 
 def check_values(enum_cls: type[StrEnum]) -> list[str]:
     return [m.value for m in enum_cls]
+
+
+# ------------------------------------------------------------ staff (HR) --
+class StaffStatus(StrEnum):
+    """The workforce list. Separate from login accounts: a cook has no login."""
+    ACTIVE = "ACTIVE"
+    ON_LEAVE = "ON_LEAVE"
+    LEFT = "LEFT"
+
+
+# ------------------------------------------------------- checkout notice --
+class CheckoutNoticeStatus(StrEnum):
+    SUBMITTED = "SUBMITTED"          # given, the office has not looked yet
+    ACKNOWLEDGED = "ACKNOWLEDGED"    # the office has accepted the leaving date
+    WITHDRAWN = "WITHDRAWN"          # the resident changed their mind
+    CANCELLED = "CANCELLED"          # the office cancelled it
+    COMPLETED = "COMPLETED"          # they checked out
+
+    @classmethod
+    def open(cls) -> set[str]:
+        return {cls.SUBMITTED, cls.ACKNOWLEDGED}
+
+
+# ------------------------------------------------------- online payments --
+class PaymentSource(StrEnum):
+    """Who put a payment into the system."""
+    DESK = "desk"            # staff recorded it at the front desk
+    RESIDENT = "resident"    # the resident paid by UPI/bank and typed the UTR
+    RAZORPAY = "razorpay"    # confirmed by Razorpay's signature
+
+
+class GatewayOrderStatus(StrEnum):
+    CREATED = "CREATED"
+    PAID = "PAID"
+    FAILED = "FAILED"

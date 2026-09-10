@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Plus, MessageCircleQuestion, UserPlus, DoorOpen, Send } from 'lucide-react'
 import { useApi } from '@/lib/useApi'
 import { meApi } from '@/services/api/meApi'
@@ -17,7 +18,10 @@ const TONE = { PENDING: 'amber', APPROVED: 'emerald', REJECTED: 'rose',
 /** Queries, visitor requests and gate passes — everything the resident asks for. */
 export default function MyRequests() {
   const { success, error } = useToast()
-  const [tab, setTab] = useState('queries')
+  const { pathname } = useLocation()
+  // Three nav entries share this page; each opens on its own tab.
+  const [tab, setTab] = useState(() => (pathname.startsWith('/me/visitors') ? 'visitors'
+    : pathname.startsWith('/me/gate-pass') ? 'passes' : 'queries'))
   const [modal, setModal] = useState(null)
   const [busy, setBusy] = useState(false)
   const [f, setF] = useState({})
@@ -88,8 +92,8 @@ export default function MyRequests() {
         </Button>} />
 
       <div className="grid grid-cols-3 gap-3 sm:gap-4 mb-4">
-        <StatCard label="Open questions"
-          value={num(qRows.filter((q) => q.status === 'OPEN').length)}
+        <StatCard label="Need your reply"
+          value={num(qRows.filter((q) => q.needs_reply).length)}
           icon={MessageCircleQuestion} tone="amber" />
         <StatCard label="Visitors pending"
           value={num(vRows.filter((v) => v.status === 'PENDING').length)}
@@ -116,18 +120,23 @@ export default function MyRequests() {
                 <div className="p-4 sm:p-5">
                   <div className="flex items-start justify-between gap-3 mb-2">
                     <div className="min-w-0">
+                      <div className="flex items-center gap-1.5 flex-wrap mb-0.5">
+                        {q.opened_by === 'staff' && <StatusBadge status="From the office" tone="brand" />}
+                        {q.needs_reply && <StatusBadge status="Needs your reply" tone="amber" dot />}
+                      </div>
                       <p className="text-sm font-semibold text-slate-900">{q.subject}</p>
                       <p className="text-2xs text-slate-500">
                         {q.ticket_number} · {q.category} · {relative(q.created_at)}</p>
                     </div>
-                    <StatusBadge status={q.status} tone={TONE[q.status]} dot />
+                    <StatusBadge status={q.status === 'OPEN' ? 'Waiting for the office'
+                      : q.status === 'ANSWERED' ? 'Answered' : 'Closed'} tone={TONE[q.status]} dot />
                   </div>
                   <div className="space-y-2 border-l-2 border-line pl-3 my-3">
                     {q.messages.map((m, i) => (
                       <div key={i}>
                         <p className="text-sm text-slate-700">{m.message}</p>
                         <p className="text-2xs text-slate-400">
-                          {m.author}{m.is_staff ? ' · staff' : ''} · {relative(m.created_at)}
+                          {m.is_staff ? `${m.author} · PG office` : 'You'} · {relative(m.created_at)}
                         </p>
                       </div>
                     ))}

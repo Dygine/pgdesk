@@ -5,6 +5,7 @@ import { useApi } from '@/lib/useApi'
 import { scanApi } from '@/services/api/scanApi'
 import { useToast } from '@/context/ToastContext'
 import { PageHeader } from '@/components/domain'
+import GateQrCard from './GateQrCard'
 import {
   Card, CardHeader, Button, FormField, Input, Select, StatusBadge, EmptyState,
   InlineAlert, Skeleton, StatCard, ScannerModal, ScanButton,
@@ -60,7 +61,7 @@ export default function Scan() {
   return (
     <>
       <PageHeader title="Gate scan"
-        subtitle="Scan or type a resident's QR token to record entry and exit." />
+        subtitle="Record entry and exit - scan a resident's card here, or let residents scan the gate QR with their phone." />
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
         <StatCard label="Movements shown" value={num(rows.length)} icon={ScanLine} tone="brand" />
@@ -71,6 +72,8 @@ export default function Scan() {
           value={num(rows.filter((g) => !g.allowed).length)}
           icon={TriangleAlert} tone="rose" />
       </div>
+
+      <GateQrCard />
 
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>
