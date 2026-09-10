@@ -10,8 +10,8 @@ import uuid
 from datetime import date, datetime, time
 
 from sqlalchemy import (
-    Boolean, CheckConstraint, Date, DateTime, Enum as SAEnum, ForeignKey, Index,
-    Integer, Numeric, String, Text, Time, UniqueConstraint,
+    Boolean, CheckConstraint, Date, DateTime, Enum as SAEnum, Float, ForeignKey,
+    Index, Integer, Numeric, String, Text, Time, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -93,9 +93,22 @@ class GateLog(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
     occurred_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, index=True)
     gate: Mapped[str | None] = mapped_column(String(60))
+    # "qr"   - a guard scanned the resident's code
+    # "self" - the resident scanned the gate's code from their own phone
+    # "manual" - typed at the desk
     source: Mapped[str] = mapped_column(String(20), nullable=False, default="qr")
     allowed: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
     reason: Mapped[str | None] = mapped_column(String(200))
+
+    # Where the phone said it was, kept for every self check-in including the
+    # refused ones. A geofence can be defeated by a mock-location app, so the
+    # position is retained as evidence rather than thrown away once the decision
+    # is made: a resident whose punches arrive from a scatter of impossible
+    # coordinates is visible in the log even though no single scan was provable.
+    latitude: Mapped[float | None] = mapped_column(Float)
+    longitude: Mapped[float | None] = mapped_column(Float)
+    accuracy_m: Mapped[float | None] = mapped_column(Float)
+    distance_m: Mapped[float | None] = mapped_column(Float)
     recorded_by_id: Mapped[uuid.UUID | None] = mapped_column(
         PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
 

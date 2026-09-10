@@ -10,7 +10,9 @@ from fastapi import APIRouter, Depends, Request, Response, status
 
 from app.core.config import settings
 from app.core.dependencies import DbSession, get_current_principal
-from app.core.exceptions import AppError, AuthenticationError
+from app.core.exceptions import (
+    AppError, AuthenticationError, RateLimitedError,
+)
 from app.core.responses import ok
 from app.core.security import decode_token
 from app.core.session_cookie import (
@@ -19,15 +21,35 @@ from app.core.session_cookie import (
 )
 from app.models.enums import AuditAction
 from app.schemas.auth import (
-    ChangePasswordRequest, LoginRequest, LogoutRequest, RefreshRequest,
+    ChangePasswordRequest, ForgotPasswordRequest, LoginRequest, LogoutRequest,
+    RefreshRequest, ResetPasswordRequest, VerifyOtpRequest,
 )
 from app.services.audit import AuditService
 from app.services.auth_service import AuthService, Principal
 from app.services.login_throttle import LoginThrottle
+from app.services.otp_service import OtpError
+from app.services.password_reset_service import (
+    NEUTRAL_REPLY, PasswordResetService,
+)
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
 CurrentPrincipal = Annotated[Principal, Depends(get_current_principal)]
+
+
+#: Sent by the installed app. Its presence means two things: give this session
+#: the long lifetime, and return the refresh token in the body.
+#:
+#: The body matters as much as the lifetime. A Capacitor app is served from
+#: https://localhost while the API is on another domain, so every call is
+#: cross-site and a SameSite=Lax cookie is never attached - the session would
+#: die thirty minutes after login with no visible cause. Handing the token to
+#: the app to keep in its own private storage sidesteps the cookie entirely.
+NATIVE_CLIENT_HEADER = "X-PGDesk-Client"
+
+
+def _is_native(request: Request) -> bool:
+    return (request.headers.get(NATIVE_CLIENT_HEADER) or "").lower() == "native"
 
 
 def _client(request: Request) -> tuple[str | None, str | None]:
@@ -77,7 +99,8 @@ def login(body: LoginRequest, request: Request, response: Response, db: DbSessio
         db.commit()
         raise
 
-    access, refresh = service.issue_tokens(principal, user_agent=ua, ip=ip)
+    native = _is_native(request)
+    access, refresh = service.issue_tokens(principal, user_agent=ua, ip=ip, native=native)
     described = service.describe(principal)
 
     throttle.record(identifier, ip, successful=True)
@@ -100,7 +123,7 @@ def login(body: LoginRequest, request: Request, response: Response, db: DbSessio
         "expires_in": settings.access_token_expire_minutes * 60,
         "user": described.model_dump(mode="json"),
     }
-    if settings.expose_refresh_token_in_body:
+    if native or settings.expose_refresh_token_in_body:
         payload["refresh_token"] = refresh
     return ok(payload, message=f"Signed in as {described.name}.")
 
@@ -125,8 +148,9 @@ def refresh(request: Request, response: Response, db: DbSession,
     if not presented:
         raise AuthenticationError("No session to refresh. Sign in again.")
 
+    native = _is_native(request)
     access, new_refresh, principal = service.rotate_refresh_token(
-        presented, user_agent=ua, ip=ip
+        presented, user_agent=ua, ip=ip, native=native
     )
     described = service.describe(principal)
     db.commit()
@@ -139,7 +163,11 @@ def refresh(request: Request, response: Response, db: DbSession,
         "expires_in": settings.access_token_expire_minutes * 60,
         "user": described.model_dump(mode="json"),
     }
-    if settings.expose_refresh_token_in_body:
+    # Native clients always get the token back: they hold it themselves because
+    # the cookie cannot reach them. Browsers do not, because the cookie works
+    # there and is HttpOnly, which is strictly safer than a value JavaScript can
+    # read.
+    if native or settings.expose_refresh_token_in_body:
         payload["refresh_token"] = new_refresh
     return ok(payload)
 
@@ -215,3 +243,59 @@ def change_password(
     )
     db.commit()
     return ok(None, message="Password changed. Sign in again on your other devices.")
+
+
+# ----------------------------------------------------------- password reset
+@router.post("/forgot-password", summary="Ask for a reset code by email")
+def forgot_password(body: ForgotPasswordRequest, request: Request,
+                    db: DbSession) -> dict:
+    """
+    Always answers the same thing.
+
+    Whether or not the address has an account, the reply is identical. Saying
+    "no such user" would turn this into a free tool for discovering which
+    residents and staff have accounts here, and a list of real users at a known
+    PG is worth money to somebody.
+    """
+    _, ip = _client(request)
+    try:
+        PasswordResetService(db).request_code(body.email, ip=ip)
+    except OtpError as exc:
+        # Rate limits are reported. They describe the caller's own behaviour
+        # against an address they typed themselves, so they leak nothing - and
+        # silently swallowing them would leave someone tapping a dead button.
+        db.commit()
+        raise RateLimitedError(str(exc)) from None
+    db.commit()
+    return ok({"sent": True}, message=NEUTRAL_REPLY)
+
+
+@router.post("/verify-otp", summary="Check a reset code")
+def verify_otp(body: VerifyOtpRequest, db: DbSession) -> dict:
+    """
+    Exchanges a correct code for a short-lived token.
+
+    The token is what step three spends, so the code and the new password never
+    travel together and the code does not have to be held by the client.
+    """
+    try:
+        token = PasswordResetService(db).verify_code(email=body.email, code=body.code)
+    except OtpError as exc:
+        db.commit()      # the attempt counter must survive the refusal
+        raise AuthenticationError(str(exc)) from None
+    db.commit()
+    return ok({"verification_token": token},
+              message="Code verified. Choose a new password.")
+
+
+@router.post("/reset-password", summary="Set a new password with a verified code")
+def reset_password_with_token(body: ResetPasswordRequest, db: DbSession) -> dict:
+    try:
+        PasswordResetService(db).reset(
+            token=body.verification_token, new_password=body.new_password)
+    except OtpError as exc:
+        db.commit()
+        raise AuthenticationError(str(exc)) from None
+    db.commit()
+    return ok({"reset": True},
+              message="Your password has been changed. Please sign in.")

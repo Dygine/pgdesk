@@ -14,6 +14,8 @@ from app.models.enums import (
     FloorStatus, GenderPolicy, OrganizationStatus, PlanStatus, PrincipalKind, RoomStatus,
     SubscriptionStatus, UserStatus,
 )
+from app.models.enquiry import EnquiryStatus, PgEnquiry
+from app.models.otp import OtpCode, OtpPurpose
 from app.models.organization import Organization
 from app.models.platform import SINGLETON_ID, LoginAttempt, PlatformSettings
 from app.models.operations import (
@@ -39,7 +41,11 @@ __all__ = [
     "SupportQuery", "Visitor",
     "BranchStatus", "Building", "BuildingStatus", "Floor", "FloorStatus", "GenderPolicy",
     "Room", "RoomStatus",
-    "Customer", "CustomerStatus", "Organization", "OrganizationStatus",
+    "Customer", "CustomerStatus", "Organization",
+    "OtpCode",
+    "PgEnquiry",
+    "EnquiryStatus",
+    "OtpPurpose", "OrganizationStatus",
     "LoginAttempt", "PasswordResetToken", "Permission", "PlanStatus",
     "PlatformSettings",
     "PrincipalKind", "RefreshToken", "SINGLETON_ID",

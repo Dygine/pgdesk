@@ -19,6 +19,11 @@ class BranchOut(ORMModel):
     contact_number: str | None = None
     opened_on: date | None = None
     status: str
+    latitude: float | None = None
+    longitude: float | None = None
+    geofence_radius_m: int = 150
+    self_checkin_enabled: bool = False
+    gate_qr_token: str | None = None
     counts: dict[str, int] = Field(default_factory=dict)
 
 
@@ -42,6 +47,51 @@ class BranchUpdate(BaseModel):
     pincode: str | None = None
     contact_number: str | None = None
     status: str | None = None
+
+
+class BranchListingUpdate(BaseModel):
+    """
+    What a PG chooses to publish about itself.
+
+    Separate from every other branch update because turning listing on makes an
+    address, a price and a vacancy signal readable by anyone on the internet.
+    That is a decision, and a decision deserves its own action and its own audit
+    line rather than riding along with an edit to a phone number.
+    """
+
+    listed_publicly: bool | None = None
+    listing_headline: str | None = Field(default=None, max_length=160)
+    listing_description: str | None = Field(default=None, max_length=2000)
+    starting_rent: float | None = Field(default=None, ge=0, le=10_000_000)
+    gender_preference: str | None = Field(default=None, max_length=10)
+    amenities: list[str] | None = None
+    contact_phone_public: str | None = Field(default=None, max_length=20)
+
+
+class EnquiryUpdate(BaseModel):
+    status: str | None = None
+    staff_notes: str | None = Field(default=None, max_length=2000)
+
+
+class BranchLocationUpdate(BaseModel):
+    """
+    The gate's position and the self check-in switch.
+
+    Separate from `BranchUpdate` on purpose. Editing an address is a clerical
+    change; moving the geofence decides whether two hundred residents can mark
+    attendance tomorrow morning. Keeping them apart means the second one is its
+    own audited action rather than a field that rides along with a typo fix.
+
+    Bounds are declared here and enforced again in the service and once more as
+    a database constraint. That is not redundancy for its own sake: this schema
+    only guards the HTTP path, and the seed script and any future import bypass
+    it entirely.
+    """
+
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    geofence_radius_m: int | None = Field(default=None, ge=10, le=5000)
+    self_checkin_enabled: bool | None = None
 
 
 # --------------------------------------------------------------- buildings

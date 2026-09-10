@@ -3,7 +3,7 @@ import {
   Repeat, ReceiptIndianRupee, Wallet, TrendingDown, MessageSquareWarning, UtensilsCrossed,
   WashingMachine, CalendarCheck, QrCode, UserCheck, TicketCheck, Megaphone, MessagesSquare,
   Package, Boxes, BarChart3, ScrollText, Settings, ShieldCheck, UsersRound, Building,
-  CreditCard, Gauge, Home, Bell, User, Map,
+  CreditCard, Gauge, Home, Bell, User, Map, Inbox,
 } from 'lucide-react'
 
 /**
@@ -32,6 +32,7 @@ export const ORG_NAV = [
     group: 'Residents',
     items: [
       { label: 'All residents', to: '/app/residents', icon: Users, perm: 'customers.view' },
+      { label: 'Enquiries', to: '/app/enquiries', icon: Inbox, perm: 'customers.view' },
       { label: 'Check-in', to: '/app/check-in', icon: UserPlus, perm: 'customers.checkin' },
       { label: 'Room transfer', to: '/app/transfer', icon: Repeat, perm: 'customers.transfer' },
       { label: 'Checkout', to: '/app/checkout', icon: CheckoutIcon, perm: 'customers.checkout' },

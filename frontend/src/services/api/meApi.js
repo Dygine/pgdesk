@@ -13,6 +13,14 @@ export const meApi = {
   attendance: (days) => api.get('/me/attendance', { days }).then(unwrap),
   qr: () => api.get('/me/qr').then(unwrap),
 
+  /**
+   * Advisory: whether this position would be accepted, and why not.
+   * The scan itself re-checks everything, so a client that lies here gains
+   * nothing beyond a button that looks enabled.
+   */
+  gateStatus: (params) => api.get('/me/gate', params).then(unwrap),
+  selfScan: (body) => api.post('/me/scan', body).then(unwrap),
+
   food: (days) => api.get('/me/food', { days }).then(unwrap),
   setMeal: (body) => api.post('/me/food/opt', body).then(unwrap),
 

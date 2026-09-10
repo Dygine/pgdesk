@@ -145,3 +145,34 @@ class TokenPair(BaseModel):
 
 class LoginResponse(TokenPair):
     user: AuthenticatedUser
+
+
+# ------------------------------------------------------------ password reset
+class ForgotPasswordRequest(BaseModel):
+    """Step one. The only step that names an address."""
+
+    email: LoginEmail
+
+
+class VerifyOtpRequest(BaseModel):
+    """
+    Step two. Still carries the address, because the code alone is not unique -
+    six digits collide across users constantly, and the pair is what identifies
+    a pending reset.
+    """
+
+    email: LoginEmail
+    code: str = Field(min_length=4, max_length=10)
+
+
+class ResetPasswordRequest(BaseModel):
+    """
+    Step three. No email field, deliberately.
+
+    The address is read back out of the verification token, so a caller who
+    proved one address cannot reset a different one. Adding an email field here
+    would reintroduce exactly that hole.
+    """
+
+    verification_token: str = Field(min_length=16, max_length=200)
+    new_password: str = Field(min_length=8, max_length=200)

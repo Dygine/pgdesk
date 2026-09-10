@@ -38,4 +38,24 @@
     <!-- Permissions -->
 
     <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Reading a QR code at the gate. Declared here as well as in the scanner
+         plugin's own manifest so the requirement is visible in this file rather
+         than only appearing in a merged build output. -->
+    <uses-permission android:name="android.permission.CAMERA" />
+
+    <!-- Resident self check-in. FINE is the one that matters: the COARSE
+         network fix is routinely a kilometre out in Indian cities, which no
+         usable geofence radius can absorb. COARSE is listed because Android 12
+         and later lets the user grant only approximate location, and the app
+         has to keep running - and say why it cannot check them in - rather
+         than crash on a permission it assumed. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <!-- Both are optional hardware: staff use this app on desks and tablets
+         that may have neither, and a `required=true` feature would hide the
+         app from those devices in the Play Store entirely. -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
 </manifest>

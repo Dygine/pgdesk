@@ -28,6 +28,7 @@ from app.models.enums import (
 )
 from app.services.audit import AuditService
 from app.services.notification_service import NotificationService
+from app.utils import qr_payload
 
 
 class OperationsService:
@@ -145,6 +146,23 @@ class OperationsService:
         settings = self.settings()
         now = datetime.now(timezone.utc)
 
+        # A camera and a barcode gun both deliver the whole symbol, which now
+        # carries a "PGD1:R:" marker; cards printed before the format existed,
+        # and anything typed by hand, deliver the bare token. Both are accepted.
+        kind, token = qr_payload.parse(token)
+
+        if kind == qr_payload.KIND_GATE:
+            # The guard pointed the scanner at the gate's own poster. Named
+            # explicitly because "not recognised" would send them hunting for a
+            # broken card that is working perfectly.
+            gate = self.db.scalars(select(Branch).where(
+                Branch.gate_qr_token == token,
+                Branch.organization_id == self.org_id)).first()
+            return {"result": "invalid", "allowed": False,
+                    "message": (f"That is the gate code for {gate.name}, not a "
+                                "resident's card." if gate else
+                                "That is a gate code, not a resident's card.")}
+
         resident = self.db.scalars(select(Customer).where(
             Customer.qr_token == token,
             Customer.organization_id == self.org_id)).first()
@@ -186,9 +204,15 @@ class OperationsService:
             return {**detail, "result": "inactive", "allowed": False,
                     "message": f"{resident.full_name} is not an active resident."}
 
+        # `occurred_at <= now` excludes future-dated rows. They can only reach
+        # the table by import or seeding, since the write path always stamps
+        # server time - but one is enough to sit permanently at the top of this
+        # ordering, which would both invert the inferred direction and stop the
+        # duplicate window ever comparing against the real previous scan.
         last = self.db.scalars(
             select(GateLog).where(GateLog.resident_id == resident.id,
-                                  GateLog.allowed.is_(True))
+                                  GateLog.allowed.is_(True),
+                                  GateLog.occurred_at <= now)
             .order_by(GateLog.occurred_at.desc()).limit(1)).first()
 
         # Direction is inferred from the last accepted scan unless the caller
@@ -198,11 +222,15 @@ class OperationsService:
                          if last and last.direction == GateDirection.ENTRY
                          else GateDirection.ENTRY)
 
-        if last and (now - last.occurred_at).total_seconds() < settings.gate_duplicate_window_seconds:
+        # Absolute gap: a gate log dated in the future makes the signed
+        # difference negative, which is below any window and would refuse every
+        # future scan as a duplicate - permanently, and with a nonsensical
+        # "scanned -4867s ago" on the guard's screen.
+        gap = abs((now - last.occurred_at).total_seconds()) if last else None
+        if last and gap < settings.gate_duplicate_window_seconds:
             return {**detail, "result": "duplicate", "allowed": False,
                     "direction": last.direction,
-                    "message": (f"Already scanned {int((now - last.occurred_at).total_seconds())}s "
-                                "ago — ignored.")}
+                    "message": f"Already scanned {int(gap)}s ago — ignored."}
 
         log(direction, True)
 

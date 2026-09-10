@@ -203,6 +203,28 @@ class ScanRequest(BaseModel):
     gate: str | None = None
 
 
+class SelfScanRequest(BaseModel):
+    """
+    A resident scanning the gate's code from their own phone.
+
+    No `direction` field, unlike `ScanRequest`. The guard's screen offers a
+    manual override because a guard sometimes has to correct a mis-scan; a
+    resident choosing their own direction could simply declare themselves
+    present, which is the one thing this endpoint exists to prevent. It is
+    always inferred from the last accepted movement.
+
+    No resident id either - it comes from the token.
+    """
+
+    token: str = Field(min_length=8, max_length=120)
+    latitude: float | None = Field(default=None, ge=-90, le=90)
+    longitude: float | None = Field(default=None, ge=-180, le=180)
+    #: Metres, as reported by the device. Optional because a browser may not
+    #: supply it, but a value worse than the service threshold is refused: an
+    #: imprecise reading cannot show anyone was inside a 150 metre circle.
+    accuracy_m: float | None = Field(default=None, ge=0, le=100_000)
+
+
 # ---------------------------------------------------------------- visitors
 class VisitorCreate(BaseModel):
     resident_id: uuid.UUID

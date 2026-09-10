@@ -7,6 +7,10 @@ import { ORG_NAV, MASTER_NAV, CUSTOMER_NAV, BOTTOM_NAV, filterNav } from '@/nav/
 import { Skeleton, Button, EmptyState, Card } from '@/components/ui'
 
 import Login from '@/pages/auth/Login'
+import ForgotPassword from '@/pages/auth/ForgotPassword'
+import Signup from '@/pages/auth/Signup'
+import FindPG from '@/pages/public/FindPG'
+import Enquiries from '@/pages/org/Enquiries'
 
 /* Master portal */
 import MasterDashboard from '@/pages/master/MasterDashboard'
@@ -154,6 +158,13 @@ function NotFound() {
 
 export const router = createBrowserRouter([
   { path: '/login', element: <LoginRoute /> },
+  // Public: someone who cannot sign in obviously cannot be behind a guard.
+  { path: '/forgot-password', element: <ForgotPassword /> },
+  { path: '/signup', element: <Signup /> },
+  // Deliberately reachable without a session. Someone hunting for a PG has no
+  // account and will not make one to browse - putting this behind a login would
+  // mean nobody ever sees a listing.
+  { path: '/find-pg', element: <FindPG /> },
   { path: '/', element: <RootRedirect /> },
 
   {
@@ -182,6 +193,7 @@ export const router = createBrowserRouter([
       { path: 'rooms', element: guard('rooms.view', <Rooms />) },
       { path: 'beds', element: guard('beds.view', <Beds />) },
       { path: 'residents', element: guard('customers.view', <Residents />) },
+      { path: 'enquiries', element: guard('customers.view', <Enquiries />) },
       { path: 'residents/:id', element: guard('customers.view', <ResidentProfile />) },
       { path: 'check-in', element: guard('customers.checkin', <CheckIn />) },
       { path: 'transfer', element: guard('customers.transfer', <Transfer />) },

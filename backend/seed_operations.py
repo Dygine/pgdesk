@@ -199,6 +199,7 @@ def seed_attendance(db: Session, org: Organization, residents: list[Customer]) -
 def seed_gate_logs(db: Session, org: Organization, residents: list[Customer]) -> int:
     live = [r for r in residents if r.status == CustomerStatus.ACTIVE][:20]
     made = 0
+    now = datetime.now(timezone.utc)
     for day_offset in range(-6, 1):
         for i, resident in enumerate(live):
             db.add(GateLog(
@@ -206,12 +207,20 @@ def seed_gate_logs(db: Session, org: Organization, residents: list[Customer]) ->
                 resident_id=resident.id, direction=GateDirection.EXIT,
                 occurred_at=dt(day_offset, 9, i % 50), gate="Main gate",
                 source="qr", allowed=True))
-            db.add(GateLog(
-                organization_id=org.id, branch_id=resident.branch_id,
-                resident_id=resident.id, direction=GateDirection.ENTRY,
-                occurred_at=dt(day_offset, 19, i % 50), gate="Main gate",
-                source="qr", allowed=True))
-            made += 2
+            # Today's evening return has not happened yet if the seed runs in
+            # the morning. A gate log dated in the future is not just untidy: it
+            # sorts above every real movement, so "last movement" becomes an
+            # event that has not occurred and the gate starts inferring the
+            # wrong direction.
+            evening = dt(day_offset, 19, i % 50)
+            if evening <= now:
+                db.add(GateLog(
+                    organization_id=org.id, branch_id=resident.branch_id,
+                    resident_id=resident.id, direction=GateDirection.ENTRY,
+                    occurred_at=evening, gate="Main gate",
+                    source="qr", allowed=True))
+                made += 1
+            made += 1
     db.flush()
     return made
 

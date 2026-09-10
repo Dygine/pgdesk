@@ -10,7 +10,11 @@ A single row is enforced by a CHECK on a fixed primary key rather than by
 convention, because "the settings row" being ambiguous is the kind of bug that
 only shows up once two rows disagree in production.
 """
-from sqlalchemy import Boolean, CheckConstraint, Index, Integer, JSON, String
+from datetime import datetime
+
+from sqlalchemy import (
+    Boolean, CheckConstraint, DateTime, Index, Integer, JSON, String, Text,
+)
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.core.database import Base
@@ -24,7 +28,9 @@ class PlatformSettings(Base, UUIDPrimaryKey, Timestamps):
     __tablename__ = "platform_settings"
 
     # --- subscription lifecycle ---
-    default_trial_days: Mapped[int] = mapped_column(Integer, nullable=False, default=14)
+    #: 30, because that is what the public signup page offers. A default that
+#: disagrees with the marketing copy is a support ticket waiting to happen.
+    default_trial_days: Mapped[int] = mapped_column(Integer, nullable=False, default=30)
     grace_period_days: Mapped[int] = mapped_column(Integer, nullable=False, default=7)
     auto_suspend_after_grace: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=True)
@@ -42,6 +48,38 @@ class PlatformSettings(Base, UUIDPrimaryKey, Timestamps):
     notify_whatsapp_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False)
 
+    # --- outbound mail ---
+    # Stored here rather than only in the environment so an operator can change
+    # a mail password without a redeploy. The environment still wins when set,
+    # so existing deployments keep behaving exactly as they did.
+    #
+    # The password is encrypted (app/core/crypto.py) and is never returned by
+    # the API - the settings endpoint reports whether one is stored, not what it
+    # is. A write-only field is the only shape that lets a form save a secret
+    # without also being a way to read it back.
+    smtp_host: Mapped[str | None] = mapped_column(String(255))
+    smtp_port: Mapped[int] = mapped_column(Integer, nullable=False, default=587)
+    smtp_username: Mapped[str | None] = mapped_column(String(255))
+    smtp_password_encrypted: Mapped[str | None] = mapped_column(Text)
+    smtp_from_email: Mapped[str | None] = mapped_column(String(255))
+    smtp_from_name: Mapped[str | None] = mapped_column(String(120))
+    #: STARTTLS on the submission port (587). Turn off only for implicit TLS on
+    #: 465, which `smtp_use_ssl` covers, or for a local relay that has neither.
+    smtp_use_tls: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    smtp_use_ssl: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    #: Set on a successful test send. The screen shows it so an operator can
+    #: tell "saved" from "actually delivered a message", which are not the same
+    #: claim and are routinely confused.
+    smtp_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    # --- sessions ---
+    #: How long a signed-in phone stays signed in. Ten years by default, which
+    #: is "until the app is removed" in practice. Kept as a number rather than a
+    #: boolean so an operator who decides that is too long for staff can shorten
+    #: it without a code change.
+    native_session_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=3650)
+
     # --- platform identity ---
     platform_name: Mapped[str] = mapped_column(
         String(80), nullable=False, default="PGDesk")
@@ -57,6 +95,9 @@ class PlatformSettings(Base, UUIDPrimaryKey, Timestamps):
                         name="ck_platform_grace_days"),
         CheckConstraint("expiry_warning_days BETWEEN 0 AND 90",
                         name="ck_platform_warning_days"),
+        CheckConstraint("smtp_port BETWEEN 1 AND 65535", name="ck_platform_smtp_port"),
+        CheckConstraint("native_session_days BETWEEN 1 AND 3650",
+                        name="ck_platform_native_session_days"),
     )
 
 

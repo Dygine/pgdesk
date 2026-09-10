@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { Plus, Building2, Pencil, Power } from 'lucide-react'
+import { Plus, Building2, Pencil, Power, MapPin, Globe } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useApi } from '@/lib/useApi'
 import { branchApi } from '@/services/api/branchApi'
@@ -11,6 +11,8 @@ import {
   Input, Select, InlineAlert, ProgressBar, Skeleton, ConfirmDialog,
 } from '@/components/ui'
 import { num } from '@/lib/format'
+import { GateSetup } from './GateSetup'
+import { ListingSetup } from './ListingSetup'
 
 const BLANK = { name: '', code: '', address: '', city: 'Bengaluru', state: 'Karnataka',
   pincode: '', contact_number: '' }
@@ -25,6 +27,8 @@ export default function Branches() {
   const [errs, setErrs] = useState({})
   const [busy, setBusy] = useState(false)
   const [confirm, setConfirm] = useState(null)
+  const [gateFor, setGateFor] = useState(null)
+  const [listingFor, setListingFor] = useState(null)
 
   const branches = useApi(() => branchApi.list({ search, status }), [search, status])
   const plan = useApi(() => subscriptionApi.mine(), [], { enabled: can('dashboard.view') })
@@ -163,10 +167,31 @@ export default function Branches() {
                     <ProgressBar value={occ} max={beds || 1} />
                   </div>
 
+                  {b.listed_publicly && (
+                    <p className="mt-3 text-2xs text-violet-700 flex items-center gap-1">
+                      <Globe size={11} /> Listed publicly
+                      {b.starting_rent ? ` · from ₹${Number(b.starting_rent).toLocaleString('en-IN')}` : ''}
+                    </p>
+                  )}
+                  {b.self_checkin_enabled && (
+                    <p className="mt-3 text-2xs text-emerald-700 flex items-center gap-1">
+                      <MapPin size={11} />
+                      Self check-in on · {b.geofence_radius_m} m
+                    </p>
+                  )}
+
                   <div className="mt-3 flex gap-2">
                     <PermissionGuard perm="branches.edit">
                       <Button size="sm" icon={Pencil} className="flex-1"
                         onClick={() => openEdit(b)}>Edit</Button>
+                    </PermissionGuard>
+                    <PermissionGuard perm="branches.edit">
+                      <Button size="sm" icon={MapPin} className="flex-1"
+                        onClick={() => setGateFor(b)}>Gate</Button>
+                    </PermissionGuard>
+                    <PermissionGuard perm="branches.edit">
+                      <Button size="sm" icon={Globe} className="flex-1"
+                        onClick={() => setListingFor(b)}>Listing</Button>
                     </PermissionGuard>
                     {b.status === 'ACTIVE' && (
                       <PermissionGuard perm="branches.delete">
@@ -213,6 +238,12 @@ export default function Branches() {
           )}
         </div>
       </Modal>
+
+      <ListingSetup branch={listingFor} open={!!listingFor}
+        onClose={() => setListingFor(null)} onSaved={branches.reload} />
+
+      <GateSetup branch={gateFor} open={!!gateFor} onClose={() => setGateFor(null)}
+        onSaved={branches.reload} />
 
       <ConfirmDialog open={!!confirm} onClose={() => setConfirm(null)}
         title={`Deactivate ${confirm?.name}?`} tone="danger" confirmLabel="Deactivate"

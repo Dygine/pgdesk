@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, Link } from 'react-router-dom'
 import { ArrowRight, Building2, Eye, EyeOff, ShieldCheck, Users, BedDouble, Copy } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { Button, FormField, Input, InlineAlert, StatusBadge } from '@/components/ui'
@@ -145,11 +145,29 @@ export default function Login() {
               </div>
             </FormField>
 
+            <div className="flex justify-end -mt-1">
+              <Link to="/forgot-password"
+                className="text-xs text-brand-700 hover:text-brand-800">
+                Forgot password?
+              </Link>
+            </div>
+
             {error && <InlineAlert tone="error">{error}</InlineAlert>}
 
             <Button type="submit" variant="primary" size="lg" loading={busy} iconRight={ArrowRight} className="w-full">
               Sign in
             </Button>
+
+            <p className="text-xs text-slate-500 text-center">
+              New here?{' '}
+              <Link to="/signup" className="text-brand-700 hover:text-brand-800">
+                Create an account
+              </Link>
+              {' · '}
+              <Link to="/find-pg" className="text-brand-700 hover:text-brand-800">
+                Find a PG
+              </Link>
+            </p>
           </form>
 
                   {/* Web only. Inside the APK this screen is already the app, so the

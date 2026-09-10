@@ -13,12 +13,18 @@ from sqlalchemy import func, select
 
 from app.core.dependencies import CurrentScope, DbSession, require, require_tenant
 from app.core.responses import ok, paginated
-from app.models import Bed, Branch, Building, Floor, Room
+from datetime import datetime, timezone
+
+from app.core.exceptions import ConflictError, NotFoundError
+from app.models import Bed, Branch, Building, Floor, PgEnquiry, Room
+from app.models.enquiry import EnquiryStatus
 from app.schemas.property import (
-    BedCreate, BedUpdate, BranchCreate, BranchUpdate, BuildingCreate, BuildingUpdate,
-    FloorCreate, FloorUpdate, RoomCreate, RoomUpdate,
+    BedCreate, BedUpdate, BranchCreate, BranchListingUpdate, BranchLocationUpdate,
+    BranchUpdate, EnquiryUpdate,
+    BuildingCreate, BuildingUpdate, FloorCreate, FloorUpdate, RoomCreate, RoomUpdate,
 )
 from app.services.property_service import PropertyService
+from app.utils import qr_payload
 
 router = APIRouter(tags=["property"])
 Tenant = Annotated[CurrentScope, Depends(require_tenant)]
@@ -70,6 +76,23 @@ def list_branches(db: DbSession, scope: Tenant,
             "contact_number": b.contact_number,
             "opened_on": b.opened_on.isoformat() if b.opened_on else None,
             "status": b.status,
+            "latitude": b.latitude, "longitude": b.longitude,
+            "geofence_radius_m": b.geofence_radius_m,
+            "self_checkin_enabled": b.self_checkin_enabled,
+            # The token is returned to staff who can already edit the branch, and
+            # is printed on a public wall anyway - it identifies a gate, never a
+            # person, and confers nothing without a resident login and a position
+            # inside the fence.
+            "gate_qr_token": b.gate_qr_token,
+            "gate_payload": (qr_payload.encode(qr_payload.KIND_GATE, b.gate_qr_token)
+                             if b.gate_qr_token else None),
+            "listed_publicly": b.listed_publicly,
+            "listing_headline": b.listing_headline,
+            "listing_description": b.listing_description,
+            "starting_rent": float(b.starting_rent) if b.starting_rent else None,
+            "gender_preference": b.gender_preference,
+            "amenities": b.amenities or [],
+            "contact_phone_public": b.contact_phone_public,
             "counts": {
                 "buildings": db.scalar(select(func.count(Building.id)).where(
                     Building.branch_id == b.id)) or 0,
@@ -101,6 +124,145 @@ def update_branch(branch_id: uuid.UUID, body: BranchUpdate, db: DbSession, scope
     branch = _svc(db, scope).update_branch(branch_id, body.model_dump(exclude_unset=True))
     db.commit()
     return ok({"id": str(branch.id), "name": branch.name}, message="Branch updated.")
+
+
+@router.put("/branches/{branch_id}/location", summary="Set the gate location and geofence")
+def set_branch_location(branch_id: uuid.UUID, body: BranchLocationUpdate,
+                        db: DbSession, scope: Tenant,
+                        _: None = Depends(require("branches.edit"))) -> dict:
+    """
+    One-time setup: where the gate is, how close a resident must be, and
+    whether self check-in is on at all.
+
+    Guarded by `branches.edit` rather than a new permission. A separate one
+    would have to be granted to every existing role before the feature worked,
+    and the failure mode - an owner who cannot find the setting - looks
+    identical to a bug. Anyone trusted to move a branch's address is trusted to
+    position its gate.
+    """
+    branch = _svc(db, scope).set_branch_location(
+        branch_id, body.model_dump(exclude_unset=True))
+    db.commit()
+    return ok({
+        "id": str(branch.id), "name": branch.name,
+        "latitude": branch.latitude, "longitude": branch.longitude,
+        "geofence_radius_m": branch.geofence_radius_m,
+        "self_checkin_enabled": branch.self_checkin_enabled,
+        "gate_qr_token": branch.gate_qr_token,
+        "gate_payload": qr_payload.encode(qr_payload.KIND_GATE, branch.gate_qr_token)
+                        if branch.gate_qr_token else None,
+    }, message="Gate location saved.")
+
+
+@router.put("/branches/{branch_id}/listing", summary="Publish or unpublish this branch")
+def set_branch_listing(branch_id: uuid.UUID, body: BranchListingUpdate,
+                       db: DbSession, scope: Tenant,
+                       _: None = Depends(require("branches.edit"))) -> dict:
+    """
+    Listing is off until someone here turns it on.
+
+    Guarded by `branches.edit` rather than a new permission, for the same reason
+    the gate location is: a separate permission would have to be granted to
+    every existing role before the feature worked at all, and an owner who
+    cannot find the setting cannot tell that from a bug.
+    """
+    branch = _svc(db, scope).set_branch_listing(branch_id, body.model_dump(exclude_unset=True))
+    db.commit()
+    return ok({
+        "id": str(branch.id), "name": branch.name,
+        "listed_publicly": branch.listed_publicly,
+        "listing_headline": branch.listing_headline,
+        "listing_description": branch.listing_description,
+        "starting_rent": float(branch.starting_rent) if branch.starting_rent else None,
+        "gender_preference": branch.gender_preference,
+        "amenities": branch.amenities or [],
+        "contact_phone_public": branch.contact_phone_public,
+    }, message=("This branch is now visible in public search."
+                if branch.listed_publicly else
+                "This branch is no longer listed publicly."))
+
+
+@router.get("/enquiries", summary="Enquiries from people looking for a bed")
+def list_enquiries(db: DbSession, scope: Tenant,
+                   _: None = Depends(require("customers.view")),
+                   status_filter: str | None = Query(default=None, alias="status"),
+                   page: int = Query(default=1, ge=1),
+                   page_size: int = Query(default=50, ge=1, le=200)) -> dict:
+    """
+    Scoped to the caller's organisation and branches like everything else.
+
+    Guarded by `customers.view`: whoever is trusted to see residents is trusted
+    to see the people asking to become one, and inventing a permission nobody
+    has yet would leave every existing role unable to read their own leads.
+    """
+    stmt = select(PgEnquiry).where(
+        PgEnquiry.organization_id == scope.organization_id)
+    if not scope.all_branches:
+        stmt = stmt.where(PgEnquiry.branch_id.in_(scope.branch_ids))
+    if status_filter and status_filter != "all":
+        stmt = stmt.where(PgEnquiry.status == status_filter)
+
+    total = db.scalar(select(func.count()).select_from(stmt.subquery())) or 0
+    rows = db.scalars(
+        stmt.order_by(PgEnquiry.created_at.desc())
+        .offset((page - 1) * page_size).limit(page_size)).all()
+
+    branches = {b.id: b.name for b in db.scalars(select(Branch).where(
+        Branch.organization_id == scope.organization_id)).all()}
+
+    return paginated([{
+        "id": str(e.id), "branch_id": str(e.branch_id),
+        "branch_name": branches.get(e.branch_id),
+        "full_name": e.full_name, "email": e.email, "phone": e.phone,
+        "message": e.message,
+        "move_in_date": e.move_in_date.isoformat() if e.move_in_date else None,
+        "status": e.status, "staff_notes": e.staff_notes,
+        "email_verified": e.email_verified,
+        "created_at": e.created_at.isoformat(),
+    } for e in rows], page, page_size, total)
+
+
+@router.patch("/enquiries/{enquiry_id}", summary="Update an enquiry")
+def update_enquiry(enquiry_id: uuid.UUID, body: EnquiryUpdate, db: DbSession,
+                   scope: Tenant,
+                   _: None = Depends(require("customers.edit"))) -> dict:
+    row = db.scalars(select(PgEnquiry).where(
+        PgEnquiry.id == enquiry_id,
+        PgEnquiry.organization_id == scope.organization_id)).first()
+    if row is None:
+        # Not found rather than forbidden, so this cannot confirm that another
+        # tenant's enquiry exists.
+        raise NotFoundError("Enquiry not found.")
+
+    if body.status is not None:
+        if body.status not in EnquiryStatus.ALL:
+            raise ConflictError(f"{body.status} is not a valid status.")
+        row.status = body.status
+        row.handled_by_id = scope.user.id
+        row.handled_at = datetime.now(timezone.utc)
+    if body.staff_notes is not None:
+        row.staff_notes = body.staff_notes
+
+    db.commit()
+    return ok({"id": str(row.id), "status": row.status}, message="Enquiry updated.")
+
+
+@router.post("/branches/{branch_id}/gate-token", summary="Issue a new gate QR")
+def rotate_gate_token(branch_id: uuid.UUID, db: DbSession, scope: Tenant,
+                      _: None = Depends(require("branches.edit"))) -> dict:
+    """
+    Replaces the printed gate code. The previous one stops working immediately.
+
+    Worth doing when a photograph of the poster is believed to be circulating,
+    and after any staff departure where that seems plausible.
+    """
+    branch = _svc(db, scope).rotate_gate_token(branch_id)
+    db.commit()
+    return ok({
+        "id": str(branch.id), "name": branch.name,
+        "gate_qr_token": branch.gate_qr_token,
+        "gate_payload": qr_payload.encode(qr_payload.KIND_GATE, branch.gate_qr_token),
+    }, message="A new gate QR has been issued. Print and replace the old one.")
 
 
 @router.delete("/branches/{branch_id}", summary="Deactivate a branch")

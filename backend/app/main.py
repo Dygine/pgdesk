@@ -70,7 +70,8 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,     # never "*" - see config.assert_production_safe
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-PGDesk-Auth"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-PGDesk-Auth",
+                   "X-PGDesk-Client"],
     expose_headers=["X-Request-ID"],
 )
 

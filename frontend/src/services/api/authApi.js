@@ -6,17 +6,34 @@
  * short-lived access token, which lives in memory.
  */
 import { api, refreshAccessToken, tokenStore, unwrap } from './client'
+import { clearRefreshToken, writeRefreshToken } from '@/lib/nativeSession'
 
 export const authApi = {
   async login(email, password) {
     // auth:false — there is no token yet, and sending a stale one would be wrong.
     const res = await api.post('/auth/login', { email, password }, { auth: false })
-    const { access_token, user } = res.data
+    const { access_token, refresh_token, user } = res.data
     tokenStore.write({ access_token })
+    // Present only on native, where the server hands the token to the app to
+    // keep because the cookie cannot reach it. On the web this is undefined and
+    // the call is a no-op.
+    if (refresh_token) await writeRefreshToken(refresh_token)
     return user
   },
 
   me: () => api.get('/auth/me').then(unwrap),
+
+  /* ------------------------------------------------------ password reset */
+  // Always resolves for a well-formed address, whether or not an account
+  // exists — the API answers identically on purpose, so the UI must not try to
+  // infer anything from success here.
+  forgotPassword: (email) =>
+    api.post('/auth/forgot-password', { email }, { auth: false }).then(unwrap),
+  verifyOtp: (email, code) =>
+    api.post('/auth/verify-otp', { email, code }, { auth: false }).then(unwrap),
+  resetPassword: (verification_token, new_password) =>
+    api.post('/auth/reset-password', { verification_token, new_password },
+             { auth: false }).then(unwrap),
 
   /**
    * Rebuild the session after a page reload.
@@ -37,6 +54,9 @@ export const authApi = {
       // Already expired or the API is down. The local session still clears.
     } finally {
       tokenStore.clear()
+      // Signing out has to remove the stored token too, or the next launch
+      // would silently restore the session the user just ended.
+      await clearRefreshToken()
     }
   },
 
@@ -46,6 +66,7 @@ export const authApi = {
       await api.post('/auth/logout', { all_sessions: true }, { retry: false })
     } finally {
       tokenStore.clear()
+      await clearRefreshToken()
     }
   },
 

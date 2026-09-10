@@ -63,6 +63,26 @@ const BASE_URL = CONFIGURED || FALLBACK
 /** Header proving the request came from our own front end — the CSRF factor. */
 const CSRF_HEADER = 'X-PGDesk-Auth'
 
+/* --------------------------------------------------------- native sessions */
+import {
+  NATIVE_CLIENT_HEADER, clearRefreshToken, isNativeApp, readRefreshToken,
+  writeRefreshToken,
+} from '@/lib/nativeSession'
+
+/**
+ * Headers every request carries.
+ *
+ * The native marker goes on all of them, not just the auth calls. The server
+ * uses it to decide session length at login and at every rotation, so a request
+ * that omitted it would quietly downgrade a ten-year session to a two-week one
+ * on the next refresh.
+ */
+function baseHeaders() {
+  const headers = { 'Content-Type': 'application/json', [CSRF_HEADER]: '1' }
+  if (isNativeApp()) headers[NATIVE_CLIENT_HEADER] = 'native'
+  return headers
+}
+
 /* ------------------------------------------------------------ token store */
 /**
  * In-memory only. Deliberately not localStorage or sessionStorage: both are
@@ -148,17 +168,27 @@ export async function refreshAccessToken() {
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
       try {
+        // On the web the body stays empty and the cookie carries the token.
+        // On native there is no usable cookie, so the stored token goes in the
+        // body — the same endpoint, the same rotation, a different courier.
+        const stored = await readRefreshToken()
         const res = await fetch(buildUrl('/auth/refresh'), {
           method: 'POST',
-          // The body is empty: the token is in the cookie, which the browser
-          // attaches because of credentials: 'include'.
-          headers: { 'Content-Type': 'application/json', [CSRF_HEADER]: '1' },
+          headers: baseHeaders(),
           credentials: 'include',
-          body: JSON.stringify({}),
+          body: JSON.stringify(stored ? { refresh_token: stored } : {}),
         })
         const payload = await parse(res)
-        if (!res.ok || payload?.success === false) return false
+        if (!res.ok || payload?.success === false) {
+          // A refusal means this token is spent or revoked. Keeping it would
+          // retry a dead credential on every launch forever.
+          if (stored) await clearRefreshToken()
+          return false
+        }
         tokenStore.write({ access_token: payload.data.access_token })
+        // Rotation issues a new one each time; missing this would leave the app
+        // holding a token the server has already revoked.
+        if (payload.data.refresh_token) await writeRefreshToken(payload.data.refresh_token)
         return true
       } catch { return false } finally {
         setTimeout(() => { refreshInFlight = null }, 0)
@@ -169,11 +199,8 @@ export async function refreshAccessToken() {
 }
 
 async function request(path, { method = 'GET', body, params, auth = true, retry = true } = {}) {
-  const headers = { 'Content-Type': 'application/json' }
+  const headers = baseHeaders()
   if (auth && accessToken) headers.Authorization = `Bearer ${accessToken}`
-  // Sent on every call so the auth endpoints — the only ones the cookie is
-  // scoped to — always carry it.
-  headers[CSRF_HEADER] = '1'
 
   let res
   try {

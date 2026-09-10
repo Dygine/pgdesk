@@ -67,6 +67,27 @@ class ConflictError(AppError):
     code = "conflict"
 
 
+class UpstreamServiceError(AppError):
+    """
+    A third-party we depend on failed - today, only the mail server.
+
+    502 rather than 500: the request was well formed and our own code worked.
+    Collapsing it into a 500 would put a mail-server typo in the same bucket as
+    a crash, and an operator debugging "test email fails" would have no way to
+    tell which they were looking at.
+    """
+
+    status_code = status.HTTP_502_BAD_GATEWAY
+    code = "upstream_failed"
+
+
+class ServiceUnavailableError(AppError):
+    """A feature that needs configuration the operator has not supplied yet."""
+
+    status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    code = "not_configured"
+
+
 class RateLimitedError(AppError):
     """
     Too many attempts. Carries `retry_after` so the handler can set the header

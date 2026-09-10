@@ -149,6 +149,12 @@ ROLES = [
          description="Gate duty - scanning, visitor entry and gate pass checks.",
          permissions=[
              "dashboard.view", "attendance.view", "attendance.mark",
+             # The role whose entire description is "scanning" could not reach
+             # the scan endpoint: these two were missing, so the guard's own
+             # gate screen answered 403 on every code. Nothing surfaced it
+             # because the frontend hides the page without `scan.view`, which
+             # made a missing permission look like a missing feature.
+             "scan.view", "scan.manage",
              *P("visitors", "view", "checkin"), "gatepass.view", "customers.view", "announcements.view",
          ]),
     dict(name="Maintenance Staff", is_system_role=False, all_branches=False,
@@ -312,6 +318,18 @@ def upsert_organization(db: Session, plans: dict[str, SubscriptionPlan]) -> Orga
     return org
 
 
+#: Real coordinates for the seeded branches, so a developer standing anywhere
+#: else sees an honest "you are 340 km away" rather than a geofence that passes
+#: by accident because the point was left at (0, 0).
+SEED_GATES = {
+    "KOR": (12.934533, 77.626579),   # Koramangala
+    "IND": (12.971891, 77.641151),   # Indiranagar
+    "WHF": (12.969830, 77.749980),   # Whitefield
+    "JAY": (12.925453, 77.593082),   # Jayanagar
+    "HSR": (12.911958, 77.638237),   # HSR Layout
+}
+
+
 def upsert_branches(db: Session, org: Organization) -> dict[str, Branch]:
     out = {}
     for spec in BRANCHES:
@@ -324,6 +342,17 @@ def upsert_branches(db: Session, org: Organization) -> dict[str, Branch]:
         else:
             for k, v in spec.items():
                 setattr(branch, k, v)
+        # Positioned so self check-in is usable straight after seeding. Without
+        # coordinates the resident's gate screen only ever says "this branch has
+        # not been positioned yet", which reads as a broken feature rather than
+        # an unconfigured one - the wrong first impression for a demo.
+        if branch.latitude is None:
+            branch.latitude, branch.longitude = SEED_GATES.get(
+                spec["code"], (12.934533, 77.626579))
+            branch.geofence_radius_m = 150
+            branch.self_checkin_enabled = True
+        if not branch.gate_qr_token:
+            branch.gate_qr_token = generate_qr_token()
         out[spec["code"]] = branch
     db.flush()
     return out

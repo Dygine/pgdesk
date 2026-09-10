@@ -10,4 +10,15 @@ import { api, unwrap } from './client'
 export const platformSettingsApi = {
   get: () => api.get('/master/settings').then(unwrap),
   update: (body) => api.patch('/master/settings', body).then(unwrap),
+
+  /**
+   * Write-only. There is no matching read anywhere in the API - the settings
+   * response reports whether a password is stored, never what it is.
+   */
+  setSmtpPassword: (password) =>
+    api.put('/master/settings/smtp-password', { password }).then(unwrap),
+
+  /** Proves delivery, which is a different claim from "saved". */
+  sendTestEmail: (to) =>
+    api.post('/master/settings/test-email', { to }).then(unwrap),
 }

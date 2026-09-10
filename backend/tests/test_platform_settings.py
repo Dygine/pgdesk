@@ -41,6 +41,8 @@ def actors(db, client):
 
 
 # ------------------------------------------------------------ persistence
+# 30, not 14: the public signup page offers a thirty-day trial, and a default
+# that disagrees with the copy on the page is a support ticket waiting to happen.
 def test_settings_are_created_on_first_read(db, client, actors):
     """
     No data migration seeds the row, so a fresh database and an upgraded one
@@ -49,7 +51,7 @@ def test_settings_are_created_on_first_read(db, client, actors):
     assert db.get(PlatformSettings, __import__("uuid").UUID(SINGLETON_ID)) is None
     r = client.get(f"{API}/master/settings", headers=auth(actors["master"]))
     assert r.status_code == 200, r.text
-    assert r.json()["data"]["default_trial_days"] == 14
+    assert r.json()["data"]["default_trial_days"] == 30
 
 
 def test_a_saved_value_survives_a_re_read(client, actors):
@@ -66,14 +68,16 @@ def test_a_saved_value_survives_a_re_read(client, actors):
 
 
 def test_a_partial_patch_leaves_other_fields_alone(client, actors):
-    client.patch(f"{API}/master/settings", json={"default_trial_days": 30},
+    # A value that differs from the current default, or the endpoint correctly
+    # records "saved with no changes" and there is nothing to assert about.
+    client.patch(f"{API}/master/settings", json={"default_trial_days": 21},
                  headers=auth(actors["master"]))
     client.patch(f"{API}/master/settings", json={"platform_name": "Sunrise Cloud"},
                  headers=auth(actors["master"]))
     data = client.get(f"{API}/master/settings",
                       headers=auth(actors["master"])).json()["data"]
     assert data["platform_name"] == "Sunrise Cloud"
-    assert data["default_trial_days"] == 30
+    assert data["default_trial_days"] == 21
 
 
 def test_only_one_settings_row_can_exist(db, client, actors):
@@ -162,7 +166,9 @@ def test_in_app_notifications_are_always_available(client, actors):
 def test_a_settings_change_is_audited(db, client, actors):
     from app.models import AuditLog
 
-    client.patch(f"{API}/master/settings", json={"default_trial_days": 30},
+    # A value that differs from the current default, or the endpoint correctly
+    # records "saved with no changes" and there is nothing to assert about.
+    client.patch(f"{API}/master/settings", json={"default_trial_days": 21},
                  headers=auth(actors["master"]))
     entry = db.query(AuditLog).filter(AuditLog.module == "Platform").first()
     assert entry is not None

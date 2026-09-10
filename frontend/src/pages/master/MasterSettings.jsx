@@ -7,6 +7,7 @@ import {
 import { useToast } from '@/context/ToastContext'
 import { useApi, useMutation } from '@/lib/useApi'
 import { platformSettingsApi } from '@/services/api/platformSettingsApi'
+import { SmtpCard } from './SmtpCard'
 
 const TRIAL_OPTIONS = ['7', '14', '30', '60']
 const GRACE_OPTIONS = ['0', '3', '7', '15', '30']
@@ -59,6 +60,17 @@ export default function MasterSettings() {
       notify_whatsapp_enabled: form.notify_whatsapp_enabled,
       platform_name: form.platform_name,
       support_email: form.support_email || null,
+
+      // The password is not here: it has its own endpoint because it is
+      // encrypted on the way in and has no way back out.
+      smtp_host: form.smtp_host || null,
+      smtp_port: Number(form.smtp_port) || 587,
+      smtp_username: form.smtp_username || null,
+      smtp_from_email: form.smtp_from_email || null,
+      smtp_from_name: form.smtp_from_name || null,
+      smtp_use_tls: !!form.smtp_use_tls,
+      smtp_use_ssl: !!form.smtp_use_ssl,
+      native_session_days: Number(form.native_session_days) || 3650,
     }),
     {
       onSuccess: (data) => {
@@ -130,6 +142,9 @@ export default function MasterSettings() {
               description="Tenants keep read access but cannot create or edit records." />
           </div>
         </Card>
+
+        <SmtpCard form={form} onChange={set}
+          onSaved={(data) => { setForm(data); setDirty(false) }} />
 
         <Card>
           <CardHeader title="Expiry warnings"

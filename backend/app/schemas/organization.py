@@ -142,6 +142,22 @@ class CreatedOwnerCredentials(BaseModel):
     must_change_password: bool = True
 
 
+class SmtpPasswordUpdate(BaseModel):
+    """
+    Write-only. There is no matching read anywhere in the API.
+
+    Empty string clears the stored password, for a relay that needs no
+    authentication. That is different from not sending the field at all, which
+    leaves whatever is stored untouched.
+    """
+
+    password: str = Field(max_length=400)
+
+
+class TestEmailRequest(BaseModel):
+    to: str = Field(min_length=3, max_length=255)
+
+
 class PlatformSettingsUpdate(BaseModel):
     """
     Every field optional: the master settings screen PATCHes only what changed.
@@ -161,3 +177,20 @@ class PlatformSettingsUpdate(BaseModel):
 
     platform_name: str | None = Field(default=None, min_length=1, max_length=80)
     support_email: EmailStr | None = None
+
+    # --- mail server (the password has its own endpoint, deliberately) ---
+    smtp_host: str | None = Field(default=None, max_length=255)
+    smtp_port: int | None = Field(default=None, ge=1, le=65535)
+    smtp_username: str | None = Field(default=None, max_length=255)
+    # Not EmailStr: that rejects reserved TLDs like .local, and an internal
+    # relay address is a perfectly ordinary thing for an operator to use. The
+    # mail server is the authority on what it will accept, not this schema.
+    smtp_from_email: str | None = Field(default=None, max_length=255)
+    smtp_from_name: str | None = Field(default=None, max_length=120)
+    smtp_use_tls: bool | None = None
+    smtp_use_ssl: bool | None = None
+
+    #: How long a signed-in phone stays signed in. The default of 3650 days is
+    #: "until the app is removed" in practice; an operator who decides that is
+    #: too long for staff phones can shorten it without a code change.
+    native_session_days: int | None = Field(default=None, ge=1, le=3650)

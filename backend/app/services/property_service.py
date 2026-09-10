@@ -20,7 +20,9 @@ from app.models.enums import (
     AuditAction, BedStatus, BranchStatus, BuildingStatus, FloorStatus, RoomStatus,
 )
 from app.services.audit import AuditService
+from app.services.resident_service import generate_qr_token
 from app.services.subscription_limits import SubscriptionLimitService
+from app.utils.geo import is_valid_coordinate
 
 
 class PropertyService:
@@ -138,6 +140,101 @@ class PropertyService:
                 setattr(branch, field, data[field])
         self._log("Branches", AuditAction.UPDATE, f"Updated branch {branch.name}",
                   "branch", branch.id, branch.id)
+        return branch
+
+    # ------------------------------------------------- gate and self check-in
+    def set_branch_location(self, branch_id: uuid.UUID, data: dict) -> Branch:
+        """
+        Position the gate and set the radius residents must be inside.
+
+        Validated here rather than only in the request schema because the same
+        rules have to hold for the seed script and for any future import, and a
+        geofence that silently accepts nonsense is worse than one that refuses:
+        a radius of 5 metres locks every resident out, and nobody would connect
+        the support calls back to a number typed once during setup.
+        """
+        branch = self._assert_branch(branch_id)
+
+        if "latitude" in data or "longitude" in data:
+            lat, lon = data.get("latitude"), data.get("longitude")
+            if (lat is None) != (lon is None):
+                raise ConflictError(
+                    "A location needs both a latitude and a longitude.")
+            if lat is not None and not is_valid_coordinate(lat, lon):
+                raise ConflictError("That is not a valid location on the map.")
+            branch.latitude, branch.longitude = lat, lon
+
+        if data.get("geofence_radius_m") is not None:
+            radius = int(data["geofence_radius_m"])
+            if not 10 <= radius <= 5000:
+                raise ConflictError("The radius must be between 10 and 5000 metres.")
+            branch.geofence_radius_m = radius
+
+        if data.get("self_checkin_enabled") is not None:
+            enabling = bool(data["self_checkin_enabled"])
+            if enabling and not branch.has_geofence():
+                # Refused rather than quietly stored, because the resident-facing
+                # failure - a button that never becomes available with no
+                # explanation on the owner's side - is invisible from here.
+                raise ConflictError(
+                    "Set the gate location before switching self check-in on.")
+            branch.self_checkin_enabled = enabling
+            if enabling and not branch.gate_qr_token:
+                # No gate code means nothing for a resident to scan, so issue one
+                # rather than making the owner find a second button.
+                branch.gate_qr_token = generate_qr_token()
+
+        self._log("Branches", AuditAction.UPDATE,
+                  f"Updated gate location for {branch.name}", "branch",
+                  branch.id, branch.id)
+        return branch
+
+    def set_branch_listing(self, branch_id: uuid.UUID, data: dict) -> Branch:
+        """
+        Publish or unpublish a branch, and edit what is published.
+
+        Refuses to switch listing on without a city or an address. A listing
+        nobody can find is worse than no listing: the owner believes they are
+        visible, sees no enquiries, and concludes the feature is broken.
+        """
+        branch = self._assert_branch(branch_id)
+
+        for field in ("listing_headline", "listing_description",
+                      "gender_preference", "contact_phone_public", "amenities"):
+            if field in data and data[field] is not None:
+                setattr(branch, field, data[field])
+        if data.get("starting_rent") is not None:
+            branch.starting_rent = data["starting_rent"]
+
+        if data.get("listed_publicly") is not None:
+            listing = bool(data["listed_publicly"])
+            if listing and not (branch.city or branch.address):
+                raise ConflictError(
+                    "Add a city or address to the branch before listing it, "
+                    "or nobody searching will find it.")
+            branch.listed_publicly = listing
+
+        self._log("Branches", AuditAction.UPDATE,
+                  (f"{'Listed' if branch.listed_publicly else 'Unlisted'} "
+                   f"{branch.name} publicly"),
+                  "branch", branch.id, branch.id)
+        return branch
+
+    def rotate_gate_token(self, branch_id: uuid.UUID) -> Branch:
+        """
+        Issue a fresh gate code and kill the old one.
+
+        The gate QR is printed and stuck on a wall, so it leaks by design - a
+        photograph of it is enough to attempt a check-in from elsewhere, if the
+        geofence is also defeated. Rotation is the response to a code believed
+        to be circulating, and the old token stops working the moment this
+        returns because the column is the only lookup key.
+        """
+        branch = self._assert_branch(branch_id)
+        branch.gate_qr_token = generate_qr_token()
+        self._log("Branches", AuditAction.UPDATE,
+                  f"Reissued the gate QR for {branch.name}", "branch",
+                  branch.id, branch.id)
         return branch
 
     def deactivate_branch(self, branch_id: uuid.UUID) -> Branch:

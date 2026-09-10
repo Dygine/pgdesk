@@ -7,7 +7,7 @@ import { useToast } from '@/context/ToastContext'
 import { PageHeader } from '@/components/domain'
 import {
   Card, CardHeader, Button, FormField, Input, Select, StatusBadge, EmptyState,
-  InlineAlert, Skeleton, StatCard,
+  InlineAlert, Skeleton, StatCard, ScannerModal, ScanButton,
 } from '@/components/ui'
 import { num, dateTimeFmt, relative } from '@/lib/format'
 
@@ -26,23 +26,33 @@ export default function Scan() {
   const [gate, setGate] = useState('Main gate')
   const [last, setLast] = useState(null)
   const [busy, setBusy] = useState(false)
+  const [scanning, setScanning] = useState(false)
 
   const logs = useApi(
     () => scanApi.logs({ branch_id: activeBranchId, page_size: 30 }),
     [activeBranchId, last])
 
-  const submit = async (e) => {
-    e?.preventDefault()
-    if (!token.trim()) return
+  /**
+   * One path for three inputs: the camera, a hardware barcode gun typing into
+   * the box, and a guard typing a code from a card by hand. They differ only in
+   * how the string arrives, so they must not differ in what happens next.
+   */
+  const record = async (raw) => {
+    const value = (raw || '').trim()
+    if (!value) return
     setBusy(true)
     try {
-      const result = await scanApi.scan(token.trim(), direction || null, gate || null)
+      const result = await scanApi.scan(value, direction || null, gate || null)
       setLast(result)
       setToken('')
     } catch (err) {
       error('Scan failed', err.message)
     } finally { setBusy(false) }
   }
+
+  const submit = (e) => { e?.preventDefault(); record(token) }
+
+  const onDetect = (value) => { setScanning(false); record(value) }
 
   const rows = logs.data?.items || []
   const todayEntries = rows.filter((g) => g.direction === 'ENTRY').length
@@ -65,6 +75,17 @@ export default function Scan() {
       <div className="grid lg:grid-cols-2 gap-4">
         <Card>
           <CardHeader title="Scan" subtitle="Direction is worked out automatically." />
+
+          <div className="px-5 pt-5">
+            <ScanButton variant="primary" className="w-full"
+              onClick={() => setScanning(true)} disabled={busy}>
+              Scan with camera
+            </ScanButton>
+            <p className="text-2xs text-slate-500 mt-2 text-center">
+              Or use a barcode scanner, or type the code below.
+            </p>
+          </div>
+
           <form onSubmit={submit} className="p-5 space-y-4">
             <FormField label="QR token" required
               hint="Scanners type the token straight into this box.">
@@ -144,6 +165,10 @@ export default function Scan() {
           )}
         </Card>
       </div>
+
+      <ScannerModal open={scanning} onClose={() => setScanning(false)}
+        onDetect={onDetect} title="Scan a resident's code"
+        hint="Hold the resident's QR card or phone inside the frame." />
     </>
   )
 }

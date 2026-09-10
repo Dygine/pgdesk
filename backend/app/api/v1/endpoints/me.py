@@ -29,9 +29,11 @@ from app.models.enums import (
 )
 from app.schemas.operations import (
     ComplaintCreate, GatePassCreate, MealMark, QueryCreate, QueryReply,
-    SlotBooking, VisitorCreate,
+    SelfScanRequest, SlotBooking, VisitorCreate,
 )
 from app.services.notification_service import NotificationService
+from app.services.self_checkin_service import SelfCheckInError, SelfCheckInService
+from app.utils import qr_payload
 
 router = APIRouter(prefix="/me", tags=["resident portal"])
 
@@ -249,13 +251,60 @@ def my_qr(db: DbSession, me: CurrentCustomer) -> dict:
         .order_by(GateLog.occurred_at.desc()).limit(30)).all()
     return ok({
         "token": me.qr_token,
+        # The full symbol payload, built server-side so the format lives in one
+        # place. A client that renders the bare token would produce a card the
+        # scanner treats as legacy input, which still works but loses the
+        # marker that lets a camera reject foreign codes instantly.
+        "payload": qr_payload.encode(qr_payload.KIND_RESIDENT, me.qr_token)
+                   if me.qr_token else None,
         "active": me.status in ("ACTIVE", "NOTICE"),
         "logs": [
             {"id": str(g.id), "direction": g.direction, "allowed": g.allowed,
-             "gate": g.gate, "reason": g.reason,
+             "gate": g.gate, "reason": g.reason, "source": g.source,
              "occurred_at": g.occurred_at.isoformat()}
             for g in logs],
     })
+
+
+# ------------------------------------------------------- self check-in
+@router.get("/gate", summary="Can I check myself in from here?")
+def my_gate_status(db: DbSession, me: CurrentCustomer,
+                   latitude: float | None = Query(default=None, ge=-90, le=90),
+                   longitude: float | None = Query(default=None, ge=-180, le=180),
+                   accuracy_m: float | None = Query(default=None, ge=0)) -> dict:
+    """
+    Drives the resident's screen before they scan anything.
+
+    Answers with a distance and a plain-language reason rather than a bare
+    boolean, so the app can say "you are 240 m away" instead of greying out a
+    button and leaving the resident to guess. Advisory only: `POST /me/scan`
+    repeats every check against the position sent with the scan itself.
+    """
+    service = SelfCheckInService(db, me)
+    return ok(service.status(latitude, longitude, accuracy_m))
+
+
+@router.post("/scan", summary="Scan the gate QR and record my movement")
+def my_scan(body: SelfScanRequest, db: DbSession, me: CurrentCustomer) -> dict:
+    """
+    The resident-scans-the-gate direction.
+
+    The guard-scans-the-resident flow at `POST /scan` is unchanged and remains
+    the fallback for anyone without a phone. Both write to the same gate log,
+    distinguished by `source`, so reports do not have to know which was used.
+    """
+    service = SelfCheckInService(db, me)
+    try:
+        result = service.scan(body.token, latitude=body.latitude,
+                              longitude=body.longitude, accuracy=body.accuracy_m)
+    except SelfCheckInError as exc:
+        # A refused scan may have written a log row before raising, and that row
+        # is the point - an out-of-range attempt is exactly what staff would
+        # want to see later. Commit it, then report the refusal.
+        db.commit()
+        raise ConflictError(str(exc)) from None
+    db.commit()
+    return ok(result, message=result["message"])
 
 
 # ---------------------------------------------------------------- my food

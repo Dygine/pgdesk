@@ -15,6 +15,9 @@ from sqlalchemy import func, select
 from app.core.dependencies import (
     CurrentScope, DbSession, client_ip, require_master,
 )
+from app.core.exceptions import (
+    ServiceUnavailableError, UpstreamServiceError,
+)
 from app.core.responses import ok, paginated
 from app.models import (
     Bed, Branch, Building, Customer, Organization, Room, Subscription,
@@ -22,11 +25,14 @@ from app.models import (
 )
 from app.schemas.organization import (
     ChangePlan, ExtendSubscription, LimitOverrides, OrganizationCreate,
-    OrganizationUpdate, PlanUpdate, PlatformSettingsUpdate, StatusChange,
+    OrganizationUpdate, PlanUpdate, PlatformSettingsUpdate, SmtpPasswordUpdate, TestEmailRequest, StatusChange,
 )
 from app.models.enums import AuditAction
 from app.services.audit import AuditService
 from app.services.dashboard_service import MasterDashboardService
+from app.services.email_service import (
+    EmailNotConfigured, EmailSendFailed, EmailService,
+)
 from app.services.platform_settings_service import PlatformSettingsService
 from app.services.organization_service import OrganizationService
 from app.services.subscription_limits import SubscriptionLimitService
@@ -381,3 +387,63 @@ def update_platform_settings(body: PlatformSettingsUpdate, db: DbSession, scope:
         ip_address=client_ip(request))
     db.commit()
     return ok(service.as_dict(), message="Platform settings saved.")
+
+
+@router.put("/settings/smtp-password", summary="Set or clear the mail password")
+def set_smtp_password(body: SmtpPasswordUpdate, db: DbSession, scope: Master,
+                      request: Request) -> dict:
+    """
+    Write-only. Nothing in the API reads this value back.
+
+    The password is encrypted before it touches the database, so a dump or a
+    stolen backup yields ciphertext rather than a working mail account. It is
+    still decryptable by the running application - it has to be, to send - so
+    this protects the data at rest, not against someone who already owns the
+    server.
+    """
+    service = PlatformSettingsService(db)
+    service.set_smtp_password(body.password)
+    AuditService(db).record(
+        scope=scope, module="Platform", action=AuditAction.UPDATE,
+        description=("Mail password cleared" if not body.password
+                     else "Mail password updated"),
+        entity_type="platform_settings", ip_address=client_ip(request))
+    db.commit()
+    return ok(service.as_dict(),
+              message="Mail password saved. Send a test message to confirm it works.")
+
+
+@router.post("/settings/test-email", summary="Send a test message")
+def send_test_email(body: TestEmailRequest, db: DbSession, scope: Master,
+                    request: Request) -> dict:
+    """
+    Proves delivery rather than configuration.
+
+    "Saved" and "can actually send" are different claims and operators conflate
+    them constantly - a wrong port or a Gmail account password instead of an app
+    password both save perfectly and deliver nothing. The SMTP error is returned
+    verbatim here, which is safe because the caller is a master admin who
+    already owns these credentials, and because a generic failure message would
+    leave them guessing between six possible causes.
+    """
+    service = PlatformSettingsService(db)
+    settings_row = service.get()
+    try:
+        EmailService(db).send(
+            to=body.to,
+            subject=f"{settings_row.platform_name or 'PGDesk'} test message",
+            body=("This is a test message from your PGDesk installation.\n\n"
+                  "If you are reading it, outgoing mail works: password resets "
+                  "and verification codes will be delivered.\n"))
+    except EmailNotConfigured as exc:
+        raise ServiceUnavailableError(str(exc)) from None
+    except EmailSendFailed as exc:
+        raise UpstreamServiceError(str(exc)) from None
+
+    service.mark_smtp_verified()
+    AuditService(db).record(
+        scope=scope, module="Platform", action=AuditAction.UPDATE,
+        description=f"Test email sent to {body.to}",
+        entity_type="platform_settings", ip_address=client_ip(request))
+    db.commit()
+    return ok(service.as_dict(), message=f"Test message delivered to {body.to}.")

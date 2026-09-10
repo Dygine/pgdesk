@@ -31,6 +31,7 @@ from app.core.security import (
     create_access_token, generate_opaque_token, hash_password, hash_token,
     needs_rehash, verify_password, waste_time_like_a_verify,
 )
+from app.models import PlatformSettings  # noqa: F401  (session length setting)
 from app.models import (
     Branch, Customer, Organization, RefreshToken, Subscription, User,
 )
@@ -64,6 +65,39 @@ class Principal:
 class AuthService:
     def __init__(self, db: Session):
         self.db = db
+
+    def _refresh_days(self, native: bool) -> int:
+        """
+        How long a refresh token lives, by client.
+
+        A browser keeps the short window: a shared or public computer is a real
+        possibility there, and the session lives in a cookie the user cannot see
+        or manage.
+
+        An installed app gets the long one, read from platform settings and
+        defaulting to ten years - "signed in until you remove the app", which is
+        what people expect from every other app on the phone. The device is
+        personal, it is lock-screened, and the token lives in the app's private
+        storage, which no other app can read.
+
+        This is a real trade. A staff phone with a permanent session is a
+        standing risk if it is lost, which is why the number is a setting rather
+        than a constant: an operator who decides ten years is too long for their
+        managers can shorten it without touching code, and signing out or
+        resetting a password still revokes every session immediately.
+        """
+        if not native:
+            return settings.refresh_token_expire_days
+        try:
+            from app.models.platform import SINGLETON_ID
+            row = self.db.get(PlatformSettings, uuid.UUID(SINGLETON_ID))
+            if row is not None:
+                return row.native_session_days
+        except Exception:
+            # Settings unreadable during a migration window: fall back rather
+            # than refusing a login over a preference.
+            pass
+        return 3650
 
     # ------------------------------------------------------------ lookups --
     def _find_user(self, email: str) -> User | None:
@@ -162,7 +196,8 @@ class AuthService:
 
     # ------------------------------------------------------------- tokens --
     def issue_tokens(
-        self, principal: Principal, *, user_agent: str | None = None, ip: str | None = None
+        self, principal: Principal, *, user_agent: str | None = None,
+        ip: str | None = None, native: bool = False
     ) -> tuple[str, str]:
         access = create_access_token(str(principal.id), principal=principal.kind.value)
 
@@ -170,7 +205,7 @@ class AuthService:
         row = RefreshToken(
             token_hash=hash_token(raw),
             expires_at=datetime.now(timezone.utc)
-            + timedelta(days=settings.refresh_token_expire_days),
+            + timedelta(days=self._refresh_days(native)),
             user_agent=user_agent,
             ip_address=ip,
         )
@@ -183,7 +218,8 @@ class AuthService:
         return access, raw
 
     def rotate_refresh_token(
-        self, raw_token: str, *, user_agent: str | None = None, ip: str | None = None
+        self, raw_token: str, *, user_agent: str | None = None,
+        ip: str | None = None, native: bool = False
     ) -> tuple[str, str, Principal]:
         """
         Single-use refresh with reuse detection.
@@ -214,7 +250,7 @@ class AuthService:
 
         now = datetime.now(timezone.utc)
         row.revoked_at = now
-        access, raw = self.issue_tokens(principal, user_agent=user_agent, ip=ip)
+        access, raw = self.issue_tokens(principal, user_agent=user_agent, ip=ip, native=native)
         new_row = self.db.scalars(
             select(RefreshToken).where(RefreshToken.token_hash == hash_token(raw))
         ).first()
