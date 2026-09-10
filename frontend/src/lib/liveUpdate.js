@@ -1,185 +1,43 @@
 /**
- * Updating the app without reinstalling it.
+ * Keeping every screen on the latest version.
  *
- * PGDesk is a React bundle inside a WebView, so nearly everything that changes
- * between releases - pages, fixes, styling, new features - is just HTML, JS and
- * CSS. That folder can be replaced at runtime. Only a change to native code
- * needs a real APK: a new plugin, a new Android permission, a different app
- * icon.
+ * The Android app no longer carries its own copy of the screens. It opens
+ * https://pgdesk.dygine.com inside the app (capacitor.config.json, server.url),
+ * exactly like a browser does. So deploying the website IS the update, for the
+ * browser and the app alike: git push, Render rebuilds the site, and the next
+ * time anything loads, it gets the new version. There is no bundle to publish,
+ * no version number to bump and nothing to download.
  *
- * Which is why this file distinguishes two kinds of update and treats them
- * completely differently:
+ * (It used to be different: the APK held a frozen copy of the screens and
+ * looked for updates at a relative /updates/version.json - which, inside the
+ * app, meant its own files. So an installed app never saw a single update.)
  *
- *   bundle   downloaded and applied in seconds, no installer, no permission,
- *            no Android dialog. The normal case.
- *   native   a new APK. Rare. Cannot be silent on any unrooted Android - the
- *            system always shows an install confirmation - so the honest thing
- *            is to send the user to the download and say so.
- *
- * Rollback is not an afterthought here. A bad bundle reaches every phone within
- * minutes, so `notifyAppReady()` has to run on every successful start; if it
- * does not, the plugin reverts to the previous bundle on the next launch. That
- * turns "I shipped a white screen to two hundred residents" into "they were
- * briefly on yesterday's build".
+ * The one gap left is a screen that is already open when a deploy lands. This
+ * notices it: it re-reads index.html from the server and compares the
+ * JavaScript bundle it names with the one this page is running. Different
+ * means something newer is live, and the banner offers a reload. Nothing
+ * reloads on its own - someone may be halfway through typing a payment UTR.
  */
-import { Capacitor } from '@capacitor/core'
+const bundleOf = (src) => (src ? new URL(src, window.location.href).pathname : null)
 
-/**
- * Where the manifest lives.
- *
- * Defaults to the origin serving the app, which is right for the web build and
- * for an APK pointed at the same host. Overridable so the bundle can be served
- * from a CDN without rebuilding the API.
- */
-const MANIFEST_URL =
-  import.meta.env.VITE_UPDATE_URL || '/updates/version.json'
+/** The hashed bundle this page was started from. Null on the dev server. */
+const RUNNING = typeof document === 'undefined' ? null : bundleOf(
+  document.querySelector('script[type="module"][src*="/assets/index-"]')?.getAttribute('src'))
 
-export const isNative = () => Capacitor.isNativePlatform()
-
-/**
- * Never `return` a Capacitor plugin object from an `async` function.
- *
- * Async functions resolve their return value, and resolution checks for a
- * `.then` property. A Capacitor plugin is a proxy where *every* property access
- * yields a method stub, so `.then` looks callable. JavaScript calls it believing
- * it is resolving a promise; Capacitor throws "not implemented" and never
- * invokes the resolve or reject callback it was handed - so the awaiting promise
- * settles never, not late.
- *
- * The symptom is an app frozen on its loading screen with one console line and
- * no stack. Import the module and use the plugin in the same function instead.
- */
-const loadUpdater = () => import('@capgo/capacitor-updater')
-
-/**
- * Compare two dotted version strings.
- *
- * Written rather than pulled in, because a comparison this small is easier to
- * read than a dependency, and getting it wrong is loud: it either offers an
- * update that does not exist or hides one that does. Missing parts count as
- * zero, so "1.2" and "1.2.0" are equal rather than one being newer.
- */
-export function isNewer(candidate, current) {
-  const a = String(candidate || '').split('.').map((n) => parseInt(n, 10) || 0)
-  const b = String(current || '').split('.').map((n) => parseInt(n, 10) || 0)
-  for (let i = 0; i < Math.max(a.length, b.length); i += 1) {
-    const x = a[i] || 0
-    const y = b[i] || 0
-    if (x !== y) return x > y
-  }
-  return false
-}
-
-/**
- * Mark this bundle as working.
- *
- * Called once from app startup, after React has actually rendered. Everything
- * about rollback hangs off it: the plugin gives a freshly applied bundle a
- * short window to call this, and reverts if it never does. Calling it too early
- * - at module load, say - would mark a bundle healthy that then crashes on its
- * first render, defeating the whole mechanism.
- */
-export async function markHealthy() {
-  if (!isNative()) return
+export async function newVersionAvailable() {
+  if (!RUNNING) return false
   try {
-    const { CapacitorUpdater } = await loadUpdater()
-    await CapacitorUpdater.notifyAppReady()
-  } catch {
-    /* Not fatal. Worst case the plugin reverts a bundle that was actually fine,
-       which costs the user one relaunch and no data. */
-  }
-}
-
-/** The bundle and native versions currently running. */
-export async function currentVersions() {
-  if (!isNative()) {
-    return { bundle: import.meta.env.VITE_APP_VERSION || '0.0.0', native: null }
-  }
-  try {
-    const { CapacitorUpdater } = await loadUpdater()
-    const info = await CapacitorUpdater.current()
-    return {
-      bundle: info?.bundle?.version && info.bundle.version !== 'builtin'
-        ? info.bundle.version
-        : (import.meta.env.VITE_APP_VERSION || '0.0.0'),
-      native: info?.native || null,
-    }
-  } catch {
-    return { bundle: import.meta.env.VITE_APP_VERSION || '0.0.0', native: null }
-  }
-}
-
-/**
- * Ask the server what the latest version is.
- *
- * Returns null on any failure. An update check is the least important thing the
- * app does - a server hiccup must never stop someone opening their rent page -
- * so every error path here is silence, not an error screen.
- */
-export async function checkForUpdate() {
-  try {
-    const res = await fetch(`${MANIFEST_URL}?t=${Date.now()}`, {
-      cache: 'no-store',
+    const res = await fetch(`${window.location.origin}/?v=${Date.now()}`, {
+      cache: 'no-store', credentials: 'omit',
     })
-    if (!res.ok) return null
-    const manifest = await res.json()
-    const { bundle, native } = await currentVersions()
-
-    // A native floor the current APK cannot meet. This is the case that saves
-    // you when the API changes in a way old clients cannot speak: no bundle can
-    // fix a missing plugin, so offering one would be a loop of failed updates.
-    const needsApk = Boolean(
-      manifest.minNativeVersion
-      && native
-      && isNewer(String(manifest.minNativeVersion), String(native)),
-    )
-
-    return {
-      manifest,
-      currentBundle: bundle,
-      currentNative: native,
-      needsApk,
-      hasBundleUpdate: Boolean(
-        !needsApk && manifest.version && manifest.bundleUrl
-        && isNewer(manifest.version, bundle),
-      ),
-    }
+    if (!res.ok) return false
+    const found = (await res.text()).match(/src="([^"]*\/assets\/index-[^"]+\.js)"/)
+    return Boolean(found) && bundleOf(found[1]) !== RUNNING
   } catch {
-    return null
+    return false        // offline or mid-deploy: ask again later
   }
 }
 
-/**
- * Download a bundle and switch to it. The app reloads on success.
- *
- * `onProgress` exists because this runs on Indian mobile data and a frozen
- * button for eight seconds reads as a broken button. The bundle is a few
- * hundred kilobytes, not a game download, but a progress bar is the difference
- * between waiting and giving up.
- */
-export async function applyUpdate(manifest, onProgress) {
-  if (!isNative()) {
-    // The browser updates itself by reloading; there is no bundle to swap.
-    window.location.reload()
-    return
-  }
-
-  const { CapacitorUpdater } = await loadUpdater()
-  let listener = null
-  if (onProgress) {
-    listener = await CapacitorUpdater.addListener(
-      'download', ({ percent }) => onProgress(percent))
-  }
-
-  try {
-    const bundle = await CapacitorUpdater.download({
-      url: manifest.bundleUrl,
-      version: manifest.version,
-      ...(manifest.checksum ? { checksum: manifest.checksum } : {}),
-    })
-    // `set` reloads the WebView onto the new bundle. Nothing after it runs.
-    await CapacitorUpdater.set({ id: bundle.id })
-  } finally {
-    listener?.remove?.()
-  }
+export function reloadToLatest() {
+  window.location.reload()
 }

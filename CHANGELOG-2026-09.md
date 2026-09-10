@@ -2,8 +2,8 @@
 
 Twelve requests, all shipped, plus one sign-in fix (below). Backend: 332 tests pass
 (317 before + 12 in `backend/tests/test_pgdesk_updates.py` + 3 in `test_auth_session.py`). One migration: `0013_staff_notice_menu_pay`.
-**No new APK needed** - no new Capacitor plugin or Android permission. Ship with
-`npm version patch` then `npm run build:update` (see HANDOVER §6).
+**One new APK, once** - it now opens the live website, so everything after
+ships with `git push` alone (see the last section and HANDOVER §6).
 
 | # | Request | What changed |
 |---|---|---|
@@ -63,5 +63,25 @@ free Render server waking up) triggers:
    used, or after 10 minutes, a replay still signs out every session, and the
    undelivered replacement is retired so it can never be used.
 
-Ships the same way as everything else: backend on `git push`, app as a live
-update. No new APK.
+Ships with `git push`; phones get it through the new APK described below.
+
+## The app now opens the live website
+
+Reported with screenshots: the website had every change, the APK showed old
+screens. Why: the APK carried its own copy of the screens, and its self-update
+looked for new versions at a relative `/updates/version.json` - inside the app,
+that is the app's own files - so no installed app ever received an update.
+
+Now `capacitor.config.json` has `server.url: https://pgdesk.dygine.com`: the app
+opens the website itself. A deploy updates the browser and the app together.
+
+- Removed `@capgo/capacitor-updater`, `scripts/publish-update.mjs` and the
+  `build:update` / `publish:update` scripts.
+- `src/lib/liveUpdate.js` + `UpdateBanner.jsx`: an already-open screen notices a
+  newer deploy and offers "Reload" (never forces it).
+- `public/offline.html` (`server.errorPath`): shown with no internet, retries
+  when the connection returns.
+- `scripts/check-android-env.mjs` refuses to build unless `server.url` is https.
+
+**Needs one new APK** (the old one cannot learn the new address by itself).
+After that: `git push` is the whole release process.

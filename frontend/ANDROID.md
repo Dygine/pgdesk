@@ -1,5 +1,10 @@
 # PGDesk on Android
 
+> **How the app loads (since September 2026):** the APK opens
+> https://pgdesk.dygine.com (`capacitor.config.json` → `server.url`). Screens
+> update with every website deploy; rebuild the APK only for native changes.
+> Any older notes below about live-update bundles are superseded - see HANDOVER.md §6.
+
 The Android app is **the same React application** as the web build, running in a
 Capacitor WebView. There is no second frontend, no second backend, no second
 database and no duplicated business logic.

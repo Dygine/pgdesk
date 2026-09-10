@@ -48,7 +48,7 @@ pgdesk/
 │   │   ├── nav/navConfig.js    sidebar is DATA, not markup
 │   │   └── routes/index.jsx    all routes
 │   ├── android/                Capacitor native project
-│   ├── scripts/                build guards + update publisher
+│   ├── scripts/                build guard (checks API URL and app URL)
 │   └── .env.local              VITE_API_URL  (gitignored, must exist)
 │
 ├── landing/          Static marketing page + pgdesk.apk download
@@ -161,7 +161,8 @@ npm run build:android
 **Stop and read the output.** You must see:
 
 ```
-[info] Found 8 Capacitor plugins for android:
+  App opens  : https://pgdesk.dygine.com  (screens update with every website deploy)
+[info] Found 7 Capacitor plugins for android:
        @capacitor-mlkit/barcode-scanning@8.1.1
        @capacitor/app@8.1.1
        @capacitor/geolocation@8.2.2
@@ -169,10 +170,9 @@ npm run build:android
        @capacitor/local-notifications@8.3.1
        @capacitor/preferences@8.0.1
        @capacitor/status-bar@8.0.3
-       @capgo/capacitor-updater@8.51.15
 ```
 
-**If it says 4, stop.** Gradle will happily build an APK with no camera, no GPS
+**If it says fewer than 7, stop.** Gradle will happily build an APK with no camera, no GPS
 and no updater, and nothing will fail. This has cost a full rebuild cycle twice.
 Cause is always a stale `node_modules` or an old copy of the source.
 
@@ -220,39 +220,63 @@ to uninstall first. Set up signing before handing the APK to real PG owners.
 
 ---
 
-## 6. Shipping updates WITHOUT a new APK
+## 6. Shipping updates - the app opens the live website
 
-Most releases do not need one. The app is a React bundle in a WebView, and the
-bundle can be replaced at runtime (`@capgo/capacitor-updater`).
+**The APK does not contain the screens any more.** `capacitor.config.json` sets
+`server.url` to `https://pgdesk.dygine.com`, so the Android app opens the live
+website inside the app, exactly like a browser - with the camera, GPS,
+notifications and saved login still native.
+
+So **a deploy is the update, for the browser and the app together:**
 
 ```powershell
-cd frontend
-npm version patch
-npm run build:update -- --notes "What changed"
-git add -A; git commit -m "Release"; git push
+git add -A
+git commit -m "What changed"
+git push
 ```
 
-Writes `dist/updates/version.json` and `dist/updates/pgdesk-<version>.zip`
-(~257 kB). Installed apps check on open, show an **Update** button, download,
-reload. No installer, no permission, no Android dialog.
+Render rebuilds the site; the next time the app or a browser tab opens, it has
+the new version. A screen that was already open shows *"A new version of PGDesk
+is ready - Reload"* (`src/lib/liveUpdate.js`, `UpdateBanner.jsx`). It never
+reloads by itself, because a reload mid-form loses what was typed.
 
-Rollback is automatic: a bundle that fails to start reverts to the previous one.
+No `npm version`, no `build:update`, no bundle zip - all of that was removed
+together with the `@capgo/capacitor-updater` plugin. (It never worked for
+installed apps: the manifest URL was relative, so inside the APK it pointed at
+the app's own files, and no installed app ever saw an update.)
+
+With no internet the app shows `public/offline.html`, the one page that lives
+inside the APK (`server.errorPath`); it retries when the connection returns.
+
+**Recommended once, on Render:** static site `pgdesk` → Settings → Headers →
+path `/*`, header `Cache-Control`, value `no-cache`. Asset files are hashed, so
+this only makes the phone re-check `index.html` on each open (a cheap 304) and
+guarantees a fresh open never shows old screens.
 
 ### What DOES need a new APK
 
 | Change | New APK? |
 |---|---|
-| Pages, features, fixes, styling, API changes | **No** |
-| New Capacitor plugin | **Yes** |
+| Pages, features, fixes, styling, API changes | **No** - push to GitHub |
+| New Capacitor plugin (native feature) | **Yes** |
 | New Android permission | **Yes** |
 | App icon or name | **Yes** |
+| Moving the website to a different address | **Yes** (`server.url`) |
 
-Realistically a few times a year. When it happens, raise `minNativeVersion` in
-the manifest so older APKs get a "must update" gate instead of being offered a
-bundle they cannot run.
+If a web change starts using a new native plugin, check
+`Capacitor.isPluginAvailable('Name')` before calling it: phones on an older APK
+will be running the new screens without that plugin.
 
-Version numbers come from `frontend/package.json`. One `npm version patch` moves
-the bundle, the manifest and the Android `versionCode`/`versionName` together.
+### The trade-offs, stated plainly
+
+- **Needs internet.** It did before too - every screen reads the API - so the
+  offline page replaces what was a broken screen, not a working one.
+- **The website controls the app.** Whoever can change pgdesk.dygine.com (the
+  GitHub repo, the Render account, the dygine.com DNS) can change what runs in
+  the app, native plugins included. Protect those accounts with 2FA.
+- Capacitor's docs call `server.url` "not intended for production", for those
+  two reasons and because Apple rejects plain website wrappers. PGDesk is
+  Android-only and distributed as its own APK, so no store rule applies.
 
 ---
 
@@ -320,10 +344,12 @@ promise settles **never**.
 Symptom: app frozen on "Restoring your session…" forever. Only visible in
 logcat as `"Preferences.then()" is not implemented on android`.
 
-### `notifyAppReady()` must run at startup, not in a component
+### The app shows the website, not a copy of it
 
-It lives in `src/main.jsx`. It was once inside `UpdateBanner`, which only
-renders after login — so on the login screen it never ran.
+Since September 2026 the APK loads `https://pgdesk.dygine.com` (`server.url`).
+If phones ever show old screens after a deploy, the cause is caching of
+`index.html`, not the APK - see §6 for the Render header. The old live-update
+plugin and its `notifyAppReady()` handshake are gone.
 
 ### Android sessions do not use the cookie
 
@@ -498,8 +524,8 @@ Full list in `CHANGELOG-2026-09.md`. What matters operationally:
 
 - **Migration 0013** runs on API boot like the others. Additive only: five new
   tables, new nullable/defaulted columns. Safe on the existing Neon database.
-- **No new APK.** Nothing native changed. `npm version patch`, then
-  `npm run build:update -- --notes "Staff, notices, payments, P&L, weekly menu"`.
+- **One new APK, once.** The APK now opens the live website (§6), so after
+  installing it, every later change ships with a plain `git push`.
 - **Razorpay is per PG, and the money goes to the PG.** Each owner pastes their
   own key id and key secret under Settings → Payments ("Check the keys work"
   calls Razorpay). The secret is write-only, like the Brevo key. For the webhook,

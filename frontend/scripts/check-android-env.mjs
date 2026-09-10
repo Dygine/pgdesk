@@ -74,4 +74,16 @@ if (seed === 'true') {
 
 console.log(`  API origin : ${parsed.origin}${parsed.pathname.replace(/\/$/, '')}`)
 console.log('  seed accounts: excluded')
+
+// The app opens the live website rather than a copy baked into the APK, so the
+// address it opens is the one setting that must be right before building.
+let appUrl
+try { appUrl = new URL(JSON.parse(fs.readFileSync('capacitor.config.json', 'utf8')).server?.url || '') }
+catch { appUrl = null }
+if (!appUrl || appUrl.protocol !== 'https:') {
+  console.error('\n  Android build refused.\n\n  capacitor.config.json needs server.url set to the live site over https,\n' +
+    '  e.g. "server": { "url": "https://pgdesk.dygine.com", "errorPath": "offline.html" }\n')
+  process.exit(1)
+}
+console.log(`  App opens  : ${appUrl.origin}  (screens update with every website deploy)`)
 console.log('  checks passed — building\n')

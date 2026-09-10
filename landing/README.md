@@ -58,21 +58,9 @@ cd android && ./gradlew assembleRelease
 cp app/build/outputs/apk/release/app-release.apk ../../landing/pgdesk.apk
 ```
 
-## Live updates
+## Updates
 
-Most releases do **not** need a new APK. Anything that is only React, CSS or API
-changes ships as a bundle the installed app downloads itself:
-
-```bash
-cd frontend
-npm version patch              # bumps package.json, the bundle and the APK together
-npm run build:update -- --notes "What changed"
-```
-
-That writes `dist/updates/version.json` and `dist/updates/pgdesk-<version>.zip`.
-Deploy the static site as usual and installed apps pick it up on next open.
-
-A new APK is only required when native code changes: a new Capacitor plugin, a
-new Android permission, or a different app icon or name. In that case bump
-`minNativeVersion` in the manifest so older APKs are told to reinstall rather
-than being offered a bundle they cannot run.
+The app opens https://pgdesk.dygine.com inside itself, so deploying the
+website updates the app too - `git push` and you are done. A new APK is only
+needed for native changes (a plugin, a permission, the icon or name) or a new
+website address. See HANDOVER.md §6.

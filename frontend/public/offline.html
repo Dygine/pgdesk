@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#1B1E4D" />
+  <title>PGDesk - no connection</title>
+  <!--
+    Shown by the Android app when it cannot load https://pgdesk.dygine.com
+    (capacitor.config.json -> server.errorPath). It is the one page that lives
+    inside the APK, so it must work with no network: no scripts from anywhere
+    else, no fonts, no images. Capacitor plugins are not available here.
+  -->
+  <style>
+    html, body { margin: 0; height: 100%; background: #F5F6FA; color: #1e293b;
+      font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    main { min-height: 100%; display: flex; align-items: center; justify-content: center;
+      padding: 24px; box-sizing: border-box; text-align: center; }
+    .box { max-width: 340px; }
+    .mark { width: 44px; height: 44px; border-radius: 12px; background: #1B1E4D; color: #fff;
+      display: inline-flex; align-items: center; justify-content: center; font-weight: 700; }
+    h1 { font-size: 17px; margin: 16px 0 6px; }
+    p { font-size: 14px; line-height: 1.55; color: #475569; margin: 0 0 20px; }
+    button { height: 44px; padding: 0 22px; border: 0; border-radius: 10px; background: #2C3182;
+      color: #fff; font-size: 15px; font-weight: 600; }
+    button:active { background: #232764; }
+    small { display: block; margin-top: 14px; color: #94a3b8; font-size: 12px; }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="box">
+      <span class="mark">P</span>
+      <h1>No connection to PGDesk</h1>
+      <p>Check your mobile data or Wi-Fi. You are still signed in &mdash; nothing is lost.</p>
+      <button type="button" id="retry">Try again</button>
+      <small>Trying again automatically when your connection is back.</small>
+    </div>
+  </main>
+  <script>
+    var APP = 'https://pgdesk.dygine.com/';
+    function go() { window.location.replace(APP); }
+    document.getElementById('retry').addEventListener('click', go);
+    window.addEventListener('online', go);
+  </script>
+</body>
+</html>

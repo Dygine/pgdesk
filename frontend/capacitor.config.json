@@ -7,7 +7,9 @@
     "captureInput": true
   },
   "server": {
-    "androidScheme": "https"
+    "url": "https://pgdesk.dygine.com",
+    "errorPath": "offline.html",
+    "cleartext": false
   },
   "plugins": {
     "StatusBar": {
@@ -18,12 +20,6 @@
     "Keyboard": {
       "resize": "native",
       "resizeOnFullScreen": true
-    },
-    "CapacitorUpdater": {
-      "autoUpdate": false,
-      "resetWhenUpdate": true,
-      "appReadyTimeout": 10000,
-      "directUpdate": false
     }
   }
 }
