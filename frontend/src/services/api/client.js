@@ -159,6 +159,14 @@ function toError(payload, status) {
   })
 }
 
+/**
+ * How long to wait for /auth/refresh before giving up and showing the login
+ * screen. Generous rather than snappy: a sleeping free-tier instance genuinely
+ * needs about fifty seconds to wake, and cutting it off at ten would sign
+ * people out every morning for no reason.
+ */
+const REFRESH_TIMEOUT_MS = 60000
+
 /** A single in-flight refresh, shared by every request that hits a 401 at once. */
 let refreshInFlight = null
 
@@ -172,12 +180,28 @@ export async function refreshAccessToken() {
         // On native there is no usable cookie, so the stored token goes in the
         // body — the same endpoint, the same rotation, a different courier.
         const stored = await readRefreshToken()
-        const res = await fetch(buildUrl('/auth/refresh'), {
-          method: 'POST',
-          headers: baseHeaders(),
-          credentials: 'include',
-          body: JSON.stringify(stored ? { refresh_token: stored } : {}),
-        })
+
+        // Bounded, because this call gates the whole launch: the app shows
+        // "Restoring your session" until it answers. A free-tier host that
+        // sleeps takes the better part of a minute to wake, and an unreachable
+        // one never answers at all - without a ceiling the user sits on a
+        // splash screen with no way forward. Timing out lands them on the login
+        // form, which is at least a screen they can act on.
+        const abort = new AbortController()
+        const timer = setTimeout(() => abort.abort(), REFRESH_TIMEOUT_MS)
+
+        let res
+        try {
+          res = await fetch(buildUrl('/auth/refresh'), {
+            method: 'POST',
+            headers: baseHeaders(),
+            credentials: 'include',
+            body: JSON.stringify(stored ? { refresh_token: stored } : {}),
+            signal: abort.signal,
+          })
+        } finally {
+          clearTimeout(timer)
+        }
         const payload = await parse(res)
         if (!res.ok || payload?.success === false) {
           // A refusal means this token is spent or revoked. Keeping it would
