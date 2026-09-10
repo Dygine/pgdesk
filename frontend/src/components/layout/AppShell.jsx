@@ -305,22 +305,30 @@ function ProfileMenu() {
  */
 function ChangePasswordModal({ open, onClose, forced }) {
   const { success, error } = useToast()
+  const { replaceAccount } = useAuth()
   const [current, setCurrent] = useState('')
   const [next, setNext] = useState('')
   const [confirm, setConfirm] = useState('')
   const [busy, setBusy] = useState(false)
 
+  // `forced` is the first sign-in on a temporary password - including a
+  // resident who scanned a sign-in QR and never saw that password. The server
+  // accepts no current password in exactly that state, so none is asked for.
   const submit = async () => {
+    if (!forced && !current) return error('Enter your current password.')
     if (next.length < 8) return error('Use at least 8 characters.')
     if (next !== confirm) return error('The two new passwords do not match.')
     setBusy(true)
     try {
-      await authApi.changePassword(current, next)
-      success('Password changed', 'Your other devices have been signed out.')
+      const user = await authApi.changePassword(forced ? null : current, next)
+      success(forced ? 'Password set' : 'Password changed',
+        forced ? 'Use it with your email next time you sign in.'
+          : 'Your other devices have been signed out.')
       setCurrent(''); setNext(''); setConfirm('')
+      if (user) replaceAccount(user)
       onClose()
     } catch (err) {
-      error('Could not change your password', err.message)
+      error(forced ? 'Could not set your password' : 'Could not change your password', err.message)
     } finally {
       setBusy(false)
     }
@@ -328,24 +336,28 @@ function ChangePasswordModal({ open, onClose, forced }) {
 
   return (
     <Modal open={open} onClose={forced ? () => {} : onClose} size="sm"
-      title="Change your password"
-      subtitle={forced ? 'This account is using a temporary password.' : undefined}
+      title={forced ? 'Set your password' : 'Change your password'}
+      subtitle={forced ? 'Choose a password you will remember. You sign in with it and your email from now on.' : undefined}
       footer={<>
         {!forced && <Button onClick={onClose}>Cancel</Button>}
-        <Button variant="primary" onClick={submit} loading={busy}>Change password</Button>
+        <Button variant="primary" onClick={submit} loading={busy}>
+          {forced ? 'Set password' : 'Change password'}
+        </Button>
       </>}>
       <div className="space-y-4">
-        <FormField label="Current password" required>
-          <Input type="password" value={current} onChange={(e) => setCurrent(e.target.value)}
-            autoComplete="current-password" />
-        </FormField>
+        {!forced && (
+          <FormField label="Current password" required>
+            <Input type="password" value={current} onChange={(e) => setCurrent(e.target.value)}
+              autoComplete="current-password" />
+          </FormField>
+        )}
         <FormField label="New password" required hint="At least 8 characters.">
           <Input type="password" value={next} onChange={(e) => setNext(e.target.value)}
             autoComplete="new-password" />
         </FormField>
         <FormField label="Confirm new password" required>
           <Input type="password" value={confirm} onChange={(e) => setConfirm(e.target.value)}
-            autoComplete="new-password" />
+            autoComplete="new-password" onKeyDown={(e) => e.key === 'Enter' && submit()} />
         </FormField>
       </div>
     </Modal>
@@ -353,28 +365,57 @@ function ChangePasswordModal({ open, onClose, forced }) {
 }
 
 /* ------------------------------------------------------------ bottom nav */
-function BottomNav({ items, onMore }) {
+function isActivePath(pathname, item) {
+  if (item.end) return pathname === item.to || pathname === `${item.to}/`
+  return pathname === item.to || pathname.startsWith(`${item.to}/`)
+}
+
+/**
+ * The phone tab bar. The current tab gets a filled pill in the brand colour,
+ * a heavier icon and a bold label - the old grey-to-navy text change was too
+ * faint to see at a glance on a phone. "More" lights up while the drawer is
+ * open, and whenever the current page is not one of the tabs, so there is
+ * always exactly one answer to "where am I".
+ */
+function BottomNav({ items, onMore, drawerOpen }) {
+  const { pathname } = useLocation()
+  const anyActive = items.some((it) => isActivePath(pathname, it))
+  const moreActive = drawerOpen || !anyActive
+  const tab = 'relative w-full flex flex-col items-center gap-1 pt-2 pb-1.5 text-[11px] leading-none select-none transition active:scale-95'
+  const pill = 'h-8 w-14 rounded-full inline-flex items-center justify-center transition-colors duration-200'
+  const noTapFlash = { WebkitTapHighlightColor: 'transparent' }
+
   return (
-    <nav data-bottom-nav className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-line safe-b"
-      aria-label="Primary">
-      <ul className="flex">
-        {items.map((it) => (
-          <li key={it.to} className="flex-1">
-            <NavLink to={it.to} end={it.end}
-              className={({ isActive }) => cx('flex flex-col items-center gap-0.5 py-2 text-2xs transition-colors',
-                isActive ? 'text-brand-800 font-medium' : 'text-slate-500')}>
-              {it.primary ? (
-                <span className="h-9 w-9 -mt-3 rounded-full bg-brand-700 text-white inline-flex items-center justify-center shadow-lift">
-                  <it.icon size={19} />
-                </span>
-              ) : <it.icon size={20} />}
-              <span>{it.label}</span>
-            </NavLink>
-          </li>
-        ))}
-        <li className="flex-1">
-          <button onClick={onMore} className="w-full flex flex-col items-center gap-0.5 py-2 text-2xs text-slate-500">
-            <MoreHorizontal size={20} />
+    <nav data-bottom-nav aria-label="Primary"
+      className="lg:hidden fixed bottom-0 inset-x-0 z-40 bg-white border-t border-line safe-b shadow-[0_-2px_10px_rgba(16,24,40,0.05)]">
+      <ul className="flex px-1">
+        {items.map((it) => {
+          const active = isActivePath(pathname, it)
+          return (
+            <li key={it.to} className="flex-1 min-w-0">
+              <Link to={it.to} aria-current={active ? 'page' : undefined} style={noTapFlash}
+                className={cx(tab, active ? 'text-brand-700 font-semibold' : 'text-slate-500')}>
+                {it.primary ? (
+                  <span className={cx('h-11 w-11 -mt-5 rounded-full inline-flex items-center justify-center text-white shadow-lift ring-4 ring-white transition-colors',
+                    active ? 'bg-brand-600' : 'bg-brand-800')}>
+                    <it.icon size={20} />
+                  </span>
+                ) : (
+                  <span className={cx(pill, active ? 'bg-brand-100 text-brand-700' : 'active:bg-slate-100')}>
+                    <it.icon size={20} strokeWidth={active ? 2.4 : 2} />
+                  </span>
+                )}
+                <span className="max-w-full truncate px-0.5">{it.label}</span>
+              </Link>
+            </li>
+          )
+        })}
+        <li className="flex-1 min-w-0">
+          <button type="button" onClick={onMore} aria-expanded={!!drawerOpen} style={noTapFlash}
+            className={cx(tab, moreActive ? 'text-brand-700 font-semibold' : 'text-slate-500')}>
+            <span className={cx(pill, moreActive ? 'bg-brand-100 text-brand-700' : 'active:bg-slate-100')}>
+              <MoreHorizontal size={20} strokeWidth={moreActive ? 2.4 : 2} />
+            </span>
             <span>More</span>
           </button>
         </li>
@@ -501,7 +542,7 @@ export function AppShell({ navGroups, bottomItems, children, banner, showBranchS
         <div className="px-3 sm:px-5 lg:px-7 py-5 lg:py-7 max-w-[100rem] mx-auto">{children}</div>
       </main>
 
-      {bottom.length > 0 && <BottomNav items={bottom} onMore={() => setDrawer(true)} />}
+      {bottom.length > 0 && <BottomNav items={bottom} onMore={() => setDrawer(true)} drawerOpen={drawer} />}
     </div>
   )
 }

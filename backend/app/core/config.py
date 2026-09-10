@@ -61,6 +61,16 @@ class Settings(BaseSettings):
     # --- cors ---
     cors_origins: str = "http://localhost:5173"
 
+    # --- area search for people looking for a PG ---
+    #
+    # Nominatim (OpenStreetMap) by default: free, no key. Its policy wants an
+    # identifying User-Agent and at most one request a second, which is why the
+    # API proxies and caches rather than letting every phone call it. Point this
+    # at a self-hosted or paid Nominatim when traffic grows; set it empty to
+    # switch area search off (the text search keeps working).
+    geocoder_url: str = "https://nominatim.openstreetmap.org"
+    geocoder_user_agent: str = "PGDesk/1.0 (PG finder; https://get.dygine.com)"
+
     # --- development conveniences ---
     demo_password: str = "demo1234"
 

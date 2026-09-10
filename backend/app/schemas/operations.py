@@ -58,6 +58,9 @@ class ResidentUpdate(BaseModel):
     first_name: str | None = None
     last_name: str | None = None
     full_name: str | None = None
+    #: Editable, because it becomes the sign-in ID when portal access is given
+    #: later. Sending null removes it - refused while a login depends on it.
+    email: EmailStr | None = None
     phone: str | None = None
     alternate_phone: str | None = None
     date_of_birth: date | None = None
@@ -77,6 +80,11 @@ class ResidentUpdate(BaseModel):
     rent_due_day: int | None = Field(default=None, ge=1, le=28)
     status: str | None = None
     notes: str | None = None
+
+
+class PortalAccessRequest(BaseModel):
+    """Optional email, saved on the resident first when they have none yet."""
+    email: EmailStr | None = None
 
 
 class BedAssignment(BaseModel):

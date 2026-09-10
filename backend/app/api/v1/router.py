@@ -8,7 +8,7 @@ from one file rather than discovered by grepping.
 from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
-    public,
+    public, seeker,
     auth, billing, dashboard, master, me, meta, operations, property, rbac,
     residents, support,
 )
@@ -16,6 +16,7 @@ from app.api.v1.endpoints import (
 api_router = APIRouter()
 
 api_router.include_router(public.router)
+api_router.include_router(seeker.router)        # /public/seeker/*  PG-seeker accounts
 api_router.include_router(auth.router)          # /auth
 api_router.include_router(meta.router)          # /meta
 api_router.include_router(master.router)        # /master/*   (platform operator)

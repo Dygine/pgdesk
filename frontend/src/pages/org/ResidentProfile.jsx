@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { useParams, useNavigate, Link } from 'react-router-dom'
 import {
   ArrowLeft, BedDouble, LogOut, ArrowLeftRight, ShieldCheck, ShieldX, Plus,
-  IdCard, Receipt, CalendarCheck, MessageSquareWarning, RefreshCw,
+  IdCard, Receipt, CalendarCheck, MessageSquareWarning, RefreshCw, Pencil,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useApi } from '@/lib/useApi'
@@ -18,6 +18,7 @@ import {
   InlineAlert, Modal, FormField, Input, Select, Textarea, Tabs, Avatar, IconButton,
 } from '@/components/ui'
 import { inr, num, dateFmt, relative, timeFmt } from '@/lib/format'
+import { PortalAccessCard, EditResidentModal } from './ResidentAccess'
 
 const ID_TYPES = ['AADHAAR', 'PAN', 'PASSPORT', 'DRIVING_LICENCE', 'VOTER_ID', 'OTHER']
 
@@ -84,6 +85,9 @@ export default function ResidentProfile() {
           : 'No bed assigned'}
         actions={<>
           <Button icon={ArrowLeft} onClick={() => navigate('/app/residents')}>Back</Button>
+          <PermissionGuard perm="customers.edit">
+            <Button icon={Pencil} onClick={() => setModal('edit')}>Edit</Button>
+          </PermissionGuard>
           {!r.bed_id && r.status !== 'CHECKED_OUT' && (
             <PermissionGuard perm={['customers.assign_bed', 'beds.assign']}>
               <Button variant="primary" icon={BedDouble}
@@ -153,7 +157,9 @@ export default function ResidentProfile() {
                   ['Emergency contact', r.emergency_contact_name
                     ? `${r.emergency_contact_name} (${r.emergency_contact_relation || 'contact'}) · ${r.emergency_contact_phone || ''}`
                     : null],
-                  ['Portal login', r.has_portal_login ? 'Yes' : 'No'],
+                  ['App login', r.has_portal_login
+                    ? (r.must_change_password ? 'Waiting for first sign-in' : 'Active')
+                    : 'Not set up'],
                   ['Gate QR', r.has_qr ? 'Issued' : 'Not issued']].map(([k, v]) => (
                   <div key={k} className="px-5 py-2.5 grid grid-cols-3 gap-3">
                     <dt className="text-xs text-slate-500">{k}</dt>
@@ -175,6 +181,8 @@ export default function ResidentProfile() {
                 )}
               </div>
             </Card>
+
+            <PortalAccessCard resident={r} onChanged={resident.reload} />
 
             {r.notes && (
               <Card className="lg:col-span-2">
@@ -334,6 +342,9 @@ export default function ResidentProfile() {
           </div>
         )}
       </div>
+
+      <EditResidentModal resident={r} open={modal === 'edit'} onClose={() => setModal(null)}
+        onSaved={() => { setModal(null); resident.reload() }} />
 
       <Modal open={modal === 'bed'} onClose={() => setModal(null)} size="sm"
         title="Assign a bed" subtitle="Only beds that are free right now are listed."

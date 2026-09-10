@@ -68,7 +68,7 @@ export async function requestPermission() {
  * `maximumAge` is zero deliberately. A cached fix from when the resident was at
  * college would happily pass a geofence check.
  */
-export async function currentPosition({ timeout = 15000 } = {}) {
+export async function currentPosition({ timeout = 15000, highAccuracy = true, maximumAge = 0 } = {}) {
   let Geolocation
   try {
     ;({ Geolocation } = await loadGeolocation())
@@ -78,7 +78,9 @@ export async function currentPosition({ timeout = 15000 } = {}) {
 
   try {
     const pos = await Geolocation.getCurrentPosition({
-      enableHighAccuracy: true, timeout, maximumAge: 0,
+      // The PG finder passes highAccuracy:false and a few minutes of maximumAge:
+      // "which neighbourhood" needs a quick coarse fix, not a geofence-grade one.
+      enableHighAccuracy: highAccuracy, timeout, maximumAge,
     })
     return {
       latitude: pos.coords.latitude,

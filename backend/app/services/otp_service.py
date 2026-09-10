@@ -191,6 +191,28 @@ class OtpService:
         self.db.flush()
         return token
 
+    # ---------------------------------------------------------------- peek
+    def peek(self, *, token: str, purpose: str) -> str:
+        """
+        Which address a verification token proves, without spending it.
+
+        For flows that must decide what to ask next before committing - a seeker
+        signing in who turns out to have no account yet is asked for their name,
+        and the token they already earned has to survive that question. The
+        same checks as `consume`, and no state change; the caller still spends
+        the token with `consume` when it acts on it.
+        """
+        now = datetime.now(timezone.utc)
+        row = self.db.scalars(
+            select(OtpCode).where(
+                OtpCode.verification_token_hash == _hash((token or "").strip()),
+                OtpCode.purpose == purpose)).first()
+        if row is None or row.consumed_at is not None:
+            raise OtpError("bad_token", "That verification has already been used. Start again.")
+        if row.expires_at <= now:
+            raise OtpError("expired", "That verification has expired. Start again.")
+        return row.email
+
     # --------------------------------------------------------------- spend
     def consume(self, *, token: str, purpose: str) -> str:
         """

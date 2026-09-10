@@ -39,6 +39,7 @@ from app.models.enums import (
     CustomerStatus, OrganizationStatus, PrincipalKind, UserStatus,
 )
 from app.permissions.catalog import MASTER_PERMISSIONS
+from app.services.login_code_service import LoginCodeService
 from app.schemas.auth import (
     AuthenticatedUser, BranchSummary, OrganizationSummary, RoleSummary, SubscriptionSummary,
 )
@@ -104,7 +105,22 @@ class AuthService:
         return self.db.scalars(select(User).where(User.email == email)).first()
 
     def _find_customer(self, email: str) -> Customer | None:
-        return self.db.scalars(select(Customer).where(Customer.email == email)).first()
+        """
+        The resident row this email signs in to.
+
+        An email is unique inside one PG, not across PGs, so someone who moved
+        from one PG to another can still have a checked-out row at the first.
+        The live row wins. A dead one is returned only when it is all there is,
+        so that person hears "you have checked out" rather than a generic
+        failure - and never, as before, whichever row the database found first.
+        """
+        rows = list(self.db.scalars(
+            select(Customer).where(Customer.email == email)
+            .order_by(Customer.created_at.desc())).all())
+        for row in rows:
+            if row.can_sign_in:
+                return row
+        return rows[0] if rows else None
 
     # ----------------------------------------------------- authentication --
     def authenticate(self, email: str, password: str) -> Principal:
@@ -305,20 +321,44 @@ class AuthService:
         return len(rows)
 
     # ---------------------------------------------------------- passwords --
-    def change_password(self, principal: Principal, current: str, new: str) -> None:
+    def change_password(self, principal: Principal, current: str | None, new: str) -> None:
+        """
+        Change, or on first sign-in set, the caller's password.
+
+        The current password may be left out only while the account is on an
+        owner-issued temporary one (`must_change_password`). That is the state
+        a resident is in after scanning a sign-in QR - they never saw the
+        temporary password, and demanding it would strand them on this screen.
+        Requiring it adds nothing there anyway: whoever holds this session got
+        it with that temporary password or with the owner's QR, and both came
+        from the PG. Once a password has been chosen the flag clears and the
+        current password is required again, as it always was.
+        """
         obj = principal.obj
         stored = obj.password_hash
-        if not stored or not verify_password(current, stored):
-            raise AuthenticationError("Your current password is incorrect.")
-        if verify_password(new, stored):
+        first_time = bool(obj.must_change_password)
+
+        if current:
+            if not stored or not verify_password(current, stored):
+                raise AuthenticationError("Your current password is incorrect.")
+        elif not first_time:
+            # 409 rather than 401: a 401 makes the client try a token refresh
+            # and resend, which is noise for a form that is simply incomplete.
+            raise ConflictError("Enter your current password.",
+                                code="current_password_required")
+        if stored and verify_password(new, stored):
             raise ConflictError("The new password must be different from the current one.")
 
         obj.password_hash = hash_password(new)
         obj.must_change_password = False
 
-        # Changing a password invalidates every other session; that is the whole
-        # point of changing it after a suspected compromise.
+        # Changing a password invalidates every session; that is the whole
+        # point of changing it after a suspected compromise. The caller hands
+        # the device that made this request a fresh pair afterwards.
         self.revoke_all_sessions(principal)
+        if not principal.is_user:
+            # A sign-in QR must not outlive the password it stood in for.
+            LoginCodeService(self.db).revoke_all(obj.id)
 
     # ------------------------------------------------------ serialisation --
     def describe(self, principal: Principal) -> AuthenticatedUser:

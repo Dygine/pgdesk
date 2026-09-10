@@ -18,7 +18,7 @@ from __future__ import annotations
 
 import secrets
 import uuid
-from datetime import date
+from datetime import date, datetime, timezone
 
 from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
@@ -27,13 +27,14 @@ from app.core.dependencies import CurrentScope
 from app.core.exceptions import ConflictError, NotFoundError, PermissionDeniedError
 from app.core.security import hash_password
 from app.models import (
-    Bed, Branch, Building, Customer, Floor, ResidentKyc, Room,
+    Bed, Branch, Building, Customer, Floor, RefreshToken, ResidentKyc, Room, User,
 )
 from app.models.enums import (
     AuditAction, BedStatus, CustomerStatus, InvoiceItemKind, KycStatus,
     NotificationType,
 )
 from app.services.audit import AuditService
+from app.services.login_code_service import LoginCodeService
 from app.services.notification_service import NotificationService
 from app.services.subscription_limits import SubscriptionLimitService
 
@@ -114,6 +115,77 @@ class ResidentService:
         resident.building_id = room.building_id
         resident.branch_id = bed.branch_id
 
+    def _assert_email_free(self, email: str, *, exclude_id: uuid.UUID | None = None,
+                           for_login: bool = False) -> None:
+        """
+        Refuse an email that would collide.
+
+        Inside this PG an email names one resident, full stop - the database
+        enforces that too, this just says it in words.
+
+        For a portal login the check has to reach further, because sign-in is
+        by email across the whole platform: a staff account anywhere with the
+        same address is found first and the resident could never get in, and a
+        live resident login at another PG would make the address ambiguous.
+        Saying so is a small disclosure to staff who already know the address,
+        and the alternative is a login that silently never works.
+        """
+        same_org = select(Customer).where(
+            Customer.organization_id == self.org_id, Customer.email == email)
+        if exclude_id is not None:
+            same_org = same_org.where(Customer.id != exclude_id)
+        if self.db.scalars(same_org).first():
+            raise ConflictError("Another resident here already uses that email.")
+
+        if not for_login:
+            return
+        if self.db.scalars(select(User).where(User.email == email)).first():
+            raise ConflictError(
+                "That email already belongs to a staff or owner login on PGDesk. "
+                "Use a different email for this resident.")
+        elsewhere = self.db.scalars(select(Customer).where(
+            Customer.email == email, Customer.organization_id != self.org_id,
+            Customer.password_hash.is_not(None))).all()
+        if any(c.can_sign_in for c in elsewhere):
+            raise ConflictError(
+                "That email is already used to sign in to another PG on PGDesk. "
+                "Use a different email for this resident.")
+
+    def _revoke_sessions(self, resident: Customer) -> int:
+        """Sign the resident out everywhere. Used when their access changes."""
+        now = datetime.now(timezone.utc)
+        rows = list(self.db.scalars(select(RefreshToken).where(
+            RefreshToken.customer_id == resident.id,
+            RefreshToken.revoked_at.is_(None))).all())
+        for row in rows:
+            row.revoked_at = now
+        return len(rows)
+
+    def _issue_credentials(self, resident: Customer) -> dict:
+        """
+        A fresh temporary password plus a 30-minute sign-in QR.
+
+        The password is returned once and stored only as a hash. The QR is the
+        easy path on a phone; the password is the fallback for a browser.
+        """
+        from app.services.organization_service import generate_temporary_password
+        temporary_password = generate_temporary_password()
+        resident.password_hash = hash_password(temporary_password)
+        resident.must_change_password = True
+        code = LoginCodeService(self.db).issue(resident, created_by_id=self.scope.user.id)
+        return {
+            "email": resident.email,
+            "temporary_password": temporary_password,
+            "must_change_password": True,
+            "login_code": code,
+        }
+
+    def _assert_can_have_login(self, resident: Customer) -> None:
+        if not resident.is_active or resident.status in (
+                CustomerStatus.CHECKED_OUT, CustomerStatus.ARCHIVED):
+            raise ConflictError(
+                "This resident has checked out, so they cannot have a portal login.")
+
     # ------------------------------------------------------------ querying
     def list(self, *, search=None, status=None, branch_id=None, room_id=None,
              page=1, page_size=25):
@@ -141,15 +213,27 @@ class ResidentService:
         return rows, total
 
     # ------------------------------------------------------------ creating
-    def create(self, data: dict) -> tuple[Customer, str | None]:
+    def create(self, data: dict) -> tuple[Customer, dict | None]:
+        """
+        Returns `(resident, credentials)`. Credentials are present only when a
+        portal login was asked for: email, temporary password and a sign-in QR.
+        """
         branch = self._assert_branch(data["branch_id"])
         self.limits.can_create_customer(self.org_id)
 
         email = (data.get("email") or "").strip().lower() or None
+        wants_login = bool(data.get("create_portal_login"))
+        if wants_login and not email:
+            # Refused rather than quietly skipped. Skipping is how a resident
+            # ended up with "no login" while the desk believed they had one.
+            raise ConflictError(
+                "A portal login needs an email address - it is their sign-in ID.")
         if email and self.db.scalars(
             select(Customer).where(Customer.organization_id == self.org_id,
                                    Customer.email == email)).first():
             raise ConflictError("A resident with that email already exists.")
+        if email and wants_login:
+            self._assert_email_free(email, for_login=True)
 
         first = (data.get("first_name") or "").strip()
         last = (data.get("last_name") or "").strip()
@@ -178,26 +262,23 @@ class ResidentService:
             qr_token=generate_qr_token(),
         )
 
-        # Portal access is optional. A resident recorded at the enquiry desk has
-        # no login until someone gives them one.
-        temporary_password = None
-        if data.get("create_portal_login") and email:
-            from app.services.organization_service import generate_temporary_password
-            temporary_password = generate_temporary_password()
-            resident.password_hash = hash_password(temporary_password)
-            resident.must_change_password = True
-
         self.db.add(resident)
         self.db.flush()
+
+        # Portal access is optional. A resident recorded at the enquiry desk has
+        # no login until someone gives them one - now or later, from their
+        # profile, with `grant_portal_access`.
+        credentials = self._issue_credentials(resident) if wants_login else None
 
         if data.get("bed_id"):
             self.assign_bed(resident.id, data["bed_id"], log=False)
 
         self.audit.record(
             scope=self.scope, module="Residents", action=AuditAction.CREATE,
-            description=f"Created resident {resident.full_name}",
+            description=(f"Created resident {resident.full_name}"
+                         + (" with a portal login" if credentials else "")),
             entity_type="resident", entity_id=resident.id, branch_id=branch.id)
-        return resident, temporary_password
+        return resident, credentials
 
     def update(self, resident_id: uuid.UUID, data: dict) -> Customer:
         resident = self.get(resident_id)
@@ -210,6 +291,18 @@ class ResidentService:
             if data.get(field) is not None:
                 setattr(resident, field, data[field])
 
+        if "email" in data:
+            new_email = (data.get("email") or "").strip().lower() or None
+            if new_email != resident.email:
+                if new_email is None and resident.password_hash:
+                    raise ConflictError(
+                        "This resident signs in with that email. Turn off portal "
+                        "access before removing it.")
+                if new_email:
+                    self._assert_email_free(new_email, exclude_id=resident.id,
+                                            for_login=bool(resident.password_hash))
+                resident.email = new_email
+
         if data.get("status") is not None and data["status"] != resident.status:
             # Checkout has its own method - it has to free the bed.
             if data["status"] == CustomerStatus.CHECKED_OUT:
@@ -220,6 +313,106 @@ class ResidentService:
         self.audit.record(
             scope=self.scope, module="Residents", action=AuditAction.UPDATE,
             description=f"Updated resident {resident.full_name}",
+            entity_type="resident", entity_id=resident.id, branch_id=resident.branch_id)
+        return resident
+
+    # -------------------------------------------------------- portal access
+    def grant_portal_access(self, resident_id: uuid.UUID,
+                            email: str | None = None) -> tuple[Customer, dict]:
+        """
+        Give an existing resident a login - the path that used to be missing.
+
+        A resident added without the "portal login" tick had no way to get one
+        afterwards: the edit endpoint did not accept an email and nothing issued
+        a password. This is that way. An email can be supplied here, in which
+        case it is saved on the resident first, because it becomes their
+        sign-in ID.
+        """
+        resident = self.get(resident_id)
+        self._assert_can_have_login(resident)
+        if resident.password_hash:
+            raise ConflictError(
+                "They already have portal access. Use Reset password to issue new "
+                "sign-in details.", code="already_has_access")
+
+        email = (email or "").strip().lower() or None
+        if email and email != resident.email:
+            self._assert_email_free(email, exclude_id=resident.id, for_login=True)
+            resident.email = email
+        if not resident.email:
+            raise ConflictError(
+                "Add an email address first - it becomes their sign-in ID.",
+                code="email_required")
+        self._assert_email_free(resident.email, exclude_id=resident.id, for_login=True)
+
+        credentials = self._issue_credentials(resident)
+        self.audit.record(
+            scope=self.scope, module="Residents", action=AuditAction.UPDATE,
+            description=f"Gave {resident.full_name} a portal login",
+            entity_type="resident", entity_id=resident.id, branch_id=resident.branch_id)
+        return resident, credentials
+
+    def reset_portal_password(self, resident_id: uuid.UUID) -> tuple[Customer, dict]:
+        """
+        New temporary password and a new QR; every existing session ends.
+
+        The deliberate, visible way back into an account whose owner has chosen
+        their own password: the resident notices, because the password they
+        chose stops working.
+        """
+        resident = self.get(resident_id)
+        self._assert_can_have_login(resident)
+        if not resident.password_hash:
+            raise ConflictError(
+                "They do not have portal access yet. Use Give portal access.",
+                code="no_access")
+        self._revoke_sessions(resident)
+        credentials = self._issue_credentials(resident)
+        self.audit.record(
+            scope=self.scope, module="Residents", action=AuditAction.UPDATE,
+            description=f"Reset the portal password for {resident.full_name}",
+            entity_type="resident", entity_id=resident.id, branch_id=resident.branch_id)
+        return resident, credentials
+
+    def issue_login_code(self, resident_id: uuid.UUID) -> tuple[Customer, dict]:
+        """
+        A fresh sign-in QR without touching the password.
+
+        The everyday case: the first QR expired before the resident got round
+        to installing the app. Allowed only while they are still on the
+        temporary password - see `LoginCodeService` for why a QR must never
+        open an account whose owner has set their own password.
+        """
+        resident = self.get(resident_id)
+        self._assert_can_have_login(resident)
+        if not resident.password_hash:
+            raise ConflictError(
+                "They do not have portal access yet. Use Give portal access.",
+                code="no_access")
+        if not resident.must_change_password:
+            raise ConflictError(
+                "They have already set their own password, so a sign-in QR would "
+                "let someone else into their account. Use Reset password if they "
+                "are locked out.", code="password_already_set")
+        code = LoginCodeService(self.db).issue(resident, created_by_id=self.scope.user.id)
+        self.audit.record(
+            scope=self.scope, module="Residents", action=AuditAction.UPDATE,
+            description=f"Issued a sign-in QR for {resident.full_name}",
+            entity_type="resident", entity_id=resident.id, branch_id=resident.branch_id)
+        return resident, {"email": resident.email, "login_code": code}
+
+    def revoke_portal_access(self, resident_id: uuid.UUID) -> Customer:
+        """Take the login away: password cleared, sessions ended, QRs dead."""
+        resident = self.get(resident_id)
+        if not resident.password_hash:
+            raise ConflictError("They do not have portal access.", code="no_access")
+        resident.password_hash = None
+        resident.must_change_password = False
+        self._revoke_sessions(resident)
+        LoginCodeService(self.db).revoke_all(resident.id)
+        self.audit.record(
+            scope=self.scope, module="Residents", action=AuditAction.UPDATE,
+            description=f"Turned off portal access for {resident.full_name}",
             entity_type="resident", entity_id=resident.id, branch_id=resident.branch_id)
         return resident
 

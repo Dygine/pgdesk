@@ -255,6 +255,10 @@ class SelfCheckInService:
         kind, token = qr_payload.parse(raw_token)
         if not token:
             raise SelfCheckInError("invalid", "That code could not be read.")
+        if kind == qr_payload.KIND_LOGIN:
+            raise SelfCheckInError(
+                "wrong_code", "That is a sign-in QR, not a gate code. "
+                              "Scan the code displayed at the gate.")
         if kind == qr_payload.KIND_RESIDENT:
             # Someone pointed the app at another resident's card. Worth its own
             # message: it is a genuine and easy mistake, and "not recognised"

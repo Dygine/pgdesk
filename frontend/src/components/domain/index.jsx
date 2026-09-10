@@ -168,3 +168,4 @@ export { UpdateBanner } from './UpdateBanner'
 export {
   PermissionOnboarding, shouldAskPermissions, resetPermissionOnboarding,
 } from './PermissionOnboarding'
+export { PortalCredentials } from './PortalCredentials'

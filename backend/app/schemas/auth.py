@@ -70,8 +70,17 @@ class LogoutRequest(BaseModel):
 
 
 class ChangePasswordRequest(BaseModel):
-    current_password: str = Field(min_length=1, max_length=200)
+    #: Optional only while the account is on an owner-issued temporary password
+    #: (`must_change_password`). A resident who signed in by scanning a QR never
+    #: saw that password, so asking for it would strand them - see
+    #: AuthService.change_password.
+    current_password: str | None = Field(default=None, max_length=200)
     new_password: str = Field(min_length=8, max_length=200)
+
+
+class QrLoginRequest(BaseModel):
+    """The text inside a sign-in QR: `PGD1:L:<key>`."""
+    code: str = Field(min_length=8, max_length=300)
 
 
 # ----------------------------------------------------------------- responses

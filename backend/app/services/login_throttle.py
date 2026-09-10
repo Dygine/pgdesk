@@ -68,6 +68,20 @@ class LoginThrottle:
                 "Try again in a few minutes.",
                 retry_after=int(WINDOW.total_seconds()))
 
+    def check_ip(self, ip_address: str | None) -> None:
+        """
+        The per-address budget alone, for sign-in paths with no identifier.
+
+        A QR sign-in carries a random key rather than an email, so there is no
+        account to count against - but a source spraying keys should still hit
+        the same wall as one spraying passwords.
+        """
+        if ip_address and self._failures(ip_address=ip_address) >= MAX_FAILURES_PER_IP:
+            raise RateLimitedError(
+                "Too many sign-in attempts from this network. "
+                "Try again in a few minutes.",
+                retry_after=int(WINDOW.total_seconds()))
+
     def record(self, identifier: str, ip_address: str | None, *,
                successful: bool, reason: str | None = None) -> None:
         self.db.add(LoginAttempt(

@@ -18,6 +18,14 @@ export const residentApi = {
   checkout: (id, body) => api.post(`/residents/${id}/checkout`, body || {}).then(unwrap),
   reissueQr: (id) => api.post(`/residents/${id}/reissue-qr`).then(unwrap),
 
+  /* App access. Responses carry `credentials`: a 30-minute sign-in QR and,
+     when a password was issued, the temporary password (shown once). */
+  grantPortalAccess: (id, email) =>
+    api.post(`/residents/${id}/portal-access`, email ? { email } : {}).then(unwrap),
+  resetPortalPassword: (id) => api.post(`/residents/${id}/reset-password`).then(unwrap),
+  loginCode: (id) => api.post(`/residents/${id}/login-code`).then(unwrap),
+  revokePortalAccess: (id) => api.delete(`/residents/${id}/portal-access`).then(unwrap),
+
   kyc: (id) => api.get(`/residents/${id}/kyc`).then(unwrap),
   addKyc: (id, body) => api.post(`/residents/${id}/kyc`, body).then(unwrap),
   verifyKyc: (kycId, approved, notes) =>

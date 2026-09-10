@@ -9,7 +9,7 @@ from app.core.responses import ok, paginated
 from app.models import Bed, Branch, Building, Customer, Floor, Room
 from app.schemas.operations import (
     BedAssignment, CheckInRequest, CheckoutRequest, KycCreate, KycDecision,
-    ResidentCreate, ResidentUpdate, TransferRequest,
+    PortalAccessRequest, ResidentCreate, ResidentUpdate, TransferRequest,
 )
 from app.services.resident_service import ResidentService
 
@@ -41,6 +41,10 @@ def _resident(db, r: Customer, *, detail: bool = False) -> dict:
         "actual_checkout_date": (r.actual_checkout_date.isoformat()
                                  if r.actual_checkout_date else None),
         "has_portal_login": bool(r.password_hash),
+        # Still on the owner-issued temporary password. The profile screen uses
+        # it to decide between "show a new sign-in QR" and "reset password".
+        "must_change_password": bool(r.password_hash) and bool(r.must_change_password),
+        "last_login_at": r.last_login_at.isoformat() if r.last_login_at else None,
         "created_at": r.created_at.isoformat(),
     }
 
@@ -115,15 +119,12 @@ def get_resident(resident_id: uuid.UUID, db: DbSession, scope: Tenant,
 def create_resident(body: ResidentCreate, db: DbSession, scope: Tenant,
                     _: None = Depends(require("customers.create"))) -> dict:
     """Counts against the plan's resident limit. A bed may be assigned inline."""
-    resident, temporary_password = _svc(db, scope).create(body.model_dump())
+    resident, credentials = _svc(db, scope).create(body.model_dump())
     db.commit()
     db.refresh(resident)
     payload = _resident(db, resident, detail=True)
-    if temporary_password:
-        payload["credentials"] = {
-            "email": resident.email, "temporary_password": temporary_password,
-            "must_change_password": True,
-        }
+    if credentials:
+        payload["credentials"] = credentials
     return ok(payload, message=f"{resident.full_name} added.")
 
 
@@ -134,6 +135,54 @@ def update_resident(resident_id: uuid.UUID, body: ResidentUpdate, db: DbSession,
     db.commit()
     db.refresh(resident)
     return ok(_resident(db, resident, detail=True), message="Resident updated.")
+
+
+# ------------------------------------------------------------ portal access
+#
+# The temporary password in these responses is shown once and stored only as a
+# hash. The login code is a 30-minute, single-use key drawn as a QR on the
+# owner's screen - see app/models/login_code.py for why the QR never carries the
+# password itself.
+@router.post("/residents/{resident_id}/portal-access", summary="Give a portal login")
+def grant_portal_access(resident_id: uuid.UUID, db: DbSession, scope: Tenant,
+                        body: PortalAccessRequest | None = None,
+                        _: None = Depends(require("customers.edit"))) -> dict:
+    resident, credentials = _svc(db, scope).grant_portal_access(
+        resident_id, email=body.email if body else None)
+    db.commit()
+    db.refresh(resident)
+    payload = _resident(db, resident, detail=True)
+    payload["credentials"] = credentials
+    return ok(payload, message=f"{resident.full_name} can now sign in.")
+
+
+@router.post("/residents/{resident_id}/reset-password", summary="Reset their portal password")
+def reset_portal_password(resident_id: uuid.UUID, db: DbSession, scope: Tenant,
+                          _: None = Depends(require("customers.edit"))) -> dict:
+    resident, credentials = _svc(db, scope).reset_portal_password(resident_id)
+    db.commit()
+    db.refresh(resident)
+    payload = _resident(db, resident, detail=True)
+    payload["credentials"] = credentials
+    return ok(payload, message="New sign-in details issued. Old sessions were signed out.")
+
+
+@router.post("/residents/{resident_id}/login-code", summary="A fresh 30-minute sign-in QR")
+def issue_login_code(resident_id: uuid.UUID, db: DbSession, scope: Tenant,
+                     _: None = Depends(require("customers.edit"))) -> dict:
+    resident, credentials = _svc(db, scope).issue_login_code(resident_id)
+    db.commit()
+    return ok({"id": str(resident.id), "credentials": credentials},
+              message="New sign-in QR ready. It works for 30 minutes.")
+
+
+@router.delete("/residents/{resident_id}/portal-access", summary="Turn portal access off")
+def revoke_portal_access(resident_id: uuid.UUID, db: DbSession, scope: Tenant,
+                         _: None = Depends(require("customers.edit"))) -> dict:
+    resident = _svc(db, scope).revoke_portal_access(resident_id)
+    db.commit()
+    db.refresh(resident)
+    return ok(_resident(db, resident, detail=True), message="Portal access turned off.")
 
 
 @router.post("/residents/{resident_id}/assign-bed", summary="Assign a bed")

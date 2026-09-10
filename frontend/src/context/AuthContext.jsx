@@ -76,6 +76,32 @@ export function AuthProvider({ children }) {
     setBranchScope('all')
   }, [])
 
+  /** The resident's first sign-in, by scanning the QR their PG showed them. */
+  const loginWithQr = useCallback(async (code) => {
+    try {
+      const user = await authApi.qrLogin(code)
+      setAccount(user)
+      setStatus('authenticated')
+      setBranchScope('all')
+      return { ok: true, portal: user.portal, user }
+    } catch (err) {
+      return { ok: false, error: err.message || 'Could not sign you in.', code: err.code }
+    }
+  }, [])
+
+  /** Swap in a fresh account, e.g. the one change-password returns. */
+  const replaceAccount = useCallback((user) => { if (user) setAccount(user) }, [])
+
+  const refreshAccount = useCallback(async () => {
+    try {
+      const me = await authApi.me()
+      setAccount(me)
+      return me
+    } catch {
+      return null
+    }
+  }, [])
+
   /**
    * Impersonation is a master-admin feature (`master.impersonate`) with no
    * endpoint yet. It deliberately does NOT fall back to switching the local
@@ -92,7 +118,8 @@ export function AuthProvider({ children }) {
       user: null, customer: null, role: null, org: null, can: () => false,
       branches: [], branchScope: 'all', setBranchScope,
       apiBranches: [], apiBranchIds: [], activeBranchId: null,
-      login, logout, loginAs, isMaster: false, subscription: null,
+      login, logout, loginAs, loginWithQr, replaceAccount, refreshAccount,
+      isMaster: false, subscription: null,
       account: null, status, isAuthenticated: false, isLoading: status === 'loading',
       permissions: [], portal: null, mustChangePassword: false,
     }
@@ -171,7 +198,8 @@ export function AuthProvider({ children }) {
       activeBranchId,
       subscription: subscriptionState(account.organization),
     }
-  }, [account, status, branchScope, login, logout, loginAs])
+  }, [account, status, branchScope, login, logout, loginAs, loginWithQr,
+      replaceAccount, refreshAccount])
 
   return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>
 }

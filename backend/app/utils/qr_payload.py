@@ -3,6 +3,7 @@ The text encoded in a PGDesk QR code.
 
     PGD1:R:<token>    a resident's identity card, scanned by a guard
     PGD1:G:<token>    a gate's own code, scanned by a resident
+    PGD1:L:<token>    a one-time sign-in code, scanned on the login screen
 
 Why a prefix at all. A phone camera pointed at a gate will happily decode the
 UPI sticker next to it, a delivery label, or a poster. Without a marker the
@@ -25,6 +26,13 @@ from __future__ import annotations
 PREFIX = "PGD1"
 KIND_RESIDENT = "R"
 KIND_GATE = "G"
+#: A 30-minute, single-use sign-in key the PG shows a new resident, so they can
+#: sign in on the app without typing a temporary password. See
+#: `app/services/login_code_service.py` for why the key, not the password, is
+#: what goes in the symbol.
+KIND_LOGIN = "L"
+
+KINDS = (KIND_RESIDENT, KIND_GATE, KIND_LOGIN)
 
 #: Tokens are `secrets.token_urlsafe(24)`, which is 32 characters of the
 #: URL-safe alphabet. The bound is generous rather than exact so a future token
@@ -34,7 +42,7 @@ _MAX_TOKEN = 64
 
 def encode(kind: str, token: str) -> str:
     """Build the string that goes into a QR symbol."""
-    if kind not in (KIND_RESIDENT, KIND_GATE):
+    if kind not in KINDS:
         raise ValueError(f"unknown QR kind {kind!r}")
     return f"{PREFIX}:{kind}:{token}"
 
@@ -61,7 +69,7 @@ def parse(raw: str | None) -> tuple[str | None, str]:
     parts = text.split(":")
     if len(parts) == 3 and parts[0].upper() == PREFIX:
         kind = parts[1].upper()
-        if kind in (KIND_RESIDENT, KIND_GATE):
+        if kind in KINDS:
             return kind, parts[2].strip()[:_MAX_TOKEN]
         # A recognised prefix with an unrecognised kind is a newer card than
         # this build understands. Returning the raw text unchanged would send

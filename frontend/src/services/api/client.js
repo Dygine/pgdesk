@@ -222,8 +222,10 @@ export async function refreshAccessToken() {
   return refreshInFlight
 }
 
-async function request(path, { method = 'GET', body, params, auth = true, retry = true } = {}) {
-  const headers = baseHeaders()
+async function request(path, { method = 'GET', body, params, auth = true, retry = true, headers: extra } = {}) {
+  // `extra` is for the few calls that carry their own credential header, such
+  // as a PG seeker's session. It never replaces the CSRF or native markers.
+  const headers = { ...baseHeaders(), ...(extra || {}) }
   if (auth && accessToken) headers.Authorization = `Bearer ${accessToken}`
 
   let res
@@ -244,7 +246,7 @@ async function request(path, { method = 'GET', body, params, auth = true, retry 
      reload that is the normal state and the cookie may still be good. */
   if (res.status === 401 && auth && retry) {
     if (await refreshAccessToken()) {
-      return request(path, { method, body, params, auth, retry: false })
+      return request(path, { method, body, params, auth, retry: false, headers: extra })
     }
     tokenStore.clear()
     onSessionExpired()

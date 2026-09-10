@@ -13,6 +13,7 @@ import {
 } from '@/components/ui'
 import { ChartCard, DonutChart, HBarChart } from '@/components/charts/Charts'
 import { num, relative } from '@/lib/format'
+import { ShareBedsCard } from './ShareBeds'
 
 const BED_COLOR = {
   occupied: '#373DA6', available: '#0F766E', reserved: '#B45309',
@@ -49,6 +50,7 @@ export default function OwnerDashboard() {
         </div>
       ) : d && (
         <>
+          <ShareBedsCard byBranch={d.by_branch || []} />
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
             <StatCard label="Occupancy" value={`${p.occupancy_rate}%`} icon={Gauge}
               tone={p.occupancy_rate >= 85 ? 'emerald' : p.occupancy_rate >= 60 ? 'brand' : 'amber'}

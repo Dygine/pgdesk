@@ -151,6 +151,13 @@ class OperationsService:
         # and anything typed by hand, deliver the bare token. Both are accepted.
         kind, token = qr_payload.parse(token)
 
+        if kind == qr_payload.KIND_LOGIN:
+            # A resident showing the guard the sign-in QR from their welcome
+            # screen. Named, for the same reason the gate code is below.
+            return {"result": "invalid", "allowed": False,
+                    "message": "That is a sign-in QR for the resident app, "
+                               "not a resident's card."}
+
         if kind == qr_payload.KIND_GATE:
             # The guard pointed the scanner at the gate's own poster. Named
             # explicitly because "not recognised" would send them hunting for a

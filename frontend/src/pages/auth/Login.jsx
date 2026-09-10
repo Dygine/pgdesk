@@ -1,8 +1,11 @@
 import { useState } from 'react'
 import { useNavigate, Link } from 'react-router-dom'
-import { ArrowRight, Building2, Eye, EyeOff, ShieldCheck, Users, BedDouble, Copy } from 'lucide-react'
+import {
+  ArrowRight, Building2, Eye, EyeOff, ShieldCheck, Users, BedDouble, Copy, QrCode, MapPin,
+} from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import { Button, FormField, Input, InlineAlert, StatusBadge } from '@/components/ui'
+import { Button, FormField, Input, InlineAlert, StatusBadge, ScannerModal } from '@/components/ui'
+import { parse as parseQr, KIND_LOGIN } from '@/lib/qr'
 import { useToast } from '@/context/ToastContext'
 import { Capacitor } from '@capacitor/core'
 
@@ -24,7 +27,7 @@ import { Capacitor } from '@capacitor/core'
 const SHOW_SEED_ACCOUNTS = import.meta.env.VITE_SHOW_SEED_ACCOUNTS === 'true'
 
 export default function Login() {
-  const { login } = useAuth()
+  const { login, loginWithQr } = useAuth()
   const { success } = useToast()
   const navigate = useNavigate()
   // Prefilled in development only. In production these are empty strings and
@@ -34,6 +37,8 @@ export default function Login() {
   const [show, setShow] = useState(false)
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
+  const [scanning, setScanning] = useState(false)
+  const [qrBusy, setQrBusy] = useState(false)
 
   /* Seeded by `backend/seed.py`. Development only — see SHOW_SEED_ACCOUNTS. */
   const DEMO_LOGINS = SHOW_SEED_ACCOUNTS ? [
@@ -61,6 +66,23 @@ export default function Login() {
     setBusy(true)
     const res = await login(email, password)
     setBusy(false)
+    if (!res.ok) return setError(res.error)
+    navigate(res.portal === 'master' ? '/master' : res.portal === 'customer' ? '/me' : '/app')
+  }
+
+  /* The sign-in QR a PG shows a new resident: a 30-minute, single-use key -
+     never the password. The server says whether it expired or was used. */
+  const onScan = async (raw) => {
+    setScanning(false)
+    setError('')
+    const { kind } = parseQr(raw)
+    if (kind && kind !== KIND_LOGIN) {
+      setError('That is a gate or resident card. Scan the sign-in QR your PG showed you.')
+      return
+    }
+    setQrBusy(true)
+    const res = await loginWithQr(raw)
+    setQrBusy(false)
     if (!res.ok) return setError(res.error)
     navigate(res.portal === 'master' ? '/master' : res.portal === 'customer' ? '/me' : '/app')
   }
@@ -158,6 +180,20 @@ export default function Login() {
               Sign in
             </Button>
 
+            <div className="flex items-center gap-3" aria-hidden="true">
+              <span className="h-px flex-1 bg-line" />
+              <span className="text-xs text-slate-400">or</span>
+              <span className="h-px flex-1 bg-line" />
+            </div>
+
+            <Button type="button" size="lg" icon={QrCode} loading={qrBusy} className="w-full"
+              onClick={() => { setError(''); setScanning(true) }}>
+              Scan QR code to sign in
+            </Button>
+            <p className="text-xs text-slate-500 text-center -mt-1">
+              New resident? Scan the QR your PG shows you. No password to type.
+            </p>
+
             <p className="text-xs text-slate-500 text-center">
               New here?{' '}
               <Link to="/signup" className="text-brand-700 hover:text-brand-800">
@@ -169,6 +205,21 @@ export default function Login() {
               </Link>
             </p>
           </form>
+
+          <Link to="/find-pg"
+            className="mt-6 flex items-center gap-3 rounded-lg border border-brand-100 bg-brand-50/60 px-3.5 py-3 hover:bg-brand-50 transition-colors">
+            <span className="h-9 w-9 rounded-lg bg-white border border-brand-100 text-brand-700 inline-flex items-center justify-center shrink-0">
+              <MapPin size={17} />
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-sm font-medium text-slate-900">Looking for a PG?</span>
+              <span className="block text-xs text-slate-500">See PGs with free beds near you</span>
+            </span>
+            <ArrowRight size={16} className="text-slate-400 shrink-0" />
+          </Link>
+
+          <ScannerModal open={scanning} onClose={() => setScanning(false)} onDetect={onScan}
+            title="Scan your sign-in QR" hint="Point the camera at the QR on your PG's screen." />
 
                   {/* Web only. Inside the APK this screen is already the app, so the
             download prompt would be nonsense there. */}

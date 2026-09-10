@@ -30,6 +30,7 @@ from app.core.exceptions import (
 )
 from app.core.responses import ok
 from app.models.otp import OtpPurpose
+from app.services import geocode_service
 from app.services.email_service import (
     EmailNotConfigured, EmailSendFailed, EmailService,
 )
@@ -109,6 +110,37 @@ def search_pgs(db: DbSession,
         city=city, query=q, max_rent=max_rent, gender=gender,
         only_vacant=only_vacant, limit=limit)
     return ok(results)
+
+
+@router.get("/places", summary="Find an area by name")
+def search_places(db: DbSession,
+                  q: str = Query(min_length=2, max_length=120)) -> dict:
+    """
+    "Koramangala" to coordinates, so a seeker can see PGs near an area.
+
+    The geocoder is a convenience, never a dependency. When it is down, or
+    knows nothing, the answer comes from listed PGs whose city or address
+    matches; when that is empty too, the plain text search still works.
+    """
+    try:
+        places = geocode_service.search_places(q)
+        source = "map"
+    except geocode_service.GeocodeUnavailable:
+        places, source = [], "listings"
+    if not places:
+        places = PublicService(db).areas_matching(q)
+        source = "listings"
+    return ok({"places": places, "source": source})
+
+
+@router.get("/places/reverse", summary="Name the area at a position")
+def reverse_place(latitude: float = Query(ge=-90, le=90),
+                  longitude: float = Query(ge=-180, le=180)) -> dict:
+    """ "Near HSR Layout" instead of coordinates. Null when nobody can say. """
+    try:
+        return ok(geocode_service.reverse(latitude, longitude))
+    except geocode_service.GeocodeUnavailable:
+        return ok(None)
 
 
 @router.get("/pgs/{branch_id}", summary="One listing")

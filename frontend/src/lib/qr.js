@@ -3,6 +3,7 @@
  *
  *     PGD1:R:<token>   a resident's card, scanned by a guard
  *     PGD1:G:<token>   a gate's own code, scanned by a resident
+ *     PGD1:L:<token>   a one-time sign-in code, scanned on the login screen
  *
  * A line-for-line mirror of `app/utils/qr_payload.py`. Both sides have to agree
  * or a card printed by one is unreadable by the other, so if you change the
@@ -18,10 +19,13 @@
 export const PREFIX = 'PGD1'
 export const KIND_RESIDENT = 'R'
 export const KIND_GATE = 'G'
+/** A 30-minute, single-use sign-in key shown by the PG to a new resident. */
+export const KIND_LOGIN = 'L'
+const KINDS = [KIND_RESIDENT, KIND_GATE, KIND_LOGIN]
 
 /** Build the string that goes into a symbol. */
 export function encode(kind, token) {
-  if (kind !== KIND_RESIDENT && kind !== KIND_GATE) {
+  if (!KINDS.includes(kind)) {
     throw new Error(`unknown QR kind ${kind}`)
   }
   return `${PREFIX}:${kind}:${token}`
@@ -43,7 +47,7 @@ export function parse(raw) {
   const parts = text.split(':')
   if (parts.length === 3 && parts[0].toUpperCase() === PREFIX) {
     const kind = parts[1].toUpperCase()
-    if (kind === KIND_RESIDENT || kind === KIND_GATE) {
+    if (KINDS.includes(kind)) {
       return { kind, token: parts[2].trim() }
     }
     // A newer card than this build understands. Reporting it as unreadable is

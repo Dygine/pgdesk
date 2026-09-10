@@ -7,7 +7,7 @@ import { residentApi } from '@/services/api/residentApi'
 import { branchApi } from '@/services/api/branchApi'
 import { subscriptionApi } from '@/services/api/subscriptionApi'
 import { useToast } from '@/context/ToastContext'
-import { PageHeader, PermissionGuard } from '@/components/domain'
+import { PageHeader, PermissionGuard, PortalCredentials } from '@/components/domain'
 import {
   Card, Button, DataTable, StatusBadge, FilterBar, EmptyState, StatCard, Modal,
   FormField, Input, Select, Checkbox, InlineAlert, Skeleton, ProgressBar, Avatar,
@@ -96,7 +96,9 @@ export default function Residents() {
       })
       setOpen(false)
       success(`${created.full_name} added`)
-      if (created.credentials) setCredentials(created.credentials)
+      if (created.credentials) {
+        setCredentials({ ...created.credentials, name: created.full_name, residentId: created.id })
+      }
       residents.reload(); plan.reload()
     } catch (err) {
       error('Could not add the resident', err.message)
@@ -255,7 +257,9 @@ export default function Residents() {
               <Input value={f.phone} onChange={set('phone')} error={errs.phone}
                 placeholder="+91 98765 43210" />
             </FormField>
-            <FormField label="Email" error={errs.email}>
+            <FormField label="Email" required={!!f.create_portal_login} error={errs.email}
+              hint={f.create_portal_login ? 'This becomes their sign-in ID for the app.'
+                : 'Needed if they will use the app.'}>
               <Input type="email" value={f.email} onChange={set('email')} error={errs.email} />
             </FormField>
             <FormField label="Branch" required error={errs.branch_id}>
@@ -270,6 +274,12 @@ export default function Residents() {
                 {['Male', 'Female', 'Other'].map((x) => <option key={x}>{x}</option>)}
               </Select>
             </FormField>
+          </div>
+
+          <div className="rounded-lg border border-line bg-slate-50/60 px-3.5 py-3">
+            <Checkbox checked={f.create_portal_login} onChange={set('create_portal_login')}
+              label="Give them app access now"
+              description="You get a sign-in QR (works for 30 minutes) and a temporary password. You can also do this later from their profile." />
           </div>
 
           <div>
@@ -322,37 +332,15 @@ export default function Residents() {
             </div>
           </div>
 
-          <Checkbox checked={f.create_portal_login} onChange={set('create_portal_login')}
-            label="Give them a portal login"
-            description="Generates a temporary password they must change on first sign-in." />
         </div>
       </Modal>
 
-      <Modal open={!!credentials} onClose={() => setCredentials(null)} size="sm"
-        title="Portal credentials" subtitle="Shown once — share them securely."
-        footer={<Button variant="primary" onClick={() => setCredentials(null)}>Done</Button>}>
-        {credentials && (
-          <div className="space-y-4">
-            <div className="rounded-lg border border-line bg-slate-50 p-4 space-y-2.5">
-              {[['Email', credentials.email],
-                ['Password', credentials.temporary_password]].map(([k, v]) => (
-                <div key={k} className="flex items-center justify-between gap-3">
-                  <span className="text-xs text-slate-500">{k}</span>
-                  <span className="flex items-center gap-2 min-w-0">
-                    <span className="font-mono text-sm text-slate-900 truncate">{v}</span>
-                    <button type="button" aria-label={`Copy ${k}`}
-                      onClick={() => { navigator.clipboard?.writeText(v); success(`${k} copied`) }}
-                      className="text-slate-400 hover:text-slate-700 shrink-0"><Copy size={14} /></button>
-                  </span>
-                </div>
-              ))}
-            </div>
-            <InlineAlert tone="warn">
-              Stored only as a hash — it cannot be looked up again.
-            </InlineAlert>
-          </div>
-        )}
-      </Modal>
+      <PortalCredentials open={!!credentials} onClose={() => setCredentials(null)}
+        name={credentials?.name} credentials={credentials}
+        onRenew={async (prev) => {
+          const data = await residentApi.loginCode(prev.residentId)
+          return { ...prev, ...data.credentials }
+        }} />
     </>
   )
 }

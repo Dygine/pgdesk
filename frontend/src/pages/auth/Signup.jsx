@@ -113,7 +113,8 @@ export default function Signup() {
           </div>
         </button>
 
-        <button type="button" onClick={() => setRole('seeker')}
+        <button type="button"
+          onClick={() => navigate('/find-pg', { state: { openAuth: 'signup' } })}
           className="w-full text-left rounded-xl border border-line p-4 hover:border-brand-400
                      hover:bg-brand-50/40 transition-colors">
           <div className="flex items-start gap-3">
@@ -124,8 +125,8 @@ export default function Signup() {
             <div className="min-w-0">
               <p className="text-sm font-semibold text-slate-900">I am looking for a PG</p>
               <p className="text-xs text-slate-500 mt-0.5">
-                Search PGs near you and send an enquiry. No account needed — the
-                PG creates your login when you move in.
+                Free account. See PGs with free beds near you and enquire in
+                one tap.
               </p>
             </div>
             <ArrowRight size={16} className="text-slate-300 mt-1 shrink-0" />

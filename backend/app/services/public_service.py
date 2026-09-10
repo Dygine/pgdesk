@@ -27,8 +27,11 @@ from sqlalchemy import Numeric, and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.models import Bed, Branch, Organization, PgEnquiry
-from app.models.enums import BedStatus, BranchStatus, OrganizationStatus
+from app.models import Bed, Branch, Organization, PgEnquiry, Room
+from app.models.enums import (
+    BedStatus, BranchStatus, NotificationType, OrganizationStatus,
+)
+from app.services.notification_service import NotificationService
 from app.utils.geo import haversine_metres, is_valid_coordinate
 
 #: How far a "near me" search reaches by default, and the most it will reach.
@@ -108,6 +111,7 @@ class PublicService:
         if query:
             like = f"%{query.strip()}%"
             stmt = stmt.where(or_(Branch.name.ilike(like),
+                                  Organization.name.ilike(like),
                                   Branch.listing_headline.ilike(like),
                                   Branch.listing_description.ilike(like),
                                   Branch.city.ilike(like),
@@ -131,14 +135,11 @@ class PublicService:
                 if distance > reach_m:
                     continue
 
-            free = self.db.scalar(
-                select(func.count(Bed.id)).where(
-                    Bed.branch_id == branch.id,
-                    Bed.status == BedStatus.AVAILABLE)) or 0
+            options, free = self._room_options(branch.id)
             if only_vacant and free <= 0:
                 continue
 
-            out.append(self._listing(branch, free, distance))
+            out.append(self._listing(branch, free, distance, options=options))
 
         if near:
             out.sort(key=lambda r: r["distance_m"])
@@ -149,7 +150,46 @@ class PublicService:
                                     r["starting_rent"] or 0))
         return out[:limit]
 
-    def _listing(self, branch: Branch, free: int, distance: float | None) -> dict:
+    def _room_options(self, branch_id: uuid.UUID) -> tuple[list[dict], int]:
+        """
+        Which kinds of room have a free bed, and what they start at.
+
+        "Double sharing from 7,500 - a few beds" answers the question a seeker
+        actually has far better than one band for the whole building. Each room
+        type still gets a band, never a count, for the reason in the module
+        docstring; the total is returned separately for the building-level band
+        and is never published as a number.
+
+        The rent is the bed's own price where one is set and the room's
+        otherwise, the same precedence check-in uses.
+        """
+        rows = self.db.execute(
+            select(Room.room_type, Room.capacity, Bed.rent_amount, Room.rent_amount)
+            .join(Room, Room.id == Bed.room_id)
+            .where(Bed.branch_id == branch_id, Bed.status == BedStatus.AVAILABLE)
+        ).all()
+
+        groups: dict[str, dict] = {}
+        for room_type, capacity, bed_rent, room_rent in rows:
+            label = (room_type or "Room").strip() or "Room"
+            rent = float(bed_rent or 0) or float(room_rent or 0) or None
+            g = groups.setdefault(label, {"free": 0, "rent": None, "sharing": capacity})
+            g["free"] += 1
+            if rent is not None and (g["rent"] is None or rent < g["rent"]):
+                g["rent"] = rent
+            if capacity and (not g["sharing"] or capacity < g["sharing"]):
+                g["sharing"] = capacity
+
+        options = [
+            {"room_type": label, "sharing": g["sharing"] or None,
+             "from_rent": g["rent"], "vacancy": _vacancy_band(g["free"])}
+            for label, g in groups.items()
+        ]
+        options.sort(key=lambda o: (o["sharing"] or 99, o["from_rent"] or 0))
+        return options, len(rows)
+
+    def _listing(self, branch: Branch, free: int, distance: float | None, *,
+                 options: list[dict] | None = None) -> dict:
         """
         Exactly the fields chosen for publication, listed one by one.
 
@@ -157,8 +197,10 @@ class PublicService:
         added to `branches` next year must not appear on a public page because
         a loop copied everything it found.
         """
+        org = self.db.get(Organization, branch.organization_id)
         return {
             "id": str(branch.id),
+            "pg_name": org.name if org else None,
             "name": branch.name,
             "headline": branch.listing_headline,
             "description": branch.listing_description,
@@ -172,8 +214,32 @@ class PublicService:
             "contact_phone": branch.contact_phone_public,
             "vacancy": _vacancy_band(free),
             "has_vacancy": free > 0,
+            "room_options": options or [],
             "distance_m": round(distance, 1) if distance is not None else None,
         }
+
+    def areas_matching(self, query: str, *, limit: int = 6) -> list[dict]:
+        """
+        Listed, positioned PGs whose city or address matches - the fallback
+        "place" list when the geocoder is down or knows nothing.
+        """
+        like = f"%{(query or '').strip()}%"
+        rows = self.db.scalars(
+            select(Branch).join(Organization, Organization.id == Branch.organization_id)
+            .where(Branch.listed_publicly.is_(True),
+                   Branch.status == BranchStatus.ACTIVE,
+                   Organization.status.in_(
+                       [OrganizationStatus.ACTIVE, OrganizationStatus.TRIAL]),
+                   Branch.latitude.is_not(None), Branch.longitude.is_not(None),
+                   or_(Branch.city.ilike(like), Branch.address.ilike(like),
+                       Branch.name.ilike(like)))
+            .limit(limit)).all()
+        return [
+            {"label": ", ".join(p for p in (b.name, b.city) if p),
+             "detail": b.address or b.city or b.name,
+             "latitude": b.latitude, "longitude": b.longitude}
+            for b in rows
+        ]
 
     def get_listing(self, branch_id: uuid.UUID) -> dict:
         branch = self.db.scalars(select(Branch).where(
@@ -183,11 +249,8 @@ class PublicService:
             # 404 for both "no such branch" and "not listed", so this endpoint
             # cannot be used to discover which PGs exist but chose privacy.
             raise NotFoundError("That PG listing is not available.")
-        free = self.db.scalar(
-            select(func.count(Bed.id)).where(
-                Bed.branch_id == branch.id,
-                Bed.status == BedStatus.AVAILABLE)) or 0
-        return self._listing(branch, free, None)
+        options, free = self._room_options(branch.id)
+        return self._listing(branch, free, None, options=options)
 
     # ----------------------------------------------------------- enquiries
     def create_enquiry(self, *, branch_id: uuid.UUID, full_name: str, email: str,
@@ -230,4 +293,12 @@ class PublicService:
             email_verified=True, requested_ip=ip)
         self.db.add(row)
         self.db.flush()
+
+        # A lead nobody sees is not a lead. The bell is where staff already
+        # look; the Enquiries inbox is where they act on it.
+        NotificationService(self.db).to_permission_holders(
+            branch.organization_id, "customers.view", NotificationType.SYSTEM,
+            "New enquiry",
+            f"{row.full_name} is asking about a bed at {branch.name}.",
+            branch_id=branch.id, entity_type="enquiry", entity_id=row.id)
         return row

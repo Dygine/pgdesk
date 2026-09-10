@@ -21,6 +21,19 @@ export const authApi = {
     return user
   },
 
+  /**
+   * Sign in with the one-time QR a PG shows a new resident. Same token handling
+   * as `login`; the account comes back with must_change_password set, which
+   * sends the app straight to "set your password".
+   */
+  async qrLogin(code) {
+    const res = await api.post('/auth/qr-login', { code }, { auth: false })
+    const { access_token, refresh_token, user } = res.data
+    tokenStore.write({ access_token })
+    if (refresh_token) await writeRefreshToken(refresh_token)
+    return user
+  },
+
   me: () => api.get('/auth/me').then(unwrap),
 
   /* ------------------------------------------------------ password reset */
@@ -70,6 +83,18 @@ export const authApi = {
     }
   },
 
-  changePassword: (current_password, new_password) =>
-    api.post('/auth/change-password', { current_password, new_password }),
+  /**
+   * The server signs out every session and hands this device a fresh pair, so
+   * the tokens in the reply must be stored - otherwise this device would be
+   * signed out when its access token next expired. `current` may be empty only
+   * while on a temporary password (first sign-in). Resolves to the account.
+   */
+  async changePassword(current_password, new_password) {
+    const res = await api.post('/auth/change-password',
+      { current_password: current_password || null, new_password })
+    const data = res?.data
+    if (data?.access_token) tokenStore.write({ access_token: data.access_token })
+    if (data?.refresh_token) await writeRefreshToken(data.refresh_token)
+    return data?.user || null
+  },
 }

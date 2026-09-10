@@ -19,13 +19,14 @@ from app.core.session_cookie import (
     clear_refresh_cookie, read_refresh_token, require_csrf_header,
     set_refresh_cookie,
 )
-from app.models.enums import AuditAction
+from app.models.enums import AuditAction, PrincipalKind
 from app.schemas.auth import (
     ChangePasswordRequest, ForgotPasswordRequest, LoginRequest, LogoutRequest,
-    RefreshRequest, ResetPasswordRequest, VerifyOtpRequest,
+    QrLoginRequest, RefreshRequest, ResetPasswordRequest, VerifyOtpRequest,
 )
 from app.services.audit import AuditService
 from app.services.auth_service import AuthService, Principal
+from app.services.login_code_service import LoginCodeService
 from app.services.login_throttle import LoginThrottle
 from app.services.otp_service import OtpError
 from app.services.password_reset_service import (
@@ -58,6 +59,29 @@ def _client(request: Request) -> tuple[str | None, str | None]:
         request.client.host if request.client else None
     )
     return request.headers.get("user-agent"), ip
+
+
+def _session_payload(service: AuthService, principal: Principal, request: Request,
+                     response: Response) -> dict:
+    """
+    Issue a token pair for the device making this request, shaped like /login.
+
+    Shared by the QR sign-in and by change-password, which both end with "this
+    phone is now signed in" and must not drift from /login in what they return.
+    """
+    ua, ip = _client(request)
+    native = _is_native(request)
+    access, refresh = service.issue_tokens(principal, user_agent=ua, ip=ip, native=native)
+    set_refresh_cookie(response, refresh)
+    payload = {
+        "access_token": access,
+        "token_type": "bearer",
+        "expires_in": settings.access_token_expire_minutes * 60,
+        "user": service.describe(principal).model_dump(mode="json"),
+    }
+    if native or settings.expose_refresh_token_in_body:
+        payload["refresh_token"] = refresh
+    return payload
 
 
 @router.post("/login", summary="Sign in", status_code=status.HTTP_200_OK)
@@ -126,6 +150,53 @@ def login(body: LoginRequest, request: Request, response: Response, db: DbSessio
     if native or settings.expose_refresh_token_in_body:
         payload["refresh_token"] = refresh
     return ok(payload, message=f"Signed in as {described.name}.")
+
+
+@router.post("/qr-login", summary="Sign in by scanning a one-time QR code")
+def qr_login(body: QrLoginRequest, request: Request, response: Response,
+             db: DbSession) -> dict:
+    """
+    The resident's first sign-in, without typing a temporary password.
+
+    The PG shows a QR carrying a 30-minute, single-use key. Scanning it here
+    signs the resident in with `must_change_password` still set, so the app
+    goes straight to "set your password" - see app/models/login_code.py.
+
+    Throttled by address only. There is no email to count against, and the key
+    is 192 random bits, so this is about a source spraying junk, not guessing.
+    """
+    ua, ip = _client(request)
+    throttle = LoginThrottle(db)
+    throttle.check_ip(ip)
+
+    try:
+        customer = LoginCodeService(db).redeem(body.code, ip=ip, user_agent=ua)
+    except AppError as exc:
+        throttle.record("qr-login", ip, successful=False, reason=exc.code)
+        AuditService(db).record(
+            scope=None, module="Auth", action=AuditAction.LOGIN_FAILED,
+            description=f"Failed QR sign-in ({exc.code})",
+            entity_type="login", user_name="qr-login",
+            ip_address=ip, user_agent=ua,
+        )
+        db.commit()      # the counter and the audit line must survive the refusal
+        raise
+
+    service = AuthService(db)
+    principal = Principal(
+        kind=PrincipalKind.CUSTOMER, id=customer.id, email=customer.email or "",
+        name=customer.full_name, organization_id=customer.organization_id, obj=customer)
+    payload = _session_payload(service, principal, request, response)
+
+    AuditService(db).record(
+        scope=None, module="Auth", action=AuditAction.LOGIN,
+        description=f"{customer.full_name} signed in with a QR code (customer portal)",
+        entity_type=principal.kind.value, entity_id=principal.id,
+        organization_id=principal.organization_id,
+        user_name=customer.full_name, ip_address=ip, user_agent=ua,
+    )
+    db.commit()
+    return ok(payload, message=f"Signed in as {customer.full_name}.")
 
 
 @router.post("/refresh", summary="Exchange a refresh token for a new access token")
@@ -223,26 +294,35 @@ def me(db: DbSession, principal: CurrentPrincipal) -> dict:
 
 @router.post("/change-password", summary="Change your own password")
 def change_password(
-    body: ChangePasswordRequest, db: DbSession, principal: CurrentPrincipal
+    body: ChangePasswordRequest, request: Request, response: Response,
+    db: DbSession, principal: CurrentPrincipal
 ) -> dict:
     """
     Also the mechanism behind `must_change_password`: an owner created with a
-    temporary password clears the flag by calling this.
+    temporary password, or a resident who signed in with a QR, clears the flag
+    by calling this - without the current password in that one state.
 
-    Every other session is revoked, since the usual reason to change a password
-    is that someone else may know the old one.
+    Every session is revoked, since the usual reason to change a password is
+    that someone else may know the old one. The device that made this request
+    then gets a fresh pair in the reply. Before, it was revoked along with the
+    rest and signed out silently when its access token expired half an hour
+    later, which read as a bug rather than a security measure.
     """
+    first_time = bool(principal.obj.must_change_password)
     service = AuthService(db)
     service.change_password(principal, body.current_password, body.new_password)
 
     AuditService(db).record(
         scope=None, module="Auth", action=AuditAction.UPDATE,
-        description=f"{principal.name} changed their password",
+        description=(f"{principal.name} set their password" if first_time
+                     else f"{principal.name} changed their password"),
         entity_type=principal.kind.value, entity_id=principal.id,
         organization_id=principal.organization_id, user_name=principal.name,
     )
+    payload = _session_payload(service, principal, request, response)
     db.commit()
-    return ok(None, message="Password changed. Sign in again on your other devices.")
+    return ok(payload, message=("Password set." if first_time else
+                                "Password changed. Your other devices have been signed out."))
 
 
 # ----------------------------------------------------------- password reset

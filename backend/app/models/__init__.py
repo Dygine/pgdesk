@@ -15,6 +15,7 @@ from app.models.enums import (
     SubscriptionStatus, UserStatus,
 )
 from app.models.enquiry import EnquiryStatus, PgEnquiry
+from app.models.login_code import LoginCode
 from app.models.otp import OtpCode, OtpPurpose
 from app.models.organization import Organization
 from app.models.platform import SINGLETON_ID, LoginAttempt, PlatformSettings
@@ -28,6 +29,7 @@ from app.models.support import (
     InventoryTransaction, Notification, OrganizationSettings, QueryMessage, SupportQuery,
 )
 from app.models.role import Permission, Role, role_permissions, user_branches, user_roles
+from app.models.seeker import PgSeeker, SeekerSession
 from app.models.subscription import Subscription, SubscriptionPlan
 from app.models.token import PasswordResetToken, RefreshToken
 from app.models.user import User
@@ -43,7 +45,7 @@ __all__ = [
     "Room", "RoomStatus",
     "Customer", "CustomerStatus", "Organization",
     "OtpCode",
-    "PgEnquiry",
+    "PgEnquiry", "LoginCode", "PgSeeker", "SeekerSession",
     "EnquiryStatus",
     "OtpPurpose", "OrganizationStatus",
     "LoginAttempt", "PasswordResetToken", "Permission", "PlanStatus",
