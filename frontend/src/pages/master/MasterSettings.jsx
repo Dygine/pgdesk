@@ -9,6 +9,61 @@ import { useApi, useMutation } from '@/lib/useApi'
 import { platformSettingsApi } from '@/services/api/platformSettingsApi'
 import { SmtpCard } from './SmtpCard'
 
+/**
+ * Every field this screen may write, and how to coerce it.
+ *
+ * A list rather than a hand-written object literal, because the literal was
+ * wrong: `email_provider` was added to the form, the card and the API schema,
+ * and forgotten here - so Save wrote every setting except the one the operator
+ * had just changed, and the provider silently stayed on SMTP. Nothing failed;
+ * the test simply reported on a transport they thought they had left.
+ *
+ * Mirrors WRITABLE in platform_settings_service.py. Secrets are absent from
+ * both on purpose - they take their own encrypting endpoints.
+ */
+const WRITABLE = {
+  default_trial_days: Number,
+  grace_period_days: Number,
+  expiry_warning_days: Number,
+  native_session_days: Number,
+  smtp_port: Number,
+
+  auto_suspend_after_grace: Boolean,
+  notify_email_enabled: Boolean,
+  notify_sms_enabled: Boolean,
+  notify_whatsapp_enabled: Boolean,
+  smtp_use_tls: Boolean,
+  smtp_use_ssl: Boolean,
+
+  platform_name: String,
+  email_provider: String,
+  support_email: null,
+  smtp_host: null,
+  smtp_username: null,
+  smtp_from_email: null,
+  smtp_from_name: null,
+  brevo_sender_email: null,
+  brevo_sender_name: null,
+}
+
+/** `null` in WRITABLE means "a string the API accepts as empty". */
+function buildPayload(form) {
+  const out = {}
+  for (const [key, cast] of Object.entries(WRITABLE)) {
+    const value = form[key]
+    if (cast === Number) out[key] = Number(value) || undefined
+    else if (cast === Boolean) out[key] = !!value
+    else out[key] = value || null
+  }
+  // Numeric fields the API bounds-checks must not arrive as undefined.
+  out.default_trial_days = Number(form.default_trial_days) || 30
+  out.grace_period_days = Number(form.grace_period_days) || 0
+  out.expiry_warning_days = Number(form.expiry_warning_days) || 0
+  out.native_session_days = Number(form.native_session_days) || 3650
+  out.smtp_port = Number(form.smtp_port) || 587
+  return out
+}
+
 const TRIAL_OPTIONS = ['7', '14', '30', '60']
 const GRACE_OPTIONS = ['0', '3', '7', '15', '30']
 const WARNING_OPTIONS = ['0', '3', '7', '15', '30']
@@ -50,28 +105,7 @@ export default function MasterSettings() {
   }
 
   const save = useMutation(
-    () => platformSettingsApi.update({
-      default_trial_days: Number(form.default_trial_days),
-      grace_period_days: Number(form.grace_period_days),
-      expiry_warning_days: Number(form.expiry_warning_days),
-      auto_suspend_after_grace: form.auto_suspend_after_grace,
-      notify_email_enabled: form.notify_email_enabled,
-      notify_sms_enabled: form.notify_sms_enabled,
-      notify_whatsapp_enabled: form.notify_whatsapp_enabled,
-      platform_name: form.platform_name,
-      support_email: form.support_email || null,
-
-      // The password is not here: it has its own endpoint because it is
-      // encrypted on the way in and has no way back out.
-      smtp_host: form.smtp_host || null,
-      smtp_port: Number(form.smtp_port) || 587,
-      smtp_username: form.smtp_username || null,
-      smtp_from_email: form.smtp_from_email || null,
-      smtp_from_name: form.smtp_from_name || null,
-      smtp_use_tls: !!form.smtp_use_tls,
-      smtp_use_ssl: !!form.smtp_use_ssl,
-      native_session_days: Number(form.native_session_days) || 3650,
-    }),
+    () => platformSettingsApi.update(buildPayload(form)),
     {
       onSuccess: (data) => {
         // Re-seed from the response, not from local state: what the server
