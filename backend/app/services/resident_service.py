@@ -24,13 +24,15 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.dependencies import CurrentScope
-from app.core.exceptions import ConflictError, NotFoundError, PermissionDeniedError
+from app.core.exceptions import AppError, ConflictError, NotFoundError, PermissionDeniedError
 from app.core.security import hash_password
 from app.models import (
-    Bed, Branch, Building, Customer, Floor, RefreshToken, ResidentKyc, Room, User,
+    Bed, Branch, Building, Customer, Floor, RefreshToken, ResidentDocument, ResidentKyc,
+    Room, User,
 )
+from app.models.customer import DOCUMENT_MAX_BYTES, DOCUMENTS_PER_RESIDENT
 from app.models.enums import (
-    AuditAction, BedStatus, CustomerStatus, InvoiceItemKind, KycStatus,
+    AuditAction, BedStatus, CustomerStatus, InvoiceItemKind, KycIdType, KycStatus,
     NotificationType,
 )
 from app.services.audit import AuditService
@@ -804,3 +806,107 @@ class ResidentService:
             description=f"Reissued gate QR for {resident.full_name}",
             entity_type="resident", entity_id=resident.id, branch_id=resident.branch_id)
         return resident
+
+
+def sniff_image(data: bytes) -> str | None:
+    """The real type, from the first bytes - never trust a name or a header."""
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    if data[:4] == b"RIFF" and data[8:12] == b"WEBP":
+        return "image/webp"
+    return None
+
+
+def decode_image(value: str) -> bytes:
+    """A data URL or bare base64, to bytes."""
+    import base64
+    import binascii
+    text = (value or "").strip()
+    if text.startswith("data:"):
+        header, _, text = text.partition(",")
+        if ";base64" not in header:
+            raise AppError("Send the image as base64.", code="document_encoding")
+    try:
+        return base64.b64decode(text, validate=True)
+    except (binascii.Error, ValueError):
+        raise AppError("That image could not be read.", code="document_encoding") from None
+
+
+class ResidentDocumentService:
+    """Scanned ID documents: at most three per resident, 5 KB each, images only."""
+
+    def __init__(self, db: Session, scope: CurrentScope):
+        self.db = db
+        self.scope = scope
+        self.residents = ResidentService(db, scope)
+        self.audit = AuditService(db)
+
+    def list(self, resident_id: uuid.UUID) -> list[ResidentDocument]:
+        resident = self.residents.get(resident_id)
+        return list(self.db.scalars(
+            select(ResidentDocument).where(ResidentDocument.resident_id == resident.id)
+            .order_by(ResidentDocument.created_at)).all())
+
+    def get(self, resident_id: uuid.UUID, document_id: uuid.UUID) -> ResidentDocument:
+        resident = self.residents.get(resident_id)
+        row = self.db.scalars(select(ResidentDocument).where(
+            ResidentDocument.id == document_id,
+            ResidentDocument.resident_id == resident.id)).first()
+        if row is None:
+            raise NotFoundError("Document not found.")
+        return row
+
+    def add(self, resident_id: uuid.UUID, *, doc_type: str, image: str,
+            label: str | None = None, source: str = "scan",
+            width: int | None = None, height: int | None = None) -> ResidentDocument:
+        resident = self.residents.get(resident_id)
+        # Lock the resident row, so two uploads at the same moment cannot both
+        # be "the third document".
+        self.db.execute(select(Customer.id).where(Customer.id == resident.id).with_for_update())
+        held = self.db.scalar(select(func.count(ResidentDocument.id)).where(
+            ResidentDocument.resident_id == resident.id)) or 0
+        if held >= DOCUMENTS_PER_RESIDENT:
+            raise ConflictError(
+                f"A resident can have {DOCUMENTS_PER_RESIDENT} documents on file. "
+                "Delete one to add another.", code="document_limit")
+
+        content = decode_image(image)
+        if not content:
+            raise AppError("That image is empty.", code="document_empty")
+        if len(content) > DOCUMENT_MAX_BYTES:
+            raise AppError(
+                f"Documents must be under 5 KB. This one is {len(content) / 1024:.1f} KB.",
+                code="document_too_large")
+        mime = sniff_image(content)
+        if mime is None:
+            raise AppError("Only JPEG, PNG or WebP images are accepted.", code="document_type")
+        if doc_type not in {t.value for t in KycIdType}:
+            raise AppError("Choose the kind of document.", code="document_kind")
+
+        row = ResidentDocument(
+            organization_id=resident.organization_id, resident_id=resident.id,
+            doc_type=doc_type, label=(label or "").strip()[:60] or None,
+            mime_type=mime, size_bytes=len(content), content=content,
+            width=width, height=height, source="upload" if source == "upload" else "scan",
+            uploaded_by_id=self.scope.user.id if self.scope.user else None)
+        self.db.add(row)
+        self.db.flush()
+        # The image never enters the audit log - only that it was added.
+        self.audit.record(
+            scope=self.scope, module="Residents", action=AuditAction.CREATE,
+            description=(f"Added a {doc_type.replace('_', ' ').lower()} document for "
+                         f"{resident.full_name} ({row.size_bytes} bytes, {row.source})"),
+            entity_type="resident_document", entity_id=row.id, branch_id=resident.branch_id)
+        return row
+
+    def delete(self, resident_id: uuid.UUID, document_id: uuid.UUID) -> None:
+        row = self.get(resident_id, document_id)
+        resident = self.db.get(Customer, row.resident_id)
+        self.db.delete(row)
+        self.audit.record(
+            scope=self.scope, module="Residents", action=AuditAction.DELETE,
+            description=f"Deleted a {row.doc_type.replace('_', ' ').lower()} document "
+                        f"for {resident.full_name}",
+            entity_type="resident_document", entity_id=row.id, branch_id=resident.branch_id)

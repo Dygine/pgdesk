@@ -560,3 +560,15 @@ class WeekMenuSave(BaseModel):
 
 class MealScheduleIn(BaseModel):
     meals: dict[str, dict]
+
+
+# ------------------------------------------------------- scanned documents
+class DocumentUpload(BaseModel):
+    doc_type: str = "AADHAAR"
+    label: str | None = Field(default=None, max_length=60)
+    # A data URL or bare base64. The cap here only stops absurd bodies early;
+    # the real 5 KB rule is checked on the decoded bytes so the message is exact.
+    image: str = Field(min_length=16, max_length=20000)
+    source: str = Field(default="scan", pattern="^(scan|upload)$")
+    width: int | None = Field(default=None, ge=1, le=10000)
+    height: int | None = Field(default=None, ge=1, le=10000)

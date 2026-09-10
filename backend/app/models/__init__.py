@@ -10,7 +10,7 @@ from app.models.branch import Branch
 from app.models.billing import (
     GatewayOrder, Invoice, InvoiceItem, Payment, PaymentSettings,
 )
-from app.models.customer import Customer, ResidentKyc
+from app.models.customer import Customer, ResidentDocument, ResidentKyc
 from app.models.enums import (
     AuditAction, BedStatus, BillingCycle, BranchStatus, BuildingStatus, CustomerStatus,
     FloorStatus, GenderPolicy, OrganizationStatus, PlanStatus, PrincipalKind, RoomStatus,
@@ -45,7 +45,7 @@ __all__ = [
     "Invoice", "InvoiceItem", "LaundryRequest", "LaundrySlot", "MealAttendance",
     "Notification", "OrganizationSettings", "Payment", "QueryMessage", "ResidentKyc",
     "SupportQuery", "Visitor",
-    "CheckoutNotice", "FoodWeekMenu", "GatewayOrder", "PaymentSettings", "StaffMember",
+    "CheckoutNotice", "FoodWeekMenu", "ResidentDocument", "GatewayOrder", "PaymentSettings", "StaffMember",
     "BranchStatus", "Building", "BuildingStatus", "Floor", "FloorStatus", "GenderPolicy",
     "Room", "RoomStatus",
     "Customer", "CustomerStatus", "Organization",

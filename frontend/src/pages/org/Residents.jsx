@@ -7,7 +7,7 @@ import { residentApi } from '@/services/api/residentApi'
 import { branchApi } from '@/services/api/branchApi'
 import { subscriptionApi } from '@/services/api/subscriptionApi'
 import { useToast } from '@/context/ToastContext'
-import { PageHeader, PermissionGuard, PortalCredentials } from '@/components/domain'
+import { ResidentDocuments, PageHeader, PermissionGuard, PortalCredentials } from '@/components/domain'
 import {
   Card, Button, DataTable, StatusBadge, FilterBar, EmptyState, StatCard, Modal,
   FormField, Input, Select, Checkbox, InlineAlert, Skeleton, ProgressBar, Avatar,
@@ -58,7 +58,10 @@ export default function Residents() {
     setErrs((x) => ({ ...x, [k]: undefined }))
   }
 
+  const [docs, setDocs] = useState([])
+
   const openNew = () => {
+    setDocs([])
     setF({ ...BLANK, branch_id: activeBranchId || branchRows[0]?.id || '' })
     setErrs({}); setOpen(true)
   }
@@ -94,8 +97,21 @@ export default function Residents() {
         bed_id: f.bed_id || null,
         create_portal_login: !!f.create_portal_login,
       })
+      // The scans ride along once the resident exists. A failure here does not
+      // undo the resident - the profile's Documents tab can add them later.
+      let failed = 0
+      for (const d of docs) {
+        try {
+          await residentApi.uploadDocument(created.id, {
+            doc_type: d.doc_type, label: d.label, image: d.image,
+            source: d.source, width: d.width, height: d.height })
+        } catch { failed += 1 }
+      }
       setOpen(false)
-      success(`${created.full_name} added`)
+      success(`${created.full_name} added`, docs.length
+        ? (failed ? `${docs.length - failed} of ${docs.length} documents saved - add the rest from their profile.`
+          : `${docs.length} document${docs.length === 1 ? '' : 's'} saved.`)
+        : undefined)
       if (created.credentials) {
         setCredentials({ ...created.credentials, name: created.full_name, residentId: created.id })
       }
@@ -330,6 +346,13 @@ export default function Residents() {
                   onChange={set('emergency_contact_relation')} placeholder="Father" />
               </FormField>
             </div>
+          </div>
+
+          <div>
+            <p className="text-[13px] font-semibold text-slate-800 mb-3 pb-2 border-b border-line">
+              ID documents <span className="font-normal text-slate-500">- optional, can be added later</span>
+            </p>
+            <ResidentDocuments pending={docs} onPendingChange={setDocs} />
           </div>
 
         </div>

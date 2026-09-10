@@ -28,6 +28,10 @@ export const residentApi = {
 
   kyc: (id) => api.get(`/residents/${id}/kyc`).then(unwrap),
   addKyc: (id, body) => api.post(`/residents/${id}/kyc`, body).then(unwrap),
+  /* Scanned copies: up to 3 per resident, each under 5 KB (see lib/docScan.js). */
+  documents: (id) => api.get(`/residents/${id}/documents`).then(unwrap),
+  uploadDocument: (id, body) => api.post(`/residents/${id}/documents`, body).then(unwrap),
+  deleteDocument: (id, docId) => api.delete(`/residents/${id}/documents/${docId}`).then(unwrap),
   verifyKyc: (kycId, approved, notes) =>
     api.post(`/residents/kyc/${kycId}/verify`, { approved, notes }).then(unwrap),
 }

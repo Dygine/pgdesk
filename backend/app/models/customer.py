@@ -21,8 +21,8 @@ import uuid
 from datetime import date, datetime
 
 from sqlalchemy import (
-    Boolean, Date, DateTime, Enum as SAEnum, ForeignKey, Index, Numeric, String, Text,
-    UniqueConstraint,
+    Boolean, CheckConstraint, Date, DateTime, Enum as SAEnum, ForeignKey, Index, Integer,
+    LargeBinary, Numeric, String, Text, UniqueConstraint,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -179,3 +179,54 @@ class ResidentKyc(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
         """Last four digits only. What every screen shows by default."""
         n = (self.id_number or "").strip()
         return f"{'X' * max(0, len(n) - 4)}{n[-4:]}" if n else ""
+
+
+#: The hard ceiling for one scanned document, in bytes: 5 KB = 5,120 bytes.
+#: Camera scans are compressed on the phone to fit; uploads larger than this are
+#: refused by the API; and the database CHECK below refuses anything that slips
+#: past both. The frontend mirrors it in src/lib/docScan.js - change both.
+DOCUMENT_MAX_BYTES = 5 * 1024
+#: How many document images one resident may have on file.
+DOCUMENTS_PER_RESIDENT = 3
+
+
+class ResidentDocument(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
+    """
+    A scanned copy of an ID document - Aadhaar, PAN, passport and so on.
+
+    Stored in the database itself, as bytes. Deliberately: the API runs on a host
+    with no persistent disk, and at 5 KB x 3 per resident a thousand residents
+    come to 15 MB, which is nothing for PostgreSQL. Anything bigger than that
+    would need object storage; this size never will.
+
+    Kept apart from `ResidentKyc` (the typed number and its verification) so a
+    photo can be added without typing the number, and so no list, report or
+    dashboard query ever drags image bytes along with it.
+    """
+
+    __tablename__ = "resident_documents"
+
+    resident_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("customers.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    doc_type: Mapped[str] = mapped_column(
+        SAEnum(KycIdType, native_enum=False, length=20, validate_strings=True),
+        nullable=False)
+    label: Mapped[str | None] = mapped_column(String(60))      # "Aadhaar - back"
+    mime_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    width: Mapped[int | None] = mapped_column(Integer)
+    height: Mapped[int | None] = mapped_column(Integer)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+    # "scan" (camera, compressed on the phone) or "upload" (a file that was
+    # already under the limit).
+    source: Mapped[str] = mapped_column(String(10), nullable=False, default="scan")
+    uploaded_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    __table_args__ = (
+        CheckConstraint(f"size_bytes > 0 AND size_bytes <= {DOCUMENT_MAX_BYTES}",
+                        name="ck_resident_documents_size"),
+        CheckConstraint(f"octet_length(content) <= {DOCUMENT_MAX_BYTES}",
+                        name="ck_resident_documents_content_size"),
+    )

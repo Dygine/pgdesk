@@ -8,12 +8,12 @@ from app.core.dependencies import CurrentScope, DbSession, require, require_tena
 from app.core.responses import ok, paginated
 from app.models import Bed, Branch, Building, Customer, Floor, Room
 from app.schemas.operations import (
-    NoticeCreate, NoticeDecision,
+    DocumentUpload, NoticeCreate, NoticeDecision,
     BedAssignment, CheckInRequest, CheckoutRequest, KycCreate, KycDecision,
     PortalAccessRequest, ResidentCreate, ResidentUpdate, TransferRequest,
 )
 from app.services.notice_service import CheckoutNoticeService, notice_payload
-from app.services.resident_service import ResidentService
+from app.services.resident_service import ResidentDocumentService, ResidentService
 
 router = APIRouter(tags=["residents"])
 Tenant = Annotated[CurrentScope, Depends(require_tenant)]
@@ -354,3 +354,55 @@ def record_notice(resident_id: uuid.UUID, body: NoticeCreate, db: DbSession, sco
         resident, planned_date=body.planned_checkout_date, reason=body.reason, scope=scope)
     db.commit()
     return ok(notice_payload(db, notice), message=f"Notice recorded for {resident.full_name}.")
+
+
+# ------------------------------------------------------- scanned documents
+def _document(d, *, with_image: bool) -> dict:
+    import base64
+    payload = {
+        "id": str(d.id), "doc_type": d.doc_type, "label": d.label,
+        "mime_type": d.mime_type, "size_bytes": d.size_bytes,
+        "width": d.width, "height": d.height, "source": d.source,
+        "created_at": d.created_at.isoformat() if d.created_at else None,
+    }
+    if with_image:
+        payload["data_url"] = (f"data:{d.mime_type};base64,"
+                               f"{base64.b64encode(d.content).decode()}")
+    return payload
+
+
+@router.get("/residents/{resident_id}/documents", summary="Scanned ID documents")
+def list_documents(resident_id: uuid.UUID, db: DbSession, scope: Tenant,
+                   _: None = Depends(require("customers.view"))) -> dict:
+    """
+    The images themselves only go to someone holding `customers.kyc_view` - the
+    same rule as full ID numbers. Everyone else sees that a document exists.
+    """
+    from app.models.customer import DOCUMENT_MAX_BYTES, DOCUMENTS_PER_RESIDENT
+    can_view = scope.can("customers.kyc_view")
+    rows = ResidentDocumentService(db, scope).list(resident_id)
+    return ok({"items": [_document(d, with_image=can_view) for d in rows],
+               "can_view_images": can_view, "max_bytes": DOCUMENT_MAX_BYTES,
+               "max_documents": DOCUMENTS_PER_RESIDENT})
+
+
+@router.post("/residents/{resident_id}/documents", status_code=status.HTTP_201_CREATED,
+             summary="Add a scanned document (max 3, each under 5 KB)")
+def add_document(resident_id: uuid.UUID, body: DocumentUpload, db: DbSession, scope: Tenant,
+                 _: None = Depends(require("customers.edit", "customers.create"))) -> dict:
+    row = ResidentDocumentService(db, scope).add(
+        resident_id, doc_type=body.doc_type, image=body.image, label=body.label,
+        source=body.source, width=body.width, height=body.height)
+    db.commit()
+    db.refresh(row)
+    return ok(_document(row, with_image=scope.can("customers.kyc_view")),
+              message="Document saved.")
+
+
+@router.delete("/residents/{resident_id}/documents/{document_id}",
+               summary="Delete a scanned document")
+def delete_document(resident_id: uuid.UUID, document_id: uuid.UUID, db: DbSession,
+                    scope: Tenant, _: None = Depends(require("customers.edit"))) -> dict:
+    ResidentDocumentService(db, scope).delete(resident_id, document_id)
+    db.commit()
+    return ok(None, message="Document deleted.")

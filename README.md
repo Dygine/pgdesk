@@ -3,6 +3,10 @@
 A SaaS platform for Indian paying-guest and hostel operators. Four portals,
 one responsive React application, a FastAPI backend, PostgreSQL underneath.
 
+**One deploy updates everything.** The website and the Android app run the
+same screens: the APK opens https://pgdesk.dygine.com inside the app (see
+[The Android app](#the-android-app)), so a `git push` updates both.
+
 **The frontend talks to the API for everything.** There is no browser demo store:
 authentication, residents, beds, billing, operations, support and reporting are
 all served by the backend and enforced there. If the API is not running, the app
@@ -15,12 +19,73 @@ server.
 
 ```
 React 18 + Vite  ──HTTP──▶  FastAPI  ──▶  SQLAlchemy 2.0  ──▶  PostgreSQL 16
-   (browser)                 (ASGI)          (ORM)             (43 tables)
+ (browser + APK)             (ASGI)          (ORM)             (54 tables)
 ```
 
-- **120 API routes** across 13 endpoint modules under `/api/v1`
-- **7 Alembic migrations**, verified to run from an empty database
-- **301 backend tests**
+- **230 API routes** across 16 endpoint modules under `/api/v1`
+- **14 Alembic migrations**, verified to run from an empty database
+- **340 backend tests**
+
+---
+
+## What changed in September 2026
+
+Full detail in [`CHANGELOG-2026-09.md`](CHANGELOG-2026-09.md); operations notes in
+[`HANDOVER.md`](HANDOVER.md) §6, §8 and §15.
+
+- **Staff** is a real workforce list (cooks, cleaners, guards - no login needed)
+  with salaries that post to Expenses. **Users & logins** is the separate login list.
+- **Checkout notice** - residents give notice from the app; the office sees days
+  left and short notice on the Checkout screen.
+- **Resident payments** - Pay now on every invoice: Razorpay (each PG's own keys,
+  stored encrypted), or UPI/bank transfer with a mandatory UTR that the office verifies.
+- **Accounts (P&L)** - cash-basis profit and loss; deposits and tax kept out of profit.
+- **Food** - a weekly menu that repeats, one-day specials (auto-deleted after a
+  week), and the PG's own meal names and timings.
+- **Query centre** - a query the office sends reaches the resident, with a notification.
+- **Gate scan** shows the branch gate QR for residents to scan.
+- **Scanned ID documents** - up to 3 per resident, 5 KB each (see below).
+- **Sign-in fix** - a server restart or deploy no longer signs anyone out.
+- **The Android app opens the live website** - no more stale screens in the APK.
+- UI fixes: notification panel on phones, every toggle switch, sidebar order.
+
+---
+
+## The Android app
+
+The APK is a thin shell: `frontend/capacitor.config.json` sets `server.url` to
+`https://pgdesk.dygine.com`, so the app shows the live website, while the
+camera, GPS, notifications and the saved login stay native.
+
+| You change | What to do |
+|---|---|
+| Screens, features, fixes, API | `git push` - Render deploys, the app shows it on next open |
+| A new native plugin or Android permission, the icon or name, the website address | Build and share a new APK (HANDOVER §5) |
+
+An already-open screen offers "A new version of PGDesk is ready - Reload". With
+no internet the app shows `public/offline.html` and retries by itself.
+
+---
+
+## Scanned ID documents
+
+Each resident can have **up to 3 document images** (Aadhaar, PAN, passport,
+driving licence, voter ID, other), **each at most 5 KB (5,120 bytes)**:
+
+- **Scan with camera** - the phone camera opens; the photo is cropped to the
+  document, turned grey with the contrast stretched, and shrunk until it fits.
+- **Upload image** - accepted only if it is already under 5 KB. A larger file is
+  refused with its size, with an option to shrink it the same way as a scan.
+- Add them in the Add resident form, or later from the resident's Documents tab.
+
+The limit is enforced three times: in the app, by the API, and by a CHECK
+constraint in the database. Images are stored in PostgreSQL (`resident_documents`);
+at 15 KB per resident that is about 15 MB per thousand residents. Only roles with
+`customers.kyc_view` can see the images. At 5 KB, names and ID numbers stay
+readable; small print (such as the address on the back of an Aadhaar) usually
+does not. The limit is `DOCUMENT_MAX_BYTES` in `backend/app/models/customer.py`
+and `DOC_MAX_BYTES` in `frontend/src/lib/docScan.js` - change both, plus the
+CHECK in a migration.
 
 ### The two rules everything else rests on
 
@@ -305,13 +370,16 @@ needed, both save perfectly and send nothing.
 
 ## Modules
 
-Branches, buildings, floors, rooms, beds - residents, KYC, check-in, bed
-assignment, transfer, checkout, QR - invoices, rent generation, payments with a
-verify/refund state machine - attendance, gate scan, visitors, gate passes -
-food and meal attendance - laundry slots and bookings - complaints, support
-queries - staff, roles, permissions - expenses, inventory, assets - reports and
-CSV export - notifications, announcements - audit log - organisation and
-platform settings - subscriptions, plan limits and usage.
+Branches, buildings, floors, rooms, beds - residents, KYC numbers and scanned ID
+documents, check-in, bed assignment, transfer, checkout notices and checkout, QR
+- invoices, rent generation, payments with a verify/refund state machine,
+resident payments (Razorpay, UPI, bank transfer) - accounts (profit and loss) -
+attendance, gate scan with the gate QR, visitors, gate passes - food: weekly
+menu, specials, meal timings and meal attendance - laundry slots and bookings -
+complaints, support queries in both directions - staff and salaries, users,
+roles, permissions - expenses, inventory, assets - reports and CSV export -
+notifications, announcements - audit log - organisation and platform settings -
+subscriptions, plan limits and usage.
 
 ---
 
@@ -367,7 +435,8 @@ Never set it in production: these are working credentials.
 
 | Piece | Production form |
 |---|---|
-| Frontend | `npm run build` -> static files on any CDN or web server |
+| Frontend | `npm run build` -> static files on any CDN or web server (Render static site `pgdesk`) |
+| Android app | APK that opens the live site (`server.url`); rebuilt only for native changes |
 | Backend | `uvicorn app.main:app` behind a process manager, multiple workers |
 | Database | Managed PostgreSQL 16, migrations applied by `alembic upgrade head` |
 | Secrets | Environment variables from the platform's secret store, never files in the image |
@@ -383,9 +452,11 @@ Never modify schema outside a migration — `test_migrations.py` will catch drif
   master settings screen reports each channel as configured or not, based on
   whether provider credentials exist in the environment. Nothing ever claims to
   have sent a message it did not send.
-- **KYC upload stores a reference, not a file.** There is no object-storage
-  integration; `document_reference` is a string the operator fills in. Building
-  it needs a storage decision (S3, GCS, volume) plus signed-URL access control.
+- **Scanned documents are small by design.** Up to 3 images per resident at
+  5 KB each, stored in the database. Anything needing full-resolution scans would
+  need object storage (S3, GCS) plus signed-URL access control.
+- **The app needs internet.** It opens the live website; with no connection it
+  shows an offline page and retries.
 - **No frontend unit-test framework.** The build is the static check, plus the
   smoke scripts. Security-critical logic is on the server and covered there; a
   component suite is worth adding as the UI grows.

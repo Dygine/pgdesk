@@ -1,7 +1,8 @@
 # September 2026 update
 
 Twelve requests, all shipped, plus one sign-in fix (below). Backend: 332 tests pass
-(317 before + 12 in `backend/tests/test_pgdesk_updates.py` + 3 in `test_auth_session.py`). One migration: `0013_staff_notice_menu_pay`.
+(317 before + 12 in `backend/tests/test_pgdesk_updates.py` + 3 in `test_auth_session.py`
++ 8 in `test_resident_documents.py`) - 340 in all. One migration: `0013_staff_notice_menu_pay`.
 **One new APK, once** - it now opens the live website, so everything after
 ships with `git push` alone (see the last section and HANDOVER §6).
 
@@ -85,3 +86,22 @@ opens the website itself. A deploy updates the browser and the app together.
 
 **Needs one new APK** (the old one cannot learn the new address by itself).
 After that: `git push` is the whole release process.
+
+## Scanned ID documents (up to 3 per resident, 5 KB each)
+
+- New table `resident_documents` (migration `0014_resident_documents`), images
+  stored as bytes. The 5 KB (5,120-byte) limit is enforced by the app, the API
+  (`ResidentDocumentService`) and two CHECK constraints in the database.
+- **Scan with camera**: crop to the document, grey with stretched contrast, then
+  the largest size that fits under 5 KB at a readable quality (WebP where
+  possible) - `frontend/src/lib/docScan.js`.
+- **Upload image**: accepted only if already under 5 KB (JPEG, PNG or WebP, checked
+  by content, not by name); a larger file is refused with its size and can be
+  shrunk like a scan.
+- In the **Add resident** form (saved once the resident exists) and on the
+  profile's **Documents** tab (add later, view, delete). The old per-number KYC
+  card there is now labelled "ID numbers" so the two are not confused.
+- Images only go to roles with `customers.kyc_view`; others see that a document
+  exists. Uploads and deletions are in the audit log, never the image.
+- Works in the current APK: the camera opens through the normal file picker,
+  which the app already supports. Ships with `git push`.

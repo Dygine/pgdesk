@@ -14,7 +14,7 @@ export const ORG_NAV = [
   {
     group: 'Overview',
     items: [
-      { label: 'Dashboard Test', to: '/app', icon: LayoutDashboard, perm: 'dashboard.view', end: true },
+      { label: 'Dashboard', to: '/app', icon: LayoutDashboard, perm: 'dashboard.view', end: true },
       { label: 'Floor plan', to: '/app/blueprint', icon: Map, perm: 'rooms.view' },
       { label: 'Reports', to: '/app/reports', icon: BarChart3, perm: 'reports.view' },
     ],

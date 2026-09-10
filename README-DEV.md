@@ -86,6 +86,17 @@ The eight `@sunriselivingpg.com` staff accounts use `demo1234`.
 
 ---
 
+## Your changes and the Android app
+
+The Android app opens the live website (https://pgdesk.dygine.com), not your
+machine. So:
+
+- `npm run dev` shows your changes **in the browser** straight away.
+- The **phone app** shows them only after you `git push` and Render has deployed.
+  Nothing else - no APK, no version number.
+- A new APK is needed only for native changes: a new Capacitor plugin, a new
+  Android permission, the app icon or name, or a new website address.
+
 ## When something does not start
 
 **"running scripts is disabled on this system"** — PowerShell execution

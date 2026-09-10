@@ -12,7 +12,7 @@ import { paymentApi } from '@/services/api/paymentApi'
 import { attendanceApi } from '@/services/api/attendanceApi'
 import { complaintApi } from '@/services/api/complaintApi'
 import { useToast } from '@/context/ToastContext'
-import { PageHeader, PermissionGuard } from '@/components/domain'
+import { ResidentDocuments, PageHeader, PermissionGuard } from '@/components/domain'
 import {
   Card, CardHeader, Button, StatCard, StatusBadge, EmptyState, Skeleton,
   InlineAlert, Modal, FormField, Input, Select, Textarea, Tabs, Avatar, IconButton,
@@ -194,19 +194,27 @@ export default function ResidentProfile() {
         )}
 
         {tab === 'kyc' && (
+          <>
+          <Card className="mb-4">
+            <CardHeader title="Scanned copies"
+              subtitle="Up to 3 documents, each stored under 5 KB. Scan with the camera or upload." />
+            <div className="p-4 sm:p-5">
+              <ResidentDocuments residentId={id} canEdit={can('customers.edit')} />
+            </div>
+          </Card>
           <Card>
-            <CardHeader title="Identity documents"
+            <CardHeader title="ID numbers"
               subtitle={can('customers.kyc_view')
                 ? 'You can see full numbers.'
                 : 'Numbers are masked — full numbers need the KYC view permission.'}
               action={<PermissionGuard perm="customers.edit">
                 <Button size="sm" icon={Plus}
                   onClick={() => { setF({ id_type: 'AADHAAR' }); setModal('kyc') }}>
-                  Add document</Button>
+                  Add ID number</Button>
               </PermissionGuard>} />
             {(kyc.data || []).length === 0 ? (
-              <EmptyState icon={IdCard} title="Nothing on file"
-                message="Record an Aadhaar, PAN or passport for this resident." />
+              <EmptyState icon={IdCard} title="No ID numbers recorded"
+                message="Type in the Aadhaar, PAN or passport number, then verify it." />
             ) : (
               <div className="divide-y divide-line">
                 {kyc.data.map((k) => (
@@ -241,6 +249,7 @@ export default function ResidentProfile() {
               </div>
             )}
           </Card>
+          </>
         )}
 
         {tab === 'money' && (
@@ -363,7 +372,7 @@ export default function ResidentProfile() {
       </Modal>
 
       <Modal open={modal === 'kyc'} onClose={() => setModal(null)} size="sm"
-        title="Record a document"
+        title="Record an ID number"
         footer={<><Button onClick={() => setModal(null)}>Cancel</Button>
           <Button variant="primary" loading={busy}
             onClick={() => act(() => residentApi.addKyc(r.id, {

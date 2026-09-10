@@ -34,8 +34,8 @@ pgdesk/
 │   │   ├── services/           all business rules live here
 │   │   ├── schemas/            Pydantic request/response
 │   │   └── permissions/        the permission catalogue
-│   ├── alembic/versions/       12 migrations, 0001 → 0012
-│   ├── tests/                  332 test cases
+│   ├── alembic/versions/       14 migrations, 0001 → 0014
+│   ├── tests/                  340 test cases
 │   ├── seed.py                 demo tenants + accounts
 │   └── expire_subscriptions.py daily cron: trial → expired → suspended
 │
@@ -115,7 +115,7 @@ demo passwords into the bundle.
 
 ```powershell
 cd backend
-python -m pytest          # 332 pass
+python -m pytest          # 340 pass
 ```
 
 There are **no frontend tests**. Only a build check.
@@ -462,7 +462,7 @@ Off by default per branch. `Branches → Listing` turns it on, or the dashboard'
 | **Render free tier** | ~50 s cold start every morning. |
 | **Gmail sender** | Brevo rewrites the From domain. Verify `dygine.com`. |
 | **No push notifications** | Permission is requested, nothing sends. Needs a Firebase project (`google-services.json` + service account). No way around FCM for closed-app delivery on Android. |
-| **KYC files not stored** | Only a text reference. No file storage configured. Real gap for an Indian PG. |
+| **KYC scans are small** | Up to 3 images per resident, 5 KB each, in the database (`resident_documents`). Name and ID number read fine; fine print (Aadhaar address) usually does not. Full-resolution scans would need object storage. |
 | **No frontend tests** | Build check only. |
 | **SMS / WhatsApp** | Structure exists, nothing sends. |
 | **Duplicate Render static site** | `pgdesk-get` and `pgdesk` both deployed. Confirm which is the landing page and which is the app. |
@@ -514,7 +514,7 @@ defaults it on for debug builds, off for release, which is correct).
    upgrades possible.
 3. **Verify `dygine.com` in Brevo** — real sender domain on password resets.
 4. **Push notifications** — needs Firebase from the owner.
-5. **KYC file storage** — the oldest outstanding gap.
+5. **Full-resolution KYC storage** — only if 5 KB scans prove too small in practice.
 
 ---
 
