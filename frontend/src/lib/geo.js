@@ -23,10 +23,20 @@ export class LocationError extends Error {
   }
 }
 
-async function plugin() {
-  const { Geolocation } = await import('@capacitor/geolocation')
-  return Geolocation
-}
+/**
+ * Never `return` a Capacitor plugin object from an `async` function.
+ *
+ * Async functions resolve their return value, and resolution checks for a
+ * `.then` property. A Capacitor plugin is a proxy where *every* property access
+ * yields a method stub, so `.then` looks callable. JavaScript calls it believing
+ * it is resolving a promise; Capacitor throws "not implemented" and never
+ * invokes the resolve or reject callback it was handed - so the awaiting promise
+ * settles never, not late.
+ *
+ * The symptom is an app frozen on its loading screen with one console line and
+ * no stack. Import the module and use the plugin in the same function instead.
+ */
+const loadGeolocation = () => import('@capacitor/geolocation')
 
 /**
  * Ask for permission, returning what the user chose rather than throwing.
@@ -38,8 +48,8 @@ async function plugin() {
  */
 export async function requestPermission() {
   try {
-    const Geolocation = await plugin()
     if (!isNative()) return 'prompt'
+    const { Geolocation } = await loadGeolocation()
     const status = await Geolocation.requestPermissions()
     return status.location ?? 'denied'
   } catch {
@@ -61,7 +71,7 @@ export async function requestPermission() {
 export async function currentPosition({ timeout = 15000 } = {}) {
   let Geolocation
   try {
-    Geolocation = await plugin()
+    ;({ Geolocation } = await loadGeolocation())
   } catch {
     throw new LocationError('unsupported', 'Location is not available on this device.')
   }

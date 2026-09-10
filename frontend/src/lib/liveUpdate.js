@@ -36,10 +36,20 @@ const MANIFEST_URL =
 
 export const isNative = () => Capacitor.isNativePlatform()
 
-async function plugin() {
-  const { CapacitorUpdater } = await import('@capgo/capacitor-updater')
-  return CapacitorUpdater
-}
+/**
+ * Never `return` a Capacitor plugin object from an `async` function.
+ *
+ * Async functions resolve their return value, and resolution checks for a
+ * `.then` property. A Capacitor plugin is a proxy where *every* property access
+ * yields a method stub, so `.then` looks callable. JavaScript calls it believing
+ * it is resolving a promise; Capacitor throws "not implemented" and never
+ * invokes the resolve or reject callback it was handed - so the awaiting promise
+ * settles never, not late.
+ *
+ * The symptom is an app frozen on its loading screen with one console line and
+ * no stack. Import the module and use the plugin in the same function instead.
+ */
+const loadUpdater = () => import('@capgo/capacitor-updater')
 
 /**
  * Compare two dotted version strings.
@@ -72,7 +82,8 @@ export function isNewer(candidate, current) {
 export async function markHealthy() {
   if (!isNative()) return
   try {
-    await (await plugin()).notifyAppReady()
+    const { CapacitorUpdater } = await loadUpdater()
+    await CapacitorUpdater.notifyAppReady()
   } catch {
     /* Not fatal. Worst case the plugin reverts a bundle that was actually fine,
        which costs the user one relaunch and no data. */
@@ -85,7 +96,8 @@ export async function currentVersions() {
     return { bundle: import.meta.env.VITE_APP_VERSION || '0.0.0', native: null }
   }
   try {
-    const info = await (await plugin()).current()
+    const { CapacitorUpdater } = await loadUpdater()
+    const info = await CapacitorUpdater.current()
     return {
       bundle: info?.bundle?.version && info.bundle.version !== 'builtin'
         ? info.bundle.version
@@ -152,7 +164,7 @@ export async function applyUpdate(manifest, onProgress) {
     return
   }
 
-  const CapacitorUpdater = await plugin()
+  const { CapacitorUpdater } = await loadUpdater()
   let listener = null
   if (onProgress) {
     listener = await CapacitorUpdater.addListener(

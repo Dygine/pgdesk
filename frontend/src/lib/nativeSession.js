@@ -34,15 +34,26 @@ export const isNativeApp = () => Capacitor.isNativePlatform()
 /** Tells the API to issue a long session and hand the token back. */
 export const NATIVE_CLIENT_HEADER = 'X-PGDesk-Client'
 
-async function prefs() {
-  const { Preferences } = await import('@capacitor/preferences')
-  return Preferences
-}
+/**
+ * Never `return` a Capacitor plugin object from an `async` function.
+ *
+ * Async functions resolve their return value, and resolution checks for a
+ * `.then` property. A Capacitor plugin is a proxy where *every* property access
+ * yields a method stub, so `.then` looks callable. JavaScript calls it believing
+ * it is resolving a promise; Capacitor throws "not implemented" and never
+ * invokes the resolve or reject callback it was handed - so the awaiting promise
+ * settles never, not late.
+ *
+ * The symptom is an app frozen on its loading screen with one console line and
+ * no stack. Import the module and use the plugin in the same function instead.
+ */
+const loadPreferences = () => import('@capacitor/preferences')
 
 export async function readRefreshToken() {
   if (!isNativeApp()) return null
   try {
-    const { value } = await (await prefs()).get({ key: KEY })
+    const { Preferences } = await loadPreferences()
+    const { value } = await Preferences.get({ key: KEY })
     return value || null
   } catch {
     return null
@@ -52,8 +63,9 @@ export async function readRefreshToken() {
 export async function writeRefreshToken(token) {
   if (!isNativeApp()) return
   try {
-    if (token) await (await prefs()).set({ key: KEY, value: token })
-    else await (await prefs()).remove({ key: KEY })
+    const { Preferences } = await loadPreferences()
+    if (token) await Preferences.set({ key: KEY, value: token })
+    else await Preferences.remove({ key: KEY })
   } catch {
     // A failed write means this session ends when the app closes. Worth not
     // crashing over: the user is signed in right now either way, and the next
