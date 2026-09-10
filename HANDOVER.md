@@ -35,7 +35,7 @@ pgdesk/
 │   │   ├── schemas/            Pydantic request/response
 │   │   └── permissions/        the permission catalogue
 │   ├── alembic/versions/       12 migrations, 0001 → 0012
-│   ├── tests/                  329 test cases
+│   ├── tests/                  332 test cases
 │   ├── seed.py                 demo tenants + accounts
 │   └── expire_subscriptions.py daily cron: trial → expired → suspended
 │
@@ -115,7 +115,7 @@ demo passwords into the bundle.
 
 ```powershell
 cd backend
-python -m pytest          # 329 pass
+python -m pytest          # 332 pass
 ```
 
 There are **no frontend tests**. Only a build check.
@@ -341,6 +341,17 @@ added to the form but forgotten there were silently never saved. Cost three
 round trips on one dropdown.
 
 **If you add a settings field, add it to `WRITABLE` in both places.**
+
+### A failed refresh is not a sign-out
+
+Only an HTTP **401** from `/auth/refresh` means the saved login is gone. A
+network error, a timeout, a 5xx or a host error page means "try again" - the
+app keeps the token and shows *Connecting to PGDesk…* with automatic retry
+(`SESSION` in `client.js`, `restoreSession` in `AuthContext.jsx`). It used to
+delete the token on any failure, which signed everyone out after every deploy.
+The server side is `AuthService._is_lost_reply`: a rotated token presented again
+within 10 minutes, whose replacement was never used, is a retry, not a theft.
+Do not "simplify" either back.
 
 ### Render free tier sleeps
 

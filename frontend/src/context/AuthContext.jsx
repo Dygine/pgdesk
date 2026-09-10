@@ -2,7 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState } 
 import { makeCan } from '@/lib/rbac'
 import { subscriptionState } from '@/lib/limits'
 import { authApi } from '@/services/api/authApi'
-import { setSessionExpiredHandler, tokenStore } from '@/services/api/client'
+import { SESSION, setSessionExpiredHandler, tokenStore } from '@/services/api/client'
 
 const AuthCtx = createContext(null)
 export const useAuth = () => useContext(AuthCtx)
@@ -22,7 +22,7 @@ export const useAuth = () => useContext(AuthCtx)
  */
 export function AuthProvider({ children }) {
   const [account, setAccount] = useState(null)     // what /auth/me returned
-  const [status, setStatus] = useState('loading')  // loading | authenticated | anonymous
+  const [status, setStatus] = useState('loading')  // loading | authenticated | anonymous | offline
   const [branchScope, setBranchScope] = useState('all')
 
   /**
@@ -34,22 +34,48 @@ export function AuthProvider({ children }) {
    * So we always ask: `restore()` exchanges the cookie for a fresh access
    * token, and a failure simply means nobody is signed in.
    */
-  useEffect(() => {
-    let cancelled = false
-    ;(async () => {
-      const restored = await authApi.restore()
-      if (cancelled) return
-      if (!restored) { setAccount(null); setStatus('anonymous'); return }
-      try {
-        const me = await authApi.me()
-        if (!cancelled) { setAccount(me); setStatus('authenticated') }
-      } catch {
-        tokenStore.clear()
-        if (!cancelled) { setAccount(null); setStatus('anonymous') }
+  const [attempts, setAttempts] = useState(0)
+
+  /**
+   * Restore the session: at launch, and again whenever the server could not be
+   * reached. Only a definite "no" from the server lands on the login screen.
+   * Unreachable means 'offline': the saved login is kept and we keep trying,
+   * because the usual cause is a server waking up or a deploy in progress -
+   * not the person having signed out.
+   */
+  const restoreSession = useCallback(async () => {
+    const result = await authApi.restore()
+    if (result === SESSION.REJECTED) { setAccount(null); setStatus('anonymous'); return }
+    if (result !== SESSION.OK) { setStatus('offline'); setAttempts((n) => n + 1); return }
+    try {
+      const me = await authApi.me()
+      setAccount(me); setStatus('authenticated'); setAttempts(0)
+    } catch (err) {
+      if (err?.status === 401) {
+        tokenStore.clear(); setAccount(null); setStatus('anonymous')
+      } else {
+        setStatus('offline'); setAttempts((n) => n + 1)
       }
-    })()
-    return () => { cancelled = true }
+    }
   }, [])
+
+  useEffect(() => { restoreSession() }, [restoreSession])
+
+  // While offline: retry on a backoff (2s, 4s, 8s, then every 15s), and
+  // immediately when the phone gets signal back or the app comes to the front.
+  useEffect(() => {
+    if (status !== 'offline') return undefined
+    const delay = Math.min(15000, 2000 * 2 ** Math.max(0, attempts - 1))
+    const timer = setTimeout(restoreSession, delay)
+    const now = () => restoreSession()
+    window.addEventListener('online', now)
+    window.addEventListener('pgdesk:resume', now)
+    return () => {
+      clearTimeout(timer)
+      window.removeEventListener('online', now)
+      window.removeEventListener('pgdesk:resume', now)
+    }
+  }, [status, attempts, restoreSession])
 
   /* One place decides what happens when a session dies mid-session. */
   useEffect(() => {
@@ -201,5 +227,14 @@ export function AuthProvider({ children }) {
   }, [account, status, branchScope, login, logout, loginAs, loginWithQr,
       replaceAccount, refreshAccount])
 
-  return <AuthCtx.Provider value={value}>{children}</AuthCtx.Provider>
+  // Added on top rather than threaded through every branch above: whether the
+  // server is currently unreachable, and a way to try again now.
+  const session = useMemo(() => ({
+    ...value,
+    isOffline: status === 'offline',
+    sessionAttempts: attempts,
+    retrySession: restoreSession,
+  }), [value, status, attempts, restoreSession])
+
+  return <AuthCtx.Provider value={session}>{children}</AuthCtx.Provider>
 }

@@ -5,7 +5,7 @@
  * browser attaches it to /auth/* on its own. This module only ever handles the
  * short-lived access token, which lives in memory.
  */
-import { api, refreshAccessToken, tokenStore, unwrap } from './client'
+import { api, refreshSession, tokenStore, unwrap } from './client'
 import { clearRefreshToken, writeRefreshToken } from '@/lib/nativeSession'
 
 export const authApi = {
@@ -55,7 +55,8 @@ export const authApi = {
    * the reload. Asking the API is the only way to find out whether it is still
    * valid — HttpOnly means the client genuinely cannot know on its own.
    */
-  restore: () => refreshAccessToken(),
+  /** 'ok' | 'rejected' | 'unreachable' - see SESSION in client.js. */
+  restore: () => refreshSession(),
 
   async logout() {
     try {

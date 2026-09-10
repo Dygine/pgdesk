@@ -167,12 +167,26 @@ function toError(payload, status) {
  */
 const REFRESH_TIMEOUT_MS = 60000
 
+/**
+ * What a refresh attempt found out.
+ *
+ * Only REJECTED means the saved login is gone: the server looked at the token
+ * and refused it (HTTP 401). Everything else - no signal, a timeout while a
+ * sleeping server wakes, a 502/503 while Render swaps in a new deploy, a 500
+ * while the database wakes - says nothing about the token, so it is kept and
+ * the app keeps trying.
+ *
+ * This used to be a yes/no, and "no" deleted the stored token. So opening the
+ * app during a deploy, or on a bad network, signed people out for good.
+ */
+export const SESSION = Object.freeze({ OK: 'ok', REJECTED: 'rejected', UNREACHABLE: 'unreachable' })
+
 /** A single in-flight refresh, shared by every request that hits a 401 at once. */
 let refreshInFlight = null
 
-export async function refreshAccessToken() {
-  // Refresh tokens are single-use server-side, so two parallel refreshes would
-  // invalidate each other and sign the user out. Everyone waits on one promise.
+export function refreshSession() {
+  // Refresh tokens are rotated server-side, so two parallel refreshes would
+  // step on each other. Everyone waits on one promise.
   if (!refreshInFlight) {
     refreshInFlight = (async () => {
       try {
@@ -180,16 +194,8 @@ export async function refreshAccessToken() {
         // On native there is no usable cookie, so the stored token goes in the
         // body — the same endpoint, the same rotation, a different courier.
         const stored = await readRefreshToken()
-
-        // Bounded, because this call gates the whole launch: the app shows
-        // "Restoring your session" until it answers. A free-tier host that
-        // sleeps takes the better part of a minute to wake, and an unreachable
-        // one never answers at all - without a ceiling the user sits on a
-        // splash screen with no way forward. Timing out lands them on the login
-        // form, which is at least a screen they can act on.
         const abort = new AbortController()
         const timer = setTimeout(() => abort.abort(), REFRESH_TIMEOUT_MS)
-
         let res
         try {
           res = await fetch(buildUrl('/auth/refresh'), {
@@ -199,27 +205,44 @@ export async function refreshAccessToken() {
             body: JSON.stringify(stored ? { refresh_token: stored } : {}),
             signal: abort.signal,
           })
+        } catch {
+          return SESSION.UNREACHABLE          // offline, DNS, or gave up waiting
         } finally {
           clearTimeout(timer)
         }
-        const payload = await parse(res)
-        if (!res.ok || payload?.success === false) {
-          // A refusal means this token is spent or revoked. Keeping it would
-          // retry a dead credential on every launch forever.
+
+        if (res.status === 401) {
+          // The server refused this token: signed out elsewhere, password
+          // changed, or expired. Keeping it would retry a dead credential.
           if (stored) await clearRefreshToken()
-          return false
+          return SESSION.REJECTED
         }
+
+        let payload = null
+        try { payload = await res.json() } catch { payload = null }
+        if (!res.ok || !payload || payload.success === false || !payload.data?.access_token) {
+          // A host error page, a 5xx, a rate limit. Not a verdict on the token.
+          return SESSION.UNREACHABLE
+        }
+
         tokenStore.write({ access_token: payload.data.access_token })
         // Rotation issues a new one each time; missing this would leave the app
-        // holding a token the server has already revoked.
+        // holding a token the server has already rotated out.
         if (payload.data.refresh_token) await writeRefreshToken(payload.data.refresh_token)
-        return true
-      } catch { return false } finally {
+        return SESSION.OK
+      } catch {
+        return SESSION.UNREACHABLE
+      } finally {
         setTimeout(() => { refreshInFlight = null }, 0)
       }
     })()
   }
   return refreshInFlight
+}
+
+/** The old yes/no form, for callers that only need to know whether it worked. */
+export async function refreshAccessToken() {
+  return (await refreshSession()) === SESSION.OK
 }
 
 async function request(path, { method = 'GET', body, params, auth = true, retry = true, headers: extra } = {}) {
@@ -245,9 +268,13 @@ async function request(path, { method = 'GET', body, params, auth = true, retry 
      attempt is made even with no access token in memory, because after a page
      reload that is the normal state and the cookie may still be good. */
   if (res.status === 401 && auth && retry) {
-    if (await refreshAccessToken()) {
+    const outcome = await refreshSession()
+    if (outcome === SESSION.OK) {
       return request(path, { method, body, params, auth, retry: false, headers: extra })
     }
+    // Could not reach the server to renew: say so, but do NOT sign out. The
+    // saved login is still good and the next attempt will use it.
+    if (outcome === SESSION.UNREACHABLE) throw new NetworkError()
     tokenStore.clear()
     onSessionExpired()
   }

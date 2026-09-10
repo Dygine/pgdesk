@@ -160,10 +160,12 @@ def test_refresh_returns_a_new_pair(client, org_setup):
 
 
 def test_refresh_tokens_are_single_use(client, org_setup):
+    """Once its replacement has been used, the old token is dead for good."""
     login(client, "owner@session.test")
     original = refresh_cookie(client)
 
-    assert do_refresh(client).status_code == 200
+    assert do_refresh(client).status_code == 200      # original -> second
+    assert do_refresh(client).status_code == 200      # the replacement is now in use
     assert present_token_alone(client, original).status_code == 401
 
 
@@ -176,6 +178,7 @@ def test_replaying_a_used_refresh_token_kills_every_session(client, org_setup):
     original = refresh_cookie(client)
 
     assert do_refresh(client).status_code == 200
+    assert do_refresh(client).status_code == 200  # two parties now hold this chain
     rotated = refresh_cookie(client)
 
     present_token_alone(client, original)        # the replay
@@ -326,3 +329,61 @@ def test_must_change_password_flag_is_reported_then_cleared(client, db):
                 headers=auth(tokens["access_token"]))
     assert login(client, "new.owner@temp.test", "Chosen@2024")["data"]["user"][
         "must_change_password"] is False
+
+
+# ------------------------------------------------- lost replies (the app's case)
+NATIVE = {**CSRF, "X-PGDesk-Client": "native"}
+
+
+def native_login(client) -> str:
+    r = client.post("/api/v1/auth/login", headers={"X-PGDesk-Client": "native"},
+                    json={"email": "owner@session.test", "password": PASSWORD})
+    assert r.status_code == 200, r.text
+    return r.json()["data"]["refresh_token"]
+
+
+def native_refresh(client, token: str):
+    client.cookies.clear()
+    return client.post("/api/v1/auth/refresh", json={"refresh_token": token}, headers=NATIVE)
+
+
+def test_a_retry_after_a_lost_reply_restores_the_session(client, org_setup):
+    """
+    The phone sends its token, the server rotates it, the reply never arrives
+    (signal dropped, or a sleeping server answered after the app gave up). The
+    app asks again with the same token. That is a retry, not a theft: it must
+    get a session back, not sign the user out of every device.
+    """
+    t1 = native_login(client)
+    lost = native_refresh(client, t1)
+    assert lost.status_code == 200
+    undelivered = lost.json()["data"]["refresh_token"]
+
+    retry = native_refresh(client, t1)
+    assert retry.status_code == 200, retry.text
+    fresh = retry.json()["data"]["refresh_token"]
+    assert fresh not in (t1, undelivered)
+    assert native_refresh(client, fresh).status_code == 200
+
+
+def test_the_undelivered_replacement_is_retired(client, org_setup):
+    """Nobody legitimate holds it, so if it ever turns up, that is theft."""
+    t1 = native_login(client)
+    undelivered = native_refresh(client, t1).json()["data"]["refresh_token"]
+    fresh = native_refresh(client, t1).json()["data"]["refresh_token"]
+
+    assert native_refresh(client, undelivered).status_code == 401
+    assert native_refresh(client, fresh).status_code == 401      # everyone signed out
+
+
+def test_a_late_replay_still_signs_every_session_out(client, org_setup, db):
+    from app.services import auth_service
+    t1 = native_login(client)
+    t2 = native_refresh(client, t1).json()["data"]["refresh_token"]
+    row = db.query(RefreshToken).filter(
+        RefreshToken.token_hash == auth_service.hash_token(t1)).one()
+    row.revoked_at = row.revoked_at - timedelta(minutes=11)      # outside the grace window
+    db.flush()
+
+    assert native_refresh(client, t1).status_code == 401
+    assert native_refresh(client, t2).status_code == 401

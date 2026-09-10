@@ -252,19 +252,32 @@ class AuthService:
         if row is None:
             raise AuthenticationError("That refresh token is not valid.")
 
+        now = datetime.now(timezone.utc)
         if row.revoked_at is not None:
-            self._revoke_all_for(row)
-            raise AuthenticationError(
-                "This session was already refreshed elsewhere. For safety every "
-                "session has been signed out - please sign in again."
-            )
+            successor = self.db.get(RefreshToken, row.replaced_by) if row.replaced_by else None
+            if not self._is_lost_reply(row, successor, now):
+                self._revoke_all_for(row)
+                raise AuthenticationError(
+                    "This session was already refreshed elsewhere. For safety every "
+                    "session has been signed out - please sign in again."
+                )
+            # The replacement never reached the device, so nobody legitimate holds
+            # it. Retire it: if it is ever presented, that IS theft and gets the
+            # full sign-out-everywhere response. Then issue a fresh pair.
+            successor.revoked_at = now
+            principal = self._principal_from_token_row(row)
+            access, raw = self.issue_tokens(principal, user_agent=user_agent, ip=ip, native=native)
+            new_row = self.db.scalars(
+                select(RefreshToken).where(RefreshToken.token_hash == hash_token(raw))
+            ).first()
+            if new_row:
+                row.replaced_by = new_row.id     # a second lost reply is covered too
+            return access, raw, principal
 
-        if row.expires_at <= datetime.now(timezone.utc):
+        if row.expires_at <= now:
             raise AuthenticationError("Your session has expired. Sign in again.")
 
         principal = self._principal_from_token_row(row)
-
-        now = datetime.now(timezone.utc)
         row.revoked_at = now
         access, raw = self.issue_tokens(principal, user_agent=user_agent, ip=ip, native=native)
         new_row = self.db.scalars(
@@ -273,6 +286,41 @@ class AuthService:
         if new_row:
             row.replaced_by = new_row.id
         return access, raw, principal
+
+    #: How long a rotated-out token may be presented again, if its replacement
+    #: has never been used. See `_is_lost_reply`.
+    ROTATION_GRACE = timedelta(minutes=10)
+
+    def _is_lost_reply(self, row: RefreshToken, successor: RefreshToken | None,
+                       now: datetime) -> bool:
+        """
+        Whether presenting an already-rotated token is a retry, not a theft.
+
+        Strict single use signed people out for something that is not an attack:
+        the app sends its token, the server rotates it, and the reply never
+        arrives - the phone lost signal, a sleeping free-tier server answered
+        after the app had given up waiting, or the app was closed mid-request.
+        The app still holds the old token and asks again. Treating that as theft
+        signed the user out of every device, typically right after a deploy,
+        when the server is slowest to answer.
+
+        It is a retry when all three hold: the token was rotated (not logged out
+        or revoked by a password change), it happened within ROTATION_GRACE, and
+        the replacement has never been used. That last condition is what keeps
+        theft detection intact: once two parties are both using tokens from one
+        chain, the replacement has been used and the old rule applies in full.
+        The window a thief gains is narrow - a token stolen and used within ten
+        minutes of the real device refreshing, before it refreshes again - and
+        the moment the real device presents its own (now retired) token, every
+        session is signed out.
+        """
+        return (
+            successor is not None
+            and successor.revoked_at is None
+            and row.revoked_at is not None
+            and now - row.revoked_at <= self.ROTATION_GRACE
+            and row.expires_at > now
+        )
 
     def _principal_from_token_row(self, row: RefreshToken) -> Principal:
         if row.user_id:

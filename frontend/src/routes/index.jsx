@@ -1,4 +1,4 @@
-import { Suspense, lazy } from 'react'
+import { useEffect, useState } from 'react'
 import { createBrowserRouter, Navigate, Outlet, useLocation, Link } from 'react-router-dom'
 import { useAuth } from '@/context/AuthContext'
 import { AppShell, SubscriptionBanner } from '@/components/layout/AppShell'
@@ -74,25 +74,58 @@ import { MyAnnouncements, MyProfile } from '@/pages/customer/MyAccount'
  * breakpoint — the same NavList drives desktop and mobile.
  */
 
-/** Shown while /auth/me is in flight, so a reload does not flash the login page. */
+/**
+ * Shown while the session is being restored, so a reload does not flash the
+ * login page - and, when the server cannot be reached, instead of the login
+ * page. A deploy or a sleeping free-tier server is not a reason to make anyone
+ * sign in again; their login is kept and this screen retries on its own.
+ */
 function SessionLoading() {
+  const { isOffline, retrySession, sessionAttempts } = useAuth() || {}
+  const [slow, setSlow] = useState(false)
+  useEffect(() => {
+    const t = setTimeout(() => setSlow(true), 8000)
+    return () => clearTimeout(t)
+  }, [])
+
   return (
-    <div className="min-h-screen bg-canvas flex items-center justify-center">
-      <div className="flex flex-col items-center gap-3">
+    <div className="min-h-screen bg-canvas flex items-center justify-center p-6">
+      <div className="max-w-sm w-full flex flex-col items-center text-center gap-3">
         <span className="h-10 w-10 rounded-xl bg-brand-900 text-white inline-flex items-center justify-center font-bold animate-pulse">P</span>
-        <p className="text-sm text-slate-500">Restoring your session…</p>
+        {!isOffline ? (
+          <>
+            <p className="text-sm text-slate-500">Restoring your session…</p>
+            {slow && (
+              <p className="text-xs text-slate-400 leading-relaxed">
+                The server was asleep and is waking up. The first open of the day can take up to a minute.
+              </p>
+            )}
+          </>
+        ) : (
+          <>
+            <p className="text-base font-semibold text-slate-900">Connecting to PGDesk…</p>
+            <p className="text-sm text-slate-600 leading-relaxed">
+              The server is starting up or your internet dropped. If you were signed in,
+              you stay signed in - this screen continues by itself once it connects.
+            </p>
+            <Button variant="primary" onClick={() => retrySession?.()}>Try now</Button>
+            <p className="text-2xs text-slate-400 tnum">Attempt {sessionAttempts || 1}</p>
+          </>
+        )}
       </div>
     </div>
   )
 }
 
 function RequirePortal({ portal }) {
-  const { can, portal: current, isAuthenticated, isLoading } = useAuth()
+  const { can, portal: current, isAuthenticated, isLoading, isOffline } = useAuth()
   const location = useLocation()
 
   // The refresh token outlives the page, so we must wait for /auth/me to answer
   // before deciding anyone is anonymous.
-  if (isLoading) return <SessionLoading />
+  // An unreachable server is not an answer either: it waits on the same
+  // screen, which retries by itself, rather than showing the login form.
+  if (isLoading || isOffline) return <SessionLoading />
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace state={{ from: location.pathname }} />
@@ -131,15 +164,15 @@ function RequirePortal({ portal }) {
 const guard = (perm, element) => <RouteGuard perm={perm}>{element}</RouteGuard>
 
 function RootRedirect() {
-  const { portal, isLoading } = useAuth()
-  if (isLoading) return <SessionLoading />
+  const { portal, isLoading, isOffline } = useAuth()
+  if (isLoading || isOffline) return <SessionLoading />
   return <Navigate to={{ master: '/master', org: '/app', customer: '/me' }[portal] || '/login'} replace />
 }
 
 /** Someone already signed in has no reason to see the login form. */
 function LoginRoute() {
-  const { portal, isAuthenticated, isLoading } = useAuth()
-  if (isLoading) return <SessionLoading />
+  const { portal, isAuthenticated, isLoading, isOffline } = useAuth()
+  if (isLoading || isOffline) return <SessionLoading />
   if (isAuthenticated) {
     return <Navigate to={{ master: '/master', org: '/app', customer: '/me' }[portal] || '/'} replace />
   }

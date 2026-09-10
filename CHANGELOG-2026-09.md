@@ -1,7 +1,7 @@
 # September 2026 update
 
-Twelve requests, all shipped. Backend: 329 tests pass (317 before + 12 new in
-`backend/tests/test_pgdesk_updates.py`). One migration: `0013_staff_notice_menu_pay`.
+Twelve requests, all shipped, plus one sign-in fix (below). Backend: 332 tests pass
+(317 before + 12 in `backend/tests/test_pgdesk_updates.py` + 3 in `test_auth_session.py`). One migration: `0013_staff_notice_menu_pay`.
 **No new APK needed** - no new Capacitor plugin or Android permission. Ship with
 `npm version patch` then `npm run build:update` (see HANDOVER §6).
 
@@ -37,3 +37,31 @@ Public (Razorpay only, HMAC-checked): `POST /payments/razorpay/webhook/{organiza
 
 No new permission codes - everything reuses the existing catalogue, so the
 JS/Python permission-parity test is untouched.
+
+## Fix: the app asked people to sign in again after a deploy
+
+Reported right after pushing this update. Not caused by the update - a
+pre-existing bug in how the app restores its session, which a deploy (or the
+free Render server waking up) triggers:
+
+1. **Any error deleted the saved login.** `refreshAccessToken()` in
+   `frontend/src/services/api/client.js` treated every failed refresh - a 502
+   while Render swaps in a new deploy, a 500 while the database wakes - as "this
+   token is dead" and removed it from the phone. Now only a real 401 from the
+   server removes it; everything else keeps it.
+2. **"Can't reach the server" looked like "not signed in".** The app showed the
+   sign-in form. Now it shows *Connecting to PGDesk…* and retries by itself
+   (2s, 4s, 8s, then every 15s, and at once when signal returns or the app is
+   reopened). It only goes to the sign-in form if the server actually says the
+   login is invalid.
+3. **A lost reply looked like theft to the server.** The app sends its token,
+   the server rotates it, the reply never arrives (slow wake-up, dropped
+   signal). The app asks again with the old token and the server signed out
+   every device. `AuthService.rotate_refresh_token` now treats that as a retry
+   when the token was rotated within 10 minutes and its replacement was never
+   used. Theft detection is unchanged otherwise: once the replacement has been
+   used, or after 10 minutes, a replay still signs out every session, and the
+   undelivered replacement is retired so it can never be used.
+
+Ships the same way as everything else: backend on `git push`, app as a live
+update. No new APK.
