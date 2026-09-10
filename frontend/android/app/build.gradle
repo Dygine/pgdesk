@@ -24,6 +24,15 @@ def hasSigning     = storeFilePath != null && file(storeFilePath).exists()
 
 apply plugin: 'com.android.application'
 
+// Read from package.json so a single `npm version` bump moves the web bundle,
+// the update manifest and the APK together. Three hand-edited numbers is three
+// chances to ship an APK that reports the wrong version to the update check.
+def pkg = new groovy.json.JsonSlurper().parseText(file("../../package.json").text)
+def pgdeskVersion = pkg.version
+// versionCode must be a monotonically increasing integer, so 1.2.3 -> 10203.
+def parts = pgdeskVersion.tokenize('.')
+def pgdeskVersionCode = (parts[0] as int) * 10000 + (parts[1] as int) * 100 + (parts[2] as int)
+
 android {
     namespace = "in.kredo.pgdesk"
     compileSdk = rootProject.ext.compileSdkVersion
@@ -31,8 +40,8 @@ android {
         applicationId "in.kredo.pgdesk"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode 1
-        versionName "1.0"
+        versionCode pgdeskVersionCode
+        versionName pgdeskVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

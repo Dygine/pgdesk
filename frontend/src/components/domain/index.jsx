@@ -163,3 +163,8 @@ export function PageHeader({ title, subtitle, actions, breadcrumb, children, cla
     </div>
   )
 }
+
+export { UpdateBanner } from './UpdateBanner'
+export {
+  PermissionOnboarding, shouldAskPermissions, resetPermissionOnboarding,
+} from './PermissionOnboarding'

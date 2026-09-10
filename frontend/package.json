@@ -10,7 +10,9 @@
     "smoke": "node smoke.mjs",
     "smoke:auth": "node smoke-auth.mjs",
     "audit:responsive": "node responsive-audit.mjs",
-    "build:android": "node scripts/check-android-env.mjs && vite build && cap sync android"
+    "build:android": "node scripts/check-android-env.mjs && vite build && cap sync android",
+    "publish:update": "node scripts/publish-update.mjs",
+    "build:update": "vite build && node scripts/publish-update.mjs"
   },
   "dependencies": {
     "@capacitor-mlkit/barcode-scanning": "^8.1.1",
@@ -19,8 +21,10 @@
     "@capacitor/core": "^8.5.1",
     "@capacitor/geolocation": "^8.2.2",
     "@capacitor/keyboard": "^8.0.5",
+    "@capacitor/local-notifications": "^8.3.1",
     "@capacitor/preferences": "^8.0.1",
     "@capacitor/status-bar": "^8.0.3",
+    "@capgo/capacitor-updater": "^8.51.15",
     "jsqr": "^1.4.0",
     "lucide-react": "^0.436.0",
     "qrcode": "^1.5.4",

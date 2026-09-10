@@ -5,6 +5,9 @@ import {
   Building2, MoreHorizontal, Sparkles,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
+import {
+  PermissionOnboarding, UpdateBanner, shouldAskPermissions,
+} from '@/components/domain'
 import { filterNav } from '@/nav/navConfig'
 import { Avatar, StatusBadge, Button, InlineAlert, Modal, FormField, Input } from '@/components/ui'
 import { GlobalSearch } from './GlobalSearch'
@@ -17,15 +20,29 @@ const cx = (...a) => a.filter(Boolean).join(' ')
 
 /* ------------------------------------------------------------------ brand */
 function Brand({ compact }) {
+  // The PG's own name, not ours. The org is already in the auth context - the
+  // sidebar footer has been showing it all along - so this is a relabel, not a
+  // new lookup.
+  //
+  // Master admins keep "PGDesk": that portal is the platform, not a tenant, and
+  // borrowing a customer's name there would be confusing rather than friendly.
+  const { org, role } = useAuth() || {}
+  const isMaster = role === 'master' || !org?.name
+  const title = isMaster ? 'PGDesk' : org.name
+  const subtitle = isMaster ? 'PG & hostel operations' : 'Powered by PGDesk'
+  const initial = (title || 'P').trim().charAt(0).toUpperCase()
+
   return (
     <div className="flex items-center gap-2.5 min-w-0">
       <span className="h-8 w-8 rounded-lg bg-brand-800 text-white inline-flex items-center justify-center shrink-0 font-bold text-sm">
-        P
+        {initial}
       </span>
       {!compact && (
         <span className="min-w-0">
-          <span className="block text-sm font-semibold text-white leading-tight">PGDesk</span>
-          <span className="block text-2xs text-brand-300 leading-tight">PG & hostel operations</span>
+          <span className="block text-sm font-semibold text-white leading-tight truncate">
+            {title}
+          </span>
+          <span className="block text-2xs text-brand-300 leading-tight">{subtitle}</span>
         </span>
       )}
     </div>
@@ -374,6 +391,16 @@ function BottomNav({ items, onMore }) {
  */
 export function AppShell({ navGroups, bottomItems, children, banner, showBranchSelector = true, showSearch = true }) {
   const { can, org, subscription } = useAuth()
+
+  // Asked once, after the first sign-in rather than at launch: a permission
+  // prompt on a screen someone has not chosen to trust yet is the one most
+  // likely to be refused.
+  const [askPermissions, setAskPermissions] = useState(false)
+  useEffect(() => {
+    let cancelled = false
+    shouldAskPermissions().then((yes) => { if (!cancelled) setAskPermissions(yes) })
+    return () => { cancelled = true }
+  }, [])
   const [drawer, setDrawer] = useState(false)
   const location = useLocation()
 
@@ -388,6 +415,15 @@ export function AppShell({ navGroups, bottomItems, children, banner, showBranchS
 
   return (
     <div className="min-h-screen bg-canvas">
+      {/* Both live above the layout on purpose. The update gate has to be able
+          to cover a screen whose API calls are already failing, and the
+          permission flow has to run before anyone reaches a scanner that would
+          silently do nothing without it. */}
+      <UpdateBanner />
+      {askPermissions && (
+        <PermissionOnboarding onDone={() => setAskPermissions(false)} />
+      )}
+
       {/* Desktop sidebar */}
       {/* z-40, above the topbar. The topbar uses lg:pl-[16.5rem] (padding, not
           margin), so its box spans the full viewport width and its background
@@ -437,8 +473,12 @@ export function AppShell({ navGroups, bottomItems, children, banner, showBranchS
             <Menu size={20} />
           </button>
           <Link to="/" className="lg:hidden flex items-center gap-2 mr-auto min-w-0">
-            <span className="h-7 w-7 rounded-md bg-brand-800 text-white inline-flex items-center justify-center font-bold text-xs shrink-0">P</span>
-            <span className="text-sm font-semibold text-slate-900 truncate">PGDesk</span>
+            <span className="h-7 w-7 rounded-md bg-brand-800 text-white inline-flex items-center justify-center font-bold text-xs shrink-0">
+              {(org?.name || 'P').trim().charAt(0).toUpperCase()}
+            </span>
+            <span className="text-sm font-semibold text-slate-900 truncate">
+              {org?.name || 'PGDesk'}
+            </span>
           </Link>
           {showSearch && <div className="hidden md:flex flex-1 min-w-0"><GlobalSearch /></div>}
           <div className="flex items-center gap-1.5 sm:gap-2 ml-auto shrink-0">
