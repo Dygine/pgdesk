@@ -21,7 +21,7 @@ import { platformSettingsApi } from '@/services/api/platformSettingsApi'
  * send nothing - so there is a test button, and the verified badge only lights
  * up after a message actually left the building.
  */
-export function SmtpCard({ form, onChange, onSaved }) {
+export function SmtpCard({ form, onChange, onSaved, dirty = false }) {
   const { success, error } = useToast()
   const [password, setPassword] = useState('')
   const [testTo, setTestTo] = useState('')
@@ -224,11 +224,21 @@ export function SmtpCard({ form, onChange, onSaved }) {
             Saving is not the same as delivering. This proves the credentials
             actually work before a resident depends on them.
           </p>
+
+          {/* A test sends with what the server has stored, not what is on
+              screen. Testing an unsaved change reports on the old transport and
+              reads as a bug in the new one. */}
+          {dirty && (
+            <InlineAlert tone="warn" className="mb-3" title="Save your changes first">
+              A test uses the settings the server already has. Press
+              <strong> Save changes</strong> at the top, then send the test.
+            </InlineAlert>
+          )}
           <div className="flex gap-2">
             <Input value={testTo} onChange={(e) => setTestTo(e.target.value)}
               placeholder="you@example.com" type="email" />
             <Button variant="primary" icon={Send} loading={busy === 'test'}
-              disabled={!testTo.trim()} onClick={sendTest}>Send test</Button>
+              disabled={!testTo.trim() || dirty} onClick={sendTest}>Send test</Button>
           </div>
         </div>
       </div>

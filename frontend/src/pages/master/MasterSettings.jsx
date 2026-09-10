@@ -143,8 +143,23 @@ export default function MasterSettings() {
           </div>
         </Card>
 
-        <SmtpCard form={form} onChange={set}
-          onSaved={(data) => { setForm(data); setDirty(false) }} />
+        <SmtpCard form={form} onChange={set} dirty={dirty}
+          onSaved={(data) => setForm((f) => ({
+            // Merge, never replace. Saving a secret returns the whole settings
+            // object, and assigning it wholesale silently discarded any edit
+            // the operator had made but not yet saved - most visibly the
+            // provider dropdown, which then tested the wrong transport and
+            // reported an error about a server they had just switched away
+            // from. Only the fields the server alone knows are taken.
+            ...f,
+            smtp_password_set: data.smtp_password_set,
+            smtp_password_readable: data.smtp_password_readable,
+            smtp_verified_at: data.smtp_verified_at,
+            brevo_api_key_set: data.brevo_api_key_set,
+            brevo_api_key_readable: data.brevo_api_key_readable,
+            brevo_verified_at: data.brevo_verified_at,
+            channels: data.channels,
+          }))} />
 
         <Card>
           <CardHeader title="Expiry warnings"
