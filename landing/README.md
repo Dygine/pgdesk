@@ -1,5 +1,12 @@
 # PGDesk landing + APK download
 
+> **⚠ The `pgdesk.apk` in this folder is the OLD self-contained build.**
+> It has no `server.url`, so it does **not** open pgdesk.dygine.com — it runs its
+> own stale bundled screens and can never update itself. Anyone who downloads it
+> gets the old app, on every device. **Rebuild it (see below) and replace this
+> file before relying on the download.** Full story + how to verify any `.apk`:
+> `../APK-DOWNLOAD-FIX.md`.
+
 Deployed as its own Render **Static Site** from this same repository.
 
 | Render setting | Value |
@@ -64,3 +71,40 @@ The app opens https://pgdesk.dygine.com inside itself, so deploying the
 website updates the app too - `git push` and you are done. A new APK is only
 needed for native changes (a plugin, a permission, the icon or name) or a new
 website address. See HANDOVER.md §6.
+
+## Verify which build an APK is
+
+An `.apk` is a ZIP. What matters is `assets/capacitor.config.json` inside it:
+
+```powershell
+Expand-Archive .\landing\pgdesk.apk -DestinationPath $env:TEMP\apkcheck -Force
+Get-Content $env:TEMP\apkcheck\assets\capacitor.config.json
+Remove-Item $env:TEMP\apkcheck -Recurse -Force
+```
+
+- **New (correct) build** - shows `"url": "https://pgdesk.dygine.com"` and has **no**
+  `CapacitorUpdater` block.
+- **Old build** - no `url`, and a `"CapacitorUpdater"` block is present.
+
+Do **not** judge new-vs-old by file size. With `server.url` set, Capacitor still
+bundles the web files as an offline fallback, so a correct build can be a similar
+size to the old one. Judge by the config, not the megabytes.
+
+## Making a new APK actually reach phones (cache)
+
+`pgdesk.apk` is served from the same URL every release, so browsers and the CDN
+keep handing out the previously cached copy - this is why a "new" download can
+still install the old app. Two things fix it:
+
+1. **Browser cache - already wired.** `index.html` appends `?v=APK_VERSION` to the
+   download link, so a new upload looks like a new URL. **Bump `APK_VERSION`**
+   (near the bottom of `index.html`) to that day's date every time you replace
+   the APK.
+2. **CDN cache - set once.** On Render, open the `pgdesk-get` static site →
+   **Settings → Headers → Add header**:
+   - Path: `/pgdesk.apk`
+   - Name: `Cache-Control`
+   - Value: `no-cache, must-revalidate`
+
+   `no-cache` still lets the file be stored, but forces the CDN to revalidate, so
+   a changed APK is re-fetched and an unchanged one returns a fast 304.

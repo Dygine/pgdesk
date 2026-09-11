@@ -19,8 +19,37 @@ import { relative } from '@/lib/format'
 
 const cx = (...a) => a.filter(Boolean).join(' ')
 
+/* Each portal gets its own sidebar colour, so at a glance you can tell which app
+   you are in: the office (indigo), a resident's (teal), or the platform
+   (violet). Full literal class strings so Tailwind keeps them. The `org` set is
+   the existing brand palette, unchanged - owners see no difference. */
+const PORTAL_THEME = {
+  org: {
+    bar: 'bg-brand-900', edge: 'border-brand-800/70', chip: 'bg-brand-800',
+    label: 'text-brand-400', sub: 'text-brand-300', activeBg: 'bg-brand-700/70',
+    idle: 'text-brand-200 hover:bg-brand-800/60 hover:text-white',
+    bottomText: 'text-brand-700', bottomPill: 'bg-brand-100 text-brand-700',
+    primaryOn: 'bg-brand-600', primaryOff: 'bg-brand-800',
+  },
+  customer: {
+    bar: 'bg-teal-900', edge: 'border-teal-800/70', chip: 'bg-teal-800',
+    label: 'text-teal-300', sub: 'text-teal-300', activeBg: 'bg-teal-700/70',
+    idle: 'text-teal-100 hover:bg-teal-800/60 hover:text-white',
+    bottomText: 'text-teal-700', bottomPill: 'bg-teal-100 text-teal-700',
+    primaryOn: 'bg-teal-600', primaryOff: 'bg-teal-800',
+  },
+  master: {
+    bar: 'bg-violet-950', edge: 'border-violet-900/70', chip: 'bg-violet-900',
+    label: 'text-violet-300', sub: 'text-violet-300', activeBg: 'bg-violet-800/70',
+    idle: 'text-violet-100 hover:bg-violet-900/60 hover:text-white',
+    bottomText: 'text-violet-700', bottomPill: 'bg-violet-100 text-violet-700',
+    primaryOn: 'bg-violet-600', primaryOff: 'bg-violet-800',
+  },
+}
+const themeFor = (p) => PORTAL_THEME[p] || PORTAL_THEME.org
+
 /* ------------------------------------------------------------------ brand */
-function Brand({ compact }) {
+function Brand({ compact, theme = PORTAL_THEME.org }) {
   // The PG's own name, not ours. The org is already in the auth context - the
   // sidebar footer has been showing it all along - so this is a relabel, not a
   // new lookup.
@@ -35,7 +64,7 @@ function Brand({ compact }) {
 
   return (
     <div className="flex items-center gap-2.5 min-w-0">
-      <span className="h-8 w-8 rounded-lg bg-brand-800 text-white inline-flex items-center justify-center shrink-0 font-bold text-sm">
+      <span className={cx('h-8 w-8 rounded-lg text-white inline-flex items-center justify-center shrink-0 font-bold text-sm', theme.chip)}>
         {initial}
       </span>
       {!compact && (
@@ -43,7 +72,7 @@ function Brand({ compact }) {
           <span className="block text-sm font-semibold text-white leading-tight truncate">
             {title}
           </span>
-          <span className="block text-2xs text-brand-300 leading-tight">{subtitle}</span>
+          <span className={cx('block text-2xs leading-tight', theme.sub)}>{subtitle}</span>
         </span>
       )}
     </div>
@@ -51,19 +80,30 @@ function Brand({ compact }) {
 }
 
 /* ------------------------------------------------------------- nav list */
-function NavList({ groups, onNavigate }) {
+function NavList({ groups, onNavigate, theme = PORTAL_THEME.org }) {
+  const navRef = useRef(null)
+  // Every time this list appears - which on a phone is every time the drawer
+  // opens - bring the current page's item into view, so you can see where you
+  // are instead of always landing at the top of a long menu.
+  useEffect(() => {
+    const id = requestAnimationFrame(() => {
+      navRef.current?.querySelector('[aria-current="page"]')
+        ?.scrollIntoView({ block: 'center' })
+    })
+    return () => cancelAnimationFrame(id)
+  }, [])
   return (
-    <nav className="px-3 py-3 space-y-5">
+    <nav ref={navRef} className="px-3 py-3 space-y-5">
       {groups.map((g) => (
         <div key={g.group}>
-          <p className="px-2.5 mb-1.5 text-2xs font-semibold text-brand-400 tracking-wide">{g.group}</p>
+          <p className={cx('px-2.5 mb-1.5 text-2xs font-semibold tracking-wide', theme.label)}>{g.group}</p>
           <ul className="space-y-0.5">
             {g.items.map((it) => (
               <li key={it.to}>
                 <NavLink to={it.to} end={it.end} onClick={onNavigate}
                   className={({ isActive }) => cx(
                     'flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm transition-colors',
-                    isActive ? 'bg-brand-700/70 text-white font-medium' : 'text-brand-200 hover:bg-brand-800/60 hover:text-white'
+                    isActive ? cx(theme.activeBg, 'text-white font-medium') : theme.idle
                   )}>
                   <it.icon size={17} className="shrink-0" />
                   <span className="truncate">{it.label}</span>
@@ -453,7 +493,7 @@ function isActivePath(pathname, item) {
  * open, and whenever the current page is not one of the tabs, so there is
  * always exactly one answer to "where am I".
  */
-function BottomNav({ items, onMore, drawerOpen }) {
+function BottomNav({ items, onMore, drawerOpen, theme = PORTAL_THEME.org }) {
   const { pathname } = useLocation()
   const anyActive = items.some((it) => isActivePath(pathname, it))
   const moreActive = drawerOpen || !anyActive
@@ -470,14 +510,14 @@ function BottomNav({ items, onMore, drawerOpen }) {
           return (
             <li key={it.to} className="flex-1 min-w-0">
               <Link to={it.to} aria-current={active ? 'page' : undefined} style={noTapFlash}
-                className={cx(tab, active ? 'text-brand-700 font-semibold' : 'text-slate-500')}>
+                className={cx(tab, active ? cx(theme.bottomText, 'font-semibold') : 'text-slate-500')}>
                 {it.primary ? (
                   <span className={cx('h-11 w-11 -mt-5 rounded-full inline-flex items-center justify-center text-white shadow-lift ring-4 ring-white transition-colors',
-                    active ? 'bg-brand-600' : 'bg-brand-800')}>
+                    active ? theme.primaryOn : theme.primaryOff)}>
                     <it.icon size={20} />
                   </span>
                 ) : (
-                  <span className={cx(pill, active ? 'bg-brand-100 text-brand-700' : 'active:bg-slate-100')}>
+                  <span className={cx(pill, active ? theme.bottomPill : 'active:bg-slate-100')}>
                     <it.icon size={20} strokeWidth={active ? 2.4 : 2} />
                   </span>
                 )}
@@ -488,8 +528,8 @@ function BottomNav({ items, onMore, drawerOpen }) {
         })}
         <li className="flex-1 min-w-0">
           <button type="button" onClick={onMore} aria-expanded={!!drawerOpen} style={noTapFlash}
-            className={cx(tab, moreActive ? 'text-brand-700 font-semibold' : 'text-slate-500')}>
-            <span className={cx(pill, moreActive ? 'bg-brand-100 text-brand-700' : 'active:bg-slate-100')}>
+            className={cx(tab, moreActive ? cx(theme.bottomText, 'font-semibold') : 'text-slate-500')}>
+            <span className={cx(pill, moreActive ? theme.bottomPill : 'active:bg-slate-100')}>
               <MoreHorizontal size={20} strokeWidth={moreActive ? 2.4 : 2} />
             </span>
             <span>More</span>
@@ -507,7 +547,8 @@ function BottomNav({ items, onMore, drawerOpen }) {
  *  <  lg : topbar + slide-in drawer (same NavList) + bottom bar
  */
 export function AppShell({ navGroups, bottomItems, children, banner, showBranchSelector = true, showSearch = true }) {
-  const { can, org, subscription } = useAuth()
+  const { can, org, subscription, portal } = useAuth()
+  const theme = themeFor(portal)
 
   // Asked once, after the first sign-in rather than at launch: a permission
   // prompt on a screen someone has not chosen to trust yet is the one most
@@ -546,13 +587,13 @@ export function AppShell({ navGroups, bottomItems, children, banner, showBranchS
           margin), so its box spans the full viewport width and its background
           paints across this column. At equal z-index the topbar wins on DOM
           order and covers the brand block. */}
-      <aside className="hidden lg:flex fixed inset-y-0 left-0 w-[16.5rem] bg-brand-900 flex-col z-40">
-        <div className="h-14 flex items-center px-4 border-b border-brand-800/70 shrink-0"><Brand /></div>
+      <aside className={cx('hidden lg:flex fixed inset-y-0 left-0 w-[16.5rem] flex-col z-40', theme.bar)}>
+        <div className={cx('h-14 flex items-center px-4 border-b shrink-0', theme.edge)}><Brand theme={theme} /></div>
         <div className="flex-1 overflow-y-auto">
-          <NavList groups={groups} />
+          <NavList groups={groups} theme={theme} />
         </div>
         {org && (
-          <div className="p-3 border-t border-brand-800/70 shrink-0">
+          <div className={cx('p-3 border-t shrink-0', theme.edge)}>
             <div className="rounded-lg bg-brand-800/60 p-3">
               <p className="text-xs font-medium text-white truncate">{org.name}</p>
               <div className="flex items-center gap-2 mt-1.5">
@@ -570,14 +611,14 @@ export function AppShell({ navGroups, bottomItems, children, banner, showBranchS
       {drawer && (
         <div className="lg:hidden fixed inset-0 z-50 flex">
           <div className="absolute inset-0 bg-slate-900/50 animate-fadeIn" onClick={() => setDrawer(false)} />
-          <div className="relative w-[17rem] max-w-[85vw] bg-brand-900 flex flex-col animate-slideLeft">
-            <div className="h-14 flex items-center justify-between px-4 border-b border-brand-800/70 shrink-0 safe-t">
-              <Brand />
-              <button onClick={() => setDrawer(false)} aria-label="Close menu" className="text-brand-300 p-1">
+          <div className={cx('relative w-[17rem] max-w-[85vw] flex flex-col animate-slideLeft', theme.bar)}>
+            <div className={cx('h-14 flex items-center justify-between px-4 border-b shrink-0 safe-t', theme.edge)}>
+              <Brand theme={theme} />
+              <button onClick={() => setDrawer(false)} aria-label="Close menu" className={cx('p-1', theme.sub)}>
                 <X size={20} />
               </button>
             </div>
-            <div className="flex-1 overflow-y-auto"><NavList groups={groups} onNavigate={() => setDrawer(false)} /></div>
+            <div className="flex-1 overflow-y-auto"><NavList groups={groups} onNavigate={() => setDrawer(false)} theme={theme} /></div>
           </div>
         </div>
       )}
@@ -618,7 +659,7 @@ export function AppShell({ navGroups, bottomItems, children, banner, showBranchS
         <div className="px-3 sm:px-5 lg:px-7 py-5 lg:py-7 max-w-[100rem] mx-auto">{children}</div>
       </main>
 
-      {bottom.length > 0 && <BottomNav items={bottom} onMore={() => setDrawer(true)} drawerOpen={drawer} />}
+      {bottom.length > 0 && <BottomNav items={bottom} onMore={() => setDrawer(true)} drawerOpen={drawer} theme={theme} />}
     </div>
   )
 }
