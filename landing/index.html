@@ -209,10 +209,11 @@ footer .r{margin-left:auto}
     </div>
 
     <div class="cta">
-      <a class="btn btn-primary" href="pgdesk.apk" download="pgdesk.apk">Download for Android</a>
+      <a class="btn btn-primary" data-apk href="pgdesk.apk" download="pgdesk.apk">Download for Android</a>
       <a class="btn btn-ghost" href="https://pgdesk.dygine.com">Open in your browser</a>
     </div>
-    <p class="cta-meta tnum">APK · Android 7.0 and above · v1.0</p>
+    <p class="cta-meta tnum">APK · Android 7.0 and above · <span data-apk-label>v1.0</span></p>
+    <p class="cta-meta">Nothing to install: <b style="color:var(--ink-2);font-weight:600">Open in your browser</b> works on any phone, iPhone included. The Android app just adds gate‑QR scanning and pop‑up alerts.</p>
   </div>
 
   <!-- ============================================================== swap -->
@@ -404,8 +405,15 @@ footer .r{margin-left:auto}
         keep working.
       </p>
 
+      <p class="note">
+        <b>Already have the app?</b> You do <b>not</b> download it again for updates —
+        just open PGDesk and it refreshes itself. A fresh download is only needed if
+        we tell you the app itself changed. Prefer no install at all? Open the web
+        version and use your browser's <b>Add to Home screen</b> for an app‑style icon.
+      </p>
+
       <div class="cta" style="margin-top:1.75rem">
-        <a class="btn btn-primary" href="pgdesk.apk" download="pgdesk.apk">Download for Android</a>
+        <a class="btn btn-primary" data-apk href="pgdesk.apk" download="pgdesk.apk">Download for Android</a>
         <a class="btn btn-ghost" href="https://pgdesk.dygine.com">Use the web version</a>
       </div>
       <p class="cta-meta">No iPhone build yet. The web version works on iPhone.</p>
@@ -456,6 +464,31 @@ footer .r{margin-left:auto}
     frag.appendChild(b);
   }
   el.appendChild(frag);
+})();
+</script>
+
+<script>
+/* ---------------------------------------------------------------------------
+   APK download: cache-bust + version label, from ONE place.
+
+   The bug this prevents: pgdesk.apk is served from the same URL every release,
+   so the browser (and the CDN) keep handing out the OLD cached file. Appending
+   ?v=DATE makes the browser treat a new upload as a new URL and fetch it.
+   The CDN is handled by a Cache-Control header on /pgdesk.apk — see
+   landing/README.md ("Making a new APK actually reach phones").
+
+   >>> Every time you replace pgdesk.apk, change APK_VERSION to that day's date. <<<
+   --------------------------------------------------------------------------- */
+(function () {
+  var APK_VERSION = '2026-09-11';   // ← bump on every APK replace (cache-bust)
+  var MARKETING   = 'v1.0';         // ← shown to users; bump on a real release
+
+  document.querySelectorAll('a[data-apk]').forEach(function (a) {
+    a.setAttribute('href', 'pgdesk.apk?v=' + APK_VERSION);
+  });
+  document.querySelectorAll('[data-apk-label]').forEach(function (el) {
+    el.textContent = MARKETING;
+  });
 })();
 </script>
 
