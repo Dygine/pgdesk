@@ -55,32 +55,17 @@ export const ORG_NAV = [
       { label: 'Gate scan', to: '/app/scan', icon: QrCode, perm: 'attendance.mark' },
       { label: 'Food & mess', to: '/app/food', icon: UtensilsCrossed, perm: 'food.view' },
       { label: 'Laundry', to: '/app/laundry', icon: WashingMachine, perm: 'laundry.view' },
-    ],
-  },
-  {
-    group: 'Security',
-    items: [
       { label: 'Visitors', to: '/app/visitors', icon: UserCheck, perm: 'visitors.view' },
       { label: 'Gate passes', to: '/app/gate-passes', icon: TicketCheck, perm: 'gatepass.view' },
     ],
   },
   {
-    group: 'Communication',
+    group: 'Admin & setup',
     items: [
       { label: 'Announcements', to: '/app/announcements', icon: Megaphone, perm: 'announcements.view' },
       { label: 'Query centre', to: '/app/queries', icon: MessagesSquare, perm: 'queries.view' },
-    ],
-  },
-  {
-    group: 'Assets',
-    items: [
       { label: 'Inventory', to: '/app/inventory', icon: Package, perm: 'inventory.view' },
       { label: 'Assets', to: '/app/assets', icon: Boxes, perm: 'assets.view' },
-    ],
-  },
-  {
-    group: 'Administration',
-    items: [
       { label: 'Staff', to: '/app/staff', icon: UsersRound, perm: 'staff.view' },
       { label: 'Users & logins', to: '/app/users', icon: KeyRound, perm: 'users.view' },
       { label: 'Roles & permissions', to: '/app/roles', icon: ShieldCheck, perm: 'roles.view' },

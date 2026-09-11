@@ -51,17 +51,35 @@ export default function OwnerDashboard() {
       ) : d && (
         <>
           <ShareBedsCard byBranch={d.by_branch || []} />
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
-            <StatCard label="Occupancy" value={`${p.occupancy_rate}%`} icon={Gauge}
-              tone={p.occupancy_rate >= 85 ? 'emerald' : p.occupancy_rate >= 60 ? 'brand' : 'amber'}
-              sub={`${p.occupied_beds} of ${p.beds} beds`}
-              footer={<ProgressBar value={p.occupied_beds} max={p.beds || 1} />} />
-            <StatCard label="Available beds" value={num(p.available_beds)} icon={BedDouble}
-              tone="emerald" sub="ready to sell" to="/app/beds" />
-            <StatCard label="Residents" value={num(d.people.customers)} icon={Users} tone="violet" />
-            <StatCard label="Active staff" value={num(d.people.active_staff)} tone="blue"
-              to="/app/users" />
-          </div>
+
+          {/* Hero: occupancy at a glance - the first thing an owner should see. */}
+          <Card className="mb-4">
+            <div className="p-5 sm:p-6 flex flex-col sm:flex-row items-center gap-6">
+              <DonutChart size={172} thickness={18}
+                centerValue={`${p.occupancy_rate}%`} centerLabel="occupied"
+                segments={[
+                  { label: 'Occupied', value: p.occupied_beds, color: '#373DA6' },
+                  { label: 'Available', value: p.available_beds, color: '#0F766E' },
+                ]} />
+              <div className="flex-1 w-full grid grid-cols-3 gap-3 sm:gap-4">
+                <Link to="/app/beds" className="rounded-xl bg-emerald-50 p-4 hover:bg-emerald-100 transition-colors">
+                  <p className="text-2xs font-semibold text-emerald-700 uppercase tracking-wide">Available</p>
+                  <p className="text-2xl font-semibold text-emerald-800 tnum mt-1">{num(p.available_beds)}</p>
+                  <p className="text-2xs text-emerald-600 mt-0.5">ready to sell</p>
+                </Link>
+                <div className="rounded-xl bg-violet-50 p-4">
+                  <p className="text-2xs font-semibold text-violet-700 uppercase tracking-wide">Residents</p>
+                  <p className="text-2xl font-semibold text-violet-800 tnum mt-1">{num(d.people.customers)}</p>
+                  <p className="text-2xs text-violet-600 mt-0.5">living here now</p>
+                </div>
+                <Link to="/app/users" className="rounded-xl bg-blue-50 p-4 hover:bg-blue-100 transition-colors">
+                  <p className="text-2xs font-semibold text-blue-700 uppercase tracking-wide">Staff</p>
+                  <p className="text-2xl font-semibold text-blue-800 tnum mt-1">{num(d.people.active_staff)}</p>
+                  <p className="text-2xs text-blue-600 mt-0.5">on the team</p>
+                </Link>
+              </div>
+            </div>
+          </Card>
 
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-4">
             <StatCard label="Branches" value={num(p.branches)} icon={Building2} tone="slate"
