@@ -10,7 +10,7 @@
     "smoke": "node smoke.mjs",
     "smoke:auth": "node smoke-auth.mjs",
     "audit:responsive": "node responsive-audit.mjs",
-    "build:android": "node scripts/check-android-env.mjs && vite build && cap sync android"
+    "build:android": "node scripts/check-android-env.mjs && vite build && node scripts/strip-apk.mjs && cap sync android"
   },
   "dependencies": {
     "@capacitor-mlkit/barcode-scanning": "^8.1.1",

@@ -43,6 +43,22 @@ android {
         versionCode pgguruVersionCode
         versionName pgguruVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
+
+        /*
+         * Ship only the CPU types real phones have.
+         *
+         * The barcode scanner (ML Kit) carries a native library per
+         * architecture, about 5 MB each. Four of them is 20 MB, and half of
+         * that is x86 and x86_64 - which exist for emulators, not handsets. No
+         * phone in India runs an x86 Android build.
+         *
+         * The cost is that this APK will not install on a standard Windows
+         * emulator, which is x86_64. Add 'x86_64' back to this list when
+         * testing that way; keep it out of what gets published.
+         */
+        ndk {
+            abiFilters 'arm64-v8a', 'armeabi-v7a'
+        }
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.
              // Default: https://android.googlesource.com/platform/frameworks/base/+/282e181b58cf72b6ca770dc7ca5f91f135444502/tools/aapt/AaptAssets.cpp#61
