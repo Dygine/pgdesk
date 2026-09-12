@@ -73,7 +73,7 @@ export function Privacy() {
   const c = site.blocks.contact || {}
   const f = site.blocks.footer || {}
   const who = f.legal_name || site.blocks.brand?.name || 'PGuru'
-  const email = c.email || 'hello@pgguru.in'
+  const email = c.email || 'pgguru.in@gmail.com'
 
   return (
     <Page title="Privacy policy" updated={UPDATED}>
@@ -231,7 +231,7 @@ export function Terms() {
   const c = site.blocks.contact || {}
   const f = site.blocks.footer || {}
   const who = f.legal_name || site.blocks.brand?.name || 'PGuru'
-  const email = c.email || 'hello@pgguru.in'
+  const email = c.email || 'pgguru.in@gmail.com'
 
   return (
     <Page title="Terms of service" updated={UPDATED}>

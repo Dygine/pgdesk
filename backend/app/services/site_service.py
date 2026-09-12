@@ -263,7 +263,7 @@ PRESETS: dict[str, dict] = {
         "title": "Talk to us",
         "phone": "",
         "whatsapp": "",
-        "email": "hello@pgguru.in",
+        "email": "pgguru.in@gmail.com",
         "address": "",
         "hours": "Monday to Saturday, 10am - 7pm IST",
         "map_url": "",
