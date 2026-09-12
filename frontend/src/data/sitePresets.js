@@ -50,9 +50,9 @@ export const SITE_PRESETS = {
     "name": "PGuru",
     "tagline": "PG and hostel operations, on one screen",
     "logo_slot": "logo",
-    "company": "Dygine",
-    "company_url": "https://dygine.com",
-    "show_company": true
+    "company": "",
+    "company_url": "",
+    "show_company": false
   },
   "hero": {
     "headline": "Every bed, every rupee, every branch.",
@@ -420,7 +420,7 @@ export const SITE_PRESETS = {
     "title": "Talk to us",
     "phone": "",
     "whatsapp": "",
-    "email": "hello@dygine.com",
+    "email": "hello@pgguru.in",
     "address": "",
     "hours": "Monday to Saturday, 10am - 7pm IST",
     "map_url": ""

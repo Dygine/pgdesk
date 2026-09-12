@@ -75,7 +75,7 @@ class Settings(BaseSettings):
     # at a self-hosted or paid Nominatim when traffic grows; set it empty to
     # switch area search off (the text search keeps working).
     geocoder_url: str = "https://nominatim.openstreetmap.org"
-    geocoder_user_agent: str = "PGuru/1.0 (PG finder; https://get.dygine.com)"
+    geocoder_user_agent: str = "PGuru/1.0 (PG finder; https://pgguru.in)"
 
     # --- development conveniences ---
     demo_password: str = "demo1234"

@@ -171,3 +171,4 @@ export {
   PermissionOnboarding, shouldAskPermissions, resetPermissionOnboarding,
 } from './PermissionOnboarding'
 export { PortalCredentials } from './PortalCredentials'
+export { LegacyDomainBanner } from './LegacyDomainBanner'

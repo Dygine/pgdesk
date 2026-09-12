@@ -29,7 +29,7 @@ const mmss = (ms) => {
 }
 
 const STEPS = [
-  'Install the PGuru app from get.dygine.com and open it.',
+  'Install the PGuru app from pgguru.in and open it.',
   'Tap “Scan QR code to sign in” and point the camera at this screen.',
   'Choose their own password. That is all.',
 ]

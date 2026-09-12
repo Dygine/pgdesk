@@ -218,7 +218,7 @@ export default function Login() {
                   {/* Web only. Inside the APK this screen is already the app, so the
             download prompt would be nonsense there. */}
         {!Capacitor.isNativePlatform() && (
-          <a href="https://get.dygine.com"
+          <a href="/pgguru.apk"
             className="mt-8 flex items-center gap-3 rounded-lg border border-line px-3.5 py-3 hover:bg-slate-50 transition-colors">
             <span className="h-9 w-9 rounded-lg bg-white ring-1 ring-black/5 inline-flex items-center justify-center overflow-hidden shrink-0"><img src="/pgguru-icon.png" alt="" className="h-8 w-8 object-contain" /></span>
             <span className="min-w-0 flex-1">

@@ -7,7 +7,7 @@
     "captureInput": true
   },
   "server": {
-    "url": "https://pgdesk.dygine.com",
+    "url": "https://pgguru.in",
     "errorPath": "offline.html",
     "cleartext": false
   },
