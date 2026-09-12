@@ -10,6 +10,7 @@ import Login from '@/pages/auth/Login'
 import ForgotPassword from '@/pages/auth/ForgotPassword'
 import Signup from '@/pages/auth/Signup'
 import FindPG from '@/pages/public/FindPG'
+import { isNativeApp } from '@/lib/nativeSession'
 import SiteLayout from '@/components/site/SiteLayout'
 import Home from '@/pages/site/Home'
 import SiteFeatures from '@/pages/site/Features'
@@ -176,6 +177,27 @@ function RootRedirect() {
   return <Navigate to={{ master: '/master', org: '/app', customer: '/me' }[portal] || '/login'} replace />
 }
 
+/**
+ * What "/" is, and who is asking.
+ *
+ * In a browser it is the marketing website: someone typing pgguru.in has very
+ * likely never seen the product, and the front door should sell it.
+ *
+ * In the installed app it must not be. The APK opens `server.url`, which is the
+ * site root - so making "/" the website turned every app launch into the
+ * brochure, with the customer's own dashboard two taps away behind a "Sign in"
+ * button. Anyone who has installed the app is past being sold to.
+ *
+ * The check is on the client rather than in capacitor.config.json on purpose.
+ * `server.url` is baked into the APK at build time, so pointing it at /login
+ * would fix only APKs built afterwards and leave every installed one on the
+ * website. This lands with the next web deploy, on every device, with nothing
+ * to reinstall.
+ */
+function RootEntry() {
+  return isNativeApp() ? <RootRedirect /> : <SiteLayout />
+}
+
 /** Someone already signed in has no reason to see the login form. */
 function LoginRoute() {
   const { portal, isAuthenticated, isLoading, isOffline } = useAuth()
@@ -209,11 +231,13 @@ export const router = createBrowserRouter([
   { path: '/find-pg', element: <FindPG /> },
   // The public website. Several pages sharing one layout, which fetches the
   // content once - so moving between them is instant and makes no request.
-  // Everyone lands here, signed in or not: this is the front door of the
-  // product, not a redirect on the way to a dashboard.
+  //
+  // In a browser everyone lands here, signed in or not: this is the front door
+  // of the product. In the installed app RootEntry sends them straight to their
+  // portal instead - see RootEntry above.
   {
     path: '/',
-    element: <SiteLayout />,
+    element: <RootEntry />,
     children: [
       { index: true, element: <Home /> },
       { path: 'features', element: <SiteFeatures /> },

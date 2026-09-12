@@ -131,12 +131,16 @@ export default function Login() {
       </div>
 
       {/* Right: sign in */}
-      <div className="flex flex-col justify-center px-5 sm:px-8 lg:px-14 py-10 bg-white min-h-screen lg:min-h-0">
-        <div className="lg:hidden mb-8">
-          <img src="/pgguru-logo.png" alt="PGuru" className="h-10 w-auto" />
-        </div>
-
-        <div className="w-full max-w-sm mx-auto lg:mx-0">
+      {/* On a phone this is a card on the page wash, matching Signup exactly -
+          the two screens are one flow and were arriving in two different
+          shapes. On a wide screen the card dissolves into the right-hand
+          column, where the brand panel beside it already frames the form. */}
+      <div className="flex flex-col justify-center px-4 sm:px-8 lg:px-14 py-8 lg:py-10
+                      min-h-screen lg:min-h-0 lg:bg-white">
+        <div className="w-full max-w-sm mx-auto lg:mx-0
+                        card lg:border-0 lg:shadow-none lg:bg-transparent lg:rounded-none
+                        p-6 sm:p-8 lg:p-0 animate-[popIn_.35s_cubic-bezier(.16,1,.3,1)]">
+          <img src="/pgguru-logo.png" alt="PGuru" className="h-10 w-auto mb-6 lg:hidden" />
           <h2 className="text-2xl font-semibold text-slate-900">Sign in</h2>
           <p className="text-sm text-slate-500 mt-1.5">Sign in with your PGuru account.</p>
 

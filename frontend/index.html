@@ -4,6 +4,19 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1B1E4D" />
+    <!--
+      Declare the scheme this app is actually built in.
+
+      Android WebView and Chrome apply "force dark" to any page that does not
+      say. The algorithm inverts backgrounds but cannot invert an image, so the
+      logo's navy "PG" disappeared into black and inputs lost their fill - the
+      app looked broken on every dark-mode handset, without a line of dark-mode
+      code existing anywhere in it.
+
+      `light` opts out. The app renders as designed on a dark-mode phone. When a
+      real dark theme is built this becomes `light dark`.
+    -->
+    <meta name="color-scheme" content="light" />
     <title>PGuru — PG & Hostel Management</title>
     <link rel="icon" href="/pgguru-icon.png" />
     <link rel="apple-touch-icon" href="/pgguru-icon.png" />
