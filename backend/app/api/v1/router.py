@@ -10,12 +10,13 @@ from fastapi import APIRouter
 from app.api.v1.endpoints import (
     public, seeker,
     accounts, auth, billing, dashboard, master, me, meta, operations, property, rbac,
-    residents, staff, support,
+    residents, site, staff, support,
 )
 
 api_router = APIRouter()
 
 api_router.include_router(public.router)
+api_router.include_router(site.router)          # /site (public), /master/site/* (editor)
 api_router.include_router(seeker.router)        # /public/seeker/*  PG-seeker accounts
 api_router.include_router(auth.router)          # /auth
 api_router.include_router(meta.router)          # /meta

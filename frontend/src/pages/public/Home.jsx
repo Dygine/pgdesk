@@ -33,17 +33,23 @@ import {
   Check, Phone, Mail, MapPin, Clock, Menu, X, Download,
 } from 'lucide-react'
 import { siteApi } from '@/services/api/siteApi'
-import { PLANS } from '@/data/plans'
+import { SITE_PRESETS, SITE_PRESET_IMAGES } from '@/data/sitePresets'
 
-/* Fallbacks used only when the API cannot be reached at all. Kept deliberately
-   short - the real presets live on the server, where the editor can see them. */
-const OFFLINE = {
-  brand: { name: 'PGuru', tagline: 'PG and hostel operations, on one screen' },
-  hero: {
-    headline: 'Every bed, every rupee, every branch.',
-    subheadline: 'Rooms, residents, rent and complaints in one place.',
-    primary_label: 'Open the app', primary_href: '/app/login',
-  },
+/**
+ * The page renders from the bundled presets immediately, then merges whatever
+ * the API returns over the top. So a sleeping backend, an un-run migration or a
+ * dead network produces the complete website rather than a headline and a
+ * button - which is what it used to produce, and which looked broken.
+ */
+const merge = (api) => {
+  const blocks = { ...SITE_PRESETS }
+  Object.entries(api?.blocks || {}).forEach(([k, v]) => { blocks[k] = { ...blocks[k], ...v } })
+  // A block the editor has hidden is absent from the API payload, so it has to
+  // be removed here too - otherwise the preset would resurrect it.
+  if (api?.blocks) {
+    Object.keys(blocks).forEach((k) => { if (!(k in api.blocks)) delete blocks[k] })
+  }
+  return { blocks, images: { ...SITE_PRESET_IMAGES, ...(api?.images || {}) } }
 }
 
 const ICONS = {
@@ -63,8 +69,7 @@ function Cta({ href, children, className, icon: Icon }) {
 }
 
 export default function Home() {
-  const [site, setSite] = useState(null)
-  const [failed, setFailed] = useState(false)
+  const [site, setSite] = useState(() => merge(null))
   const [menu, setMenu] = useState(false)
 
   useEffect(() => {
@@ -72,16 +77,16 @@ export default function Home() {
     ;(async () => {
       try {
         const data = await siteApi.content()
-        if (!dead) setSite(data)
+        if (!dead) setSite(merge(data))
       } catch {
-        if (!dead) setFailed(true)
+        // Presets are already on screen. Nothing to do and nothing to say.
       }
     })()
     return () => { dead = true }
   }, [])
 
-  const B = site?.blocks || (failed ? OFFLINE : null)
-  const images = site?.images || {}
+  const B = site.blocks
+  const images = site.images
   const img = (slot) => images[slot] || null
 
   /* The document head, from the `seo` block. Written imperatively because this
@@ -118,14 +123,6 @@ export default function Home() {
       link.setAttribute('href', seo.canonical)
     }
   }, [B, images])
-
-  if (!B) {
-    return (
-      <div className="min-h-dvh bg-white flex items-center justify-center">
-        <div className="h-8 w-8 rounded-full border-2 border-brand-200 border-t-brand-700 animate-spin" />
-      </div>
-    )
-  }
 
   const brand = B.brand || {}
   const hero = B.hero || {}
@@ -244,12 +241,18 @@ export default function Home() {
               {B.features.items.map((f, i) => {
                 const Icon = ICONS[f.icon] || BedDouble
                 return (
-                  <div key={i} className="rounded-xl border border-line bg-white p-5">
-                    <span className="h-10 w-10 rounded-lg bg-brand-50 text-brand-700 inline-flex items-center justify-center">
-                      <Icon size={19} />
-                    </span>
-                    <h3 className="mt-4 font-semibold">{f.title}</h3>
-                    <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">{f.text}</p>
+                  <div key={i} className="rounded-xl border border-line bg-white overflow-hidden flex flex-col">
+                    {img(f.image_slot)?.src && (
+                      <img src={img(f.image_slot).src} alt={img(f.image_slot).alt_text || ''}
+                        loading="lazy" className="w-full h-32 object-cover" />
+                    )}
+                    <div className="p-5">
+                      <span className="h-10 w-10 rounded-lg bg-brand-50 text-brand-700 inline-flex items-center justify-center">
+                        <Icon size={19} />
+                      </span>
+                      <h3 className="mt-4 font-semibold">{f.title}</h3>
+                      <p className="mt-1.5 text-sm text-slate-600 leading-relaxed">{f.text}</p>
+                    </div>
                   </div>
                 )
               })}
@@ -298,25 +301,27 @@ export default function Home() {
           <h2 className="text-2xl sm:text-3xl font-semibold tracking-[-.02em]">{B.pricing.title}</h2>
           {B.pricing.intro && <p className="mt-3 text-slate-600 max-w-2xl">{B.pricing.intro}</p>}
           <div className="mt-9 grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {PLANS.filter((p) => p.active).map((p) => (
-              <div key={p.id}
-                className={`rounded-xl border p-5 flex flex-col ${p.popular ? 'border-brand-400 ring-1 ring-brand-200' : 'border-line'}`}>
-                {p.popular && <span className="self-start text-2xs font-semibold bg-brand-700 text-white rounded-full px-2.5 py-0.5 mb-2">Most chosen</span>}
-                <h3 className="font-semibold">{p.name}</h3>
-                <p className="mt-2 text-2xl font-semibold tnum">{rupees(p.price)}
-                  <span className="text-sm font-normal text-slate-500">/{p.cycle}</span></p>
-                <p className="mt-1 text-xs text-slate-500 tnum">
-                  {p.limits.beds} beds · {p.limits.branches} branch{p.limits.branches === 1 ? '' : 'es'}
-                </p>
-                <ul className="mt-4 space-y-1.5 flex-1">
-                  {p.features.map((f) => (
-                    <li key={f} className="text-sm text-slate-600 flex gap-2">
-                      <Check size={15} className="text-emerald-600 mt-0.5 shrink-0" />{f}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+            {(B.pricing.plans || []).map((p, i) => {
+              const feats = String(p.features || '').split(',').map((f) => f.trim()).filter(Boolean)
+              const popular = String(p.popular || '').toLowerCase().startsWith('y')
+              return (
+                <div key={i}
+                  className={`rounded-xl border p-5 flex flex-col ${popular ? 'border-brand-400 ring-1 ring-brand-200' : 'border-line'}`}>
+                  {popular && <span className="self-start text-2xs font-semibold bg-brand-700 text-white rounded-full px-2.5 py-0.5 mb-2">Most chosen</span>}
+                  <h3 className="font-semibold">{p.name}</h3>
+                  <p className="mt-2 text-2xl font-semibold tnum">{rupees(p.price)}
+                    <span className="text-sm font-normal text-slate-500">/{p.period || 'month'}</span></p>
+                  {p.summary && <p className="mt-1 text-xs text-slate-500">{p.summary}</p>}
+                  <ul className="mt-4 space-y-1.5 flex-1">
+                    {feats.map((f) => (
+                      <li key={f} className="text-sm text-slate-600 flex gap-2">
+                        <Check size={15} className="text-emerald-600 mt-0.5 shrink-0" />{f}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )
+            })}
           </div>
           <div className="mt-7 flex flex-wrap items-center gap-4">
             <Cta href={B.pricing.cta_href} icon={ArrowRight}
@@ -366,7 +371,12 @@ export default function Home() {
       {/* ------------------------------------------------------------ cta */}
       {B.cta && (
         <section className="max-w-6xl mx-auto px-5 pb-16">
-          <div className="rounded-2xl bg-brand-700 text-white px-7 py-12 sm:px-12">
+          <div className="relative overflow-hidden rounded-2xl bg-brand-700 text-white px-7 py-12 sm:px-12">
+            {img(B.cta.image_slot)?.src && (
+              <img src={img(B.cta.image_slot).src} alt="" aria-hidden="true" loading="lazy"
+                className="absolute inset-0 h-full w-full object-cover opacity-20" />
+            )}
+            <div className="relative">
             <h2 className="text-2xl sm:text-3xl font-semibold tracking-[-.02em]">{B.cta.headline}</h2>
             <p className="mt-3 text-brand-100 max-w-xl leading-relaxed">{B.cta.text}</p>
             <div className="mt-7 flex flex-wrap gap-3">
@@ -378,6 +388,7 @@ export default function Home() {
                 className="inline-flex h-11 items-center gap-2 rounded-xl border border-white/35 px-6 font-medium text-white hover:bg-white/10">
                 {B.cta.secondary_label}
               </Cta>
+            </div>
             </div>
           </div>
         </section>

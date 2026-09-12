@@ -33,6 +33,7 @@ from app.models.support import (
     InventoryTransaction, Notification, OrganizationSettings, QueryMessage, SupportQuery,
 )
 from app.models.role import Permission, Role, role_permissions, user_branches, user_roles
+from app.models.site import SiteBlock, SiteImage
 from app.models.seeker import PgSeeker, SeekerSession
 from app.models.subscription import Subscription, SubscriptionPlan
 from app.models.token import PasswordResetToken, RefreshToken
@@ -40,7 +41,7 @@ from app.models.user import User
 
 __all__ = [
     "Announcement", "Asset", "Attendance", "AuditAction", "AuditLog", "Bed", "BedStatus",
-    "BillingCycle", "Branch", "BranchPhoto", "BranchMixin", "Complaint", "ComplaintUpdate", "Expense",
+    "BillingCycle", "Branch", "BranchPhoto", "SiteBlock", "SiteImage", "BranchMixin", "Complaint", "ComplaintUpdate", "Expense",
     "FoodMenu", "GateLog", "GatePass", "InventoryItem", "InventoryTransaction",
     "Invoice", "InvoiceItem", "LaundryRequest", "LaundrySlot", "MealAttendance",
     "Notification", "OrganizationSettings", "Payment", "QueryMessage", "ResidentKyc",
