@@ -14,8 +14,11 @@ from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session, selectinload
 
 from app.core.dependencies import CurrentScope
-from app.core.exceptions import ConflictError, NotFoundError, PermissionDeniedError
-from app.models import Bed, Branch, Building, Customer, Floor, Room
+from app.core.exceptions import (
+    AppError, ConflictError, NotFoundError, PermissionDeniedError,
+)
+from app.models import Bed, Branch, BranchPhoto, Building, Customer, Floor, Room
+from app.models.branch import PHOTO_MAX_BYTES, PHOTOS_PER_BRANCH
 from app.models.enums import (
     AuditAction, BedStatus, BranchStatus, BuildingStatus, FloorStatus, RoomStatus,
 )
@@ -656,3 +659,111 @@ def _floor_name(number: int) -> str:
         return f"Basement {abs(number)}"
     suffix = {1: "st", 2: "nd", 3: "rd"}.get(number if number < 20 else number % 10, "th")
     return f"{number}{suffix} Floor"
+
+
+class BranchPhotoService:
+    """
+    Photos on a branch's public listing: at most six, 5 KB each, images only.
+
+    Deliberately a separate service from the property CRUD above. A photo is
+    published to the internet; a room is not. Keeping the two apart means the
+    "is this branch mine to touch" check is written once, here, and a future
+    endpoint cannot reach a photo through a path that skipped it.
+
+    The 5 KB rule is checked on the decoded bytes rather than the string, so the
+    message an owner reads is the true size of their picture and not the size of
+    its base64.
+    """
+
+    def __init__(self, db: Session, scope: CurrentScope):
+        self.db = db
+        self.scope = scope
+        self.property = PropertyService(db, scope)
+        self.audit = AuditService(db)
+
+    def list(self, branch_id: uuid.UUID) -> list[BranchPhoto]:
+        branch = self.property._assert_branch(branch_id)
+        return list(self.db.scalars(
+            select(BranchPhoto).where(BranchPhoto.branch_id == branch.id)
+            .order_by(BranchPhoto.position, BranchPhoto.created_at)).all())
+
+    def get(self, branch_id: uuid.UUID, photo_id: uuid.UUID) -> BranchPhoto:
+        branch = self.property._assert_branch(branch_id)
+        row = self.db.scalars(select(BranchPhoto).where(
+            BranchPhoto.id == photo_id, BranchPhoto.branch_id == branch.id)).first()
+        if row is None:
+            raise NotFoundError("Photo not found.")
+        return row
+
+    def add(self, branch_id: uuid.UUID, *, image: str, caption: str | None = None,
+            source: str = "camera", width: int | None = None,
+            height: int | None = None) -> BranchPhoto:
+        from app.services.resident_service import decode_image, sniff_image
+
+        branch = self.property._assert_branch(branch_id)
+        # Lock the branch row so two uploads at the same instant cannot both be
+        # "the sixth photo".
+        self.db.execute(select(Branch.id).where(Branch.id == branch.id).with_for_update())
+        held = self.db.scalar(select(func.count(BranchPhoto.id)).where(
+            BranchPhoto.branch_id == branch.id)) or 0
+        if held >= PHOTOS_PER_BRANCH:
+            raise ConflictError(
+                f"A branch can show {PHOTOS_PER_BRANCH} photos. Delete one to add another.",
+                code="photo_limit")
+
+        content = decode_image(image)
+        if not content:
+            raise AppError("That image is empty.", code="photo_empty")
+        if len(content) > PHOTO_MAX_BYTES:
+            raise AppError(
+                f"Photos must be under 5 KB. This one is {len(content) / 1024:.1f} KB.",
+                code="photo_too_large")
+        mime = sniff_image(content)
+        if mime is None:
+            raise AppError("Only JPEG, PNG or WebP images are accepted.", code="photo_type")
+
+        highest = self.db.scalar(select(func.max(BranchPhoto.position)).where(
+            BranchPhoto.branch_id == branch.id))
+        row = BranchPhoto(
+            organization_id=branch.organization_id, branch_id=branch.id,
+            caption=(caption or "").strip()[:80] or None,
+            mime_type=mime, size_bytes=len(content), content=content,
+            width=width, height=height,
+            source="upload" if source == "upload" else "camera",
+            position=(highest + 1) if highest is not None else 0,
+            uploaded_by_id=self.scope.user.id if self.scope.user else None)
+        self.db.add(row)
+        self.db.flush()
+        # The image never enters the audit log - only that it was added.
+        self.audit.record(
+            scope=self.scope, module="Branches", action=AuditAction.CREATE,
+            description=(f"Added a listing photo to {branch.name} "
+                         f"({row.size_bytes} bytes, {row.source})"),
+            entity_type="branch_photo", entity_id=row.id, branch_id=branch.id)
+        return row
+
+    def delete(self, branch_id: uuid.UUID, photo_id: uuid.UUID) -> None:
+        row = self.get(branch_id, photo_id)
+        branch = self.db.get(Branch, row.branch_id)
+        self.db.delete(row)
+        self.audit.record(
+            scope=self.scope, module="Branches", action=AuditAction.DELETE,
+            description=f"Deleted a listing photo from {branch.name}",
+            entity_type="branch_photo", entity_id=row.id, branch_id=branch.id)
+
+    def reorder(self, branch_id: uuid.UUID, photo_ids: list[uuid.UUID]) -> list[BranchPhoto]:
+        """
+        Set which photo leads.
+
+        The first photo is the only one a seeker sees on a search card, so this
+        is a real decision rather than a cosmetic one. Ids not in the list keep
+        their relative order behind the ones that are, so a stale browser tab
+        cannot silently drop a photo that was added from another device.
+        """
+        rows = self.list(branch_id)
+        by_id = {r.id: r for r in rows}
+        ordered = [by_id[p] for p in photo_ids if p in by_id]
+        ordered += [r for r in rows if r.id not in {o.id for o in ordered}]
+        for index, row in enumerate(ordered):
+            row.position = index
+        return ordered

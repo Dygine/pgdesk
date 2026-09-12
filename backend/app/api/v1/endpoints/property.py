@@ -16,14 +16,14 @@ from app.core.responses import ok, paginated
 from datetime import datetime, timezone
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.models import Bed, Branch, Building, Floor, PgEnquiry, Room
+from app.models import Bed, Branch, BranchPhoto, Building, Floor, PgEnquiry, Room
 from app.models.enquiry import EnquiryStatus
 from app.schemas.property import (
     BedCreate, BedUpdate, BranchCreate, BranchListingUpdate, BranchLocationUpdate,
-    BranchUpdate, EnquiryUpdate,
+    BranchPhotoReorder, BranchPhotoUpload, BranchUpdate, EnquiryUpdate,
     BuildingCreate, BuildingUpdate, FloorCreate, FloorUpdate, RoomCreate, RoomUpdate,
 )
-from app.services.property_service import PropertyService
+from app.services.property_service import BranchPhotoService, PropertyService
 from app.utils import qr_payload
 
 router = APIRouter(tags=["property"])
@@ -104,6 +104,10 @@ def list_branches(db: DbSession, scope: Tenant,
                     Bed.branch_id == b.id)) or 0,
                 "occupied": db.scalar(select(func.count(Bed.id)).where(
                     Bed.branch_id == b.id, Bed.status == "OCCUPIED")) or 0,
+                # A count, never the bytes. This list is read on every dashboard
+                # load and six photos per branch would be 30 KB of base64 each.
+                "photos": db.scalar(select(func.count(BranchPhoto.id)).where(
+                    BranchPhoto.branch_id == b.id)) or 0,
             },
         })
     return paginated(payload, page, page_size, total)
@@ -180,6 +184,68 @@ def set_branch_listing(branch_id: uuid.UUID, body: BranchListingUpdate,
     }, message=("This branch is now visible in public search."
                 if branch.listed_publicly else
                 "This branch is no longer listed publicly."))
+
+
+# --------------------------------------------------------- listing photos
+def _photo(p, *, with_image: bool = True) -> dict:
+    """
+    One photo, ready for JSON.
+
+    `with_image` exists for the same reason it does on resident documents: a
+    list of six photos is 30 KB of base64, which is fine on a listing screen and
+    wasteful on a branch list that only needs to know whether photos exist.
+    """
+    import base64
+    payload = {
+        "id": str(p.id), "caption": p.caption, "mime_type": p.mime_type,
+        "size_bytes": p.size_bytes, "width": p.width, "height": p.height,
+        "source": p.source, "position": p.position,
+        "created_at": p.created_at.isoformat() if p.created_at else None,
+    }
+    if with_image:
+        payload["data_url"] = (f"data:{p.mime_type};base64,"
+                               f"{base64.b64encode(p.content).decode()}")
+    return payload
+
+
+@router.get("/branches/{branch_id}/photos", summary="Photos on this branch's listing")
+def list_branch_photos(branch_id: uuid.UUID, db: DbSession, scope: Tenant,
+                       _: None = Depends(require("branches.view"))) -> dict:
+    from app.models.branch import PHOTO_MAX_BYTES, PHOTOS_PER_BRANCH
+    rows = BranchPhotoService(db, scope).list(branch_id)
+    return ok({"items": [_photo(p) for p in rows],
+               "max_bytes": PHOTO_MAX_BYTES, "max_photos": PHOTOS_PER_BRANCH})
+
+
+@router.post("/branches/{branch_id}/photos", status_code=status.HTTP_201_CREATED,
+             summary="Add a listing photo (max 6, each under 5 KB)")
+def add_branch_photo(branch_id: uuid.UUID, body: BranchPhotoUpload, db: DbSession,
+                     scope: Tenant,
+                     _: None = Depends(require("branches.edit"))) -> dict:
+    row = BranchPhotoService(db, scope).add(
+        branch_id, image=body.image, caption=body.caption, source=body.source,
+        width=body.width, height=body.height)
+    db.commit()
+    return ok(_photo(row), message="Photo added.")
+
+
+@router.put("/branches/{branch_id}/photos/order", summary="Choose which photo leads")
+def reorder_branch_photos(branch_id: uuid.UUID, body: BranchPhotoReorder, db: DbSession,
+                          scope: Tenant,
+                          _: None = Depends(require("branches.edit"))) -> dict:
+    rows = BranchPhotoService(db, scope).reorder(branch_id, body.photo_ids)
+    db.commit()
+    return ok({"items": [_photo(p, with_image=False) for p in rows]},
+              message="Photo order saved.")
+
+
+@router.delete("/branches/{branch_id}/photos/{photo_id}", summary="Delete a listing photo")
+def delete_branch_photo(branch_id: uuid.UUID, photo_id: uuid.UUID, db: DbSession,
+                        scope: Tenant,
+                        _: None = Depends(require("branches.edit"))) -> dict:
+    BranchPhotoService(db, scope).delete(branch_id, photo_id)
+    db.commit()
+    return ok(None, message="Photo deleted.")
 
 
 @router.get("/enquiries", summary="Enquiries from people looking for a bed")

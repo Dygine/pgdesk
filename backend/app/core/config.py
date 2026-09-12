@@ -34,7 +34,13 @@ class Settings(BaseSettings):
     secret_key: str = "dev-only-insecure-key-change-me"
     jwt_algorithm: str = "HS256"
     access_token_expire_minutes: int = 30
-    refresh_token_expire_days: int = 14
+
+    #: How long a browser stays signed in. One day, deliberately: a laptop is
+    #: shared and left open in a way a phone is not, and the session lives in a
+    #: cookie nobody can see or manage. Installed apps do not use this - they
+    #: get a permanent session from platform settings; see
+    #: AuthService._refresh_window.
+    browser_session_hours: int = 24
 
     # --- refresh session transport ---
     #

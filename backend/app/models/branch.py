@@ -2,9 +2,10 @@ import uuid
 from datetime import date
 
 from sqlalchemy import (
-    Boolean, CheckConstraint, Date, Enum as SAEnum, Float, Integer, JSON,
-    Numeric, String, Text, UniqueConstraint,
+    Boolean, CheckConstraint, Date, Enum as SAEnum, Float, ForeignKey, Integer,
+    JSON, LargeBinary, Numeric, String, Text, UniqueConstraint,
 )
+from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
@@ -94,3 +95,68 @@ class Branch(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
 
     def __repr__(self) -> str:
         return f"<Branch {self.code}>"
+
+
+#: Every listing photo, at most this many bytes. The same 5 KB as a resident's
+#: ID scan, and for the same reason: the API has no persistent disk, so images
+#: live in PostgreSQL. Six photos a branch at 5 KB is 30 KB per PG - a thousand
+#: PGs come to 30 MB, which the database does not notice. Anything larger would
+#: need object storage, a bucket, a CDN and a bill; this size never will.
+#:
+#: Keep equal to PHOTO_MAX_BYTES in frontend/src/lib/photoScan.js.
+PHOTO_MAX_BYTES = 5 * 1024
+#: How many photos one branch may show on its listing.
+PHOTOS_PER_BRANCH = 6
+
+
+class BranchPhoto(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
+    """
+    A photo on a branch's public listing - a room, the building, the mess.
+
+    Public by construction, which is the difference from ResidentDocument. A
+    resident's Aadhaar is behind a permission and never leaves the tenant; these
+    are put on the internet on purpose, by an owner who pressed a button that
+    said so. Same 5 KB rule, same storage, opposite audience - so they are a
+    separate table rather than a flag on the same one, and no query can confuse
+    the two.
+
+    Kept out of `branches` itself so that listing a hundred branches never drags
+    image bytes through the connection.
+    """
+
+    __tablename__ = "branch_photos"
+
+    branch_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("branches.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+
+    caption: Mapped[str | None] = mapped_column(String(80))
+    mime_type: Mapped[str] = mapped_column(String(20), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    width: Mapped[int | None] = mapped_column(Integer)
+    height: Mapped[int | None] = mapped_column(Integer)
+    content: Mapped[bytes] = mapped_column(LargeBinary, nullable=False)
+
+    #: "camera" (taken live and shrunk on the phone) or "upload" (a file that
+    #: was already under the limit, or shrunk the same way after being refused).
+    source: Mapped[str] = mapped_column(String(10), nullable=False, default="camera")
+
+    #: Display order, lowest first. The first photo is the one a seeker sees on
+    #: the search card, so which one leads is a decision an owner should own.
+    position: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+
+    uploaded_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    branch: Mapped["Branch"] = relationship()
+
+    __table_args__ = (
+        CheckConstraint(f"size_bytes > 0 AND size_bytes <= {PHOTO_MAX_BYTES}",
+                        name="ck_branch_photos_size"),
+        CheckConstraint(f"octet_length(content) <= {PHOTO_MAX_BYTES}",
+                        name="ck_branch_photos_content_size"),
+        CheckConstraint("position >= 0", name="ck_branch_photos_position"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<BranchPhoto {self.branch_id} #{self.position}>"

@@ -13,7 +13,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Megaphone, MapPin, CheckCircle2, Crosshair, Inbox } from 'lucide-react'
+import { Megaphone, MapPin, CheckCircle2, Crosshair, Inbox, Camera } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
 import { useToast } from '@/context/ToastContext'
 import { useApi } from '@/lib/useApi'
@@ -22,6 +22,7 @@ import { currentPosition } from '@/lib/geo'
 import {
   Card, Button, Modal, Toggle, Input, FormField, InlineAlert, StatusBadge,
 } from '@/components/ui'
+import { BranchPhotos } from '@/components/domain/BranchPhotos'
 
 const SNOOZE_DAYS = 7
 const snoozeKey = (orgId) => `pgguru.shareBeds.snoozed.${orgId || 'org'}`
@@ -115,6 +116,9 @@ function ShareBedsModal({ open, onClose, branches, freeById, onSaved }) {
   const [rows, setRows] = useState({})
   const [busy, setBusy] = useState(false)
   const [locating, setLocating] = useState(null)
+  // Photos open in their own sheet rather than inline: six thumbnails per branch
+  // inside a list of branches turns one scrollable decision into a wall.
+  const [photosFor, setPhotosFor] = useState(null)
 
   useEffect(() => {
     if (!open) return
@@ -168,8 +172,8 @@ function ShareBedsModal({ open, onClose, branches, freeById, onSaved }) {
         <Button variant="primary" loading={busy} onClick={save}>Save</Button></>}>
       <InlineAlert tone="info" title="What people will see">
         Your PG name, area, which kinds of room have a free bed and their starting rent,
-        amenities, and the phone number below. Free beds show as “a few beds”, never an
-        exact number. Resident details are never shown.
+        amenities, any photos you add below, and the phone number below. Free beds show
+        as “a few beds”, never an exact number. Resident details are never shown.
       </InlineAlert>
 
       <div className="mt-4 divide-y divide-line rounded-lg border border-line">
@@ -210,6 +214,19 @@ function ShareBedsModal({ open, onClose, branches, freeById, onSaved }) {
                       </>
                     )}
                   </div>
+
+                  <div className="sm:col-span-2">
+                    <button type="button" onClick={() => setPhotosFor(b)}
+                      className="w-full rounded-lg border border-dashed border-line hover:border-brand-300 hover:bg-brand-50/40 px-3 py-2.5 flex items-center gap-2.5 text-left transition-colors">
+                      <Camera size={16} className="text-brand-600 shrink-0" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm text-slate-800">Add photos</span>
+                        <span className="block text-2xs text-slate-500">
+                          Take them on your phone. Shrunk to under 5 KB each before upload.
+                        </span>
+                      </span>
+                    </button>
+                  </div>
                 </div>
               )}
             </div>
@@ -219,6 +236,13 @@ function ShareBedsModal({ open, onClose, branches, freeById, onSaved }) {
       <p className="text-xs text-slate-500 mt-3">
         Headline, description and amenities are under Branches, then Listing.
       </p>
+
+      <Modal open={!!photosFor} onClose={() => setPhotosFor(null)} size="md"
+        title={`Photos — ${photosFor?.name || ''}`}
+        subtitle="Up to six, each under 5 KB. The first one is what people see in search."
+        footer={<Button variant="primary" onClick={() => setPhotosFor(null)}>Done</Button>}>
+        {photosFor && <BranchPhotos branchId={photosFor.id} />}
+      </Modal>
     </Modal>
   )
 }

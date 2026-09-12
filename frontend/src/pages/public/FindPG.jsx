@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom'
 import {
   Search, MapPin, Crosshair, Phone, Send, CheckCircle2, ArrowLeft, SlidersHorizontal,
   Navigation, MessageCircle, ChevronDown, BedDouble, Inbox, LogOut, Loader2,
+  Map as MapIcon, List as ListIcon, ImageOff,
 } from 'lucide-react'
 import { publicApi } from '@/services/api/publicApi'
 import { useApi } from '@/lib/useApi'
@@ -11,7 +12,7 @@ import { readSeekerToken, writeSeekerToken } from '@/lib/seekerSession'
 import { relative } from '@/lib/format'
 import {
   Card, Button, FormField, Input, Select, Textarea, Modal, InlineAlert, EmptyState,
-  Skeleton, StatusBadge,
+  Skeleton, StatusBadge, PgMap, PlaceChooser,
 } from '@/components/ui'
 import { useToast } from '@/context/ToastContext'
 
@@ -19,8 +20,12 @@ import { useToast } from '@/context/ToastContext'
  * Finding a PG. Public: browsing needs no account.
  *
  * Opens on "near me" - the phone's position is asked for straight away,
- * because that is the question everyone arriving here has. When location is
- * refused, an area can be searched by name instead; the API geocodes it.
+ * because that is the question everyone arriving here has. But that only serves
+ * someone standing where they want to live. Looking for a friend, or near a
+ * campus, or beside a job that starts next month, needs a point you are not
+ * standing on - so there is a real map (Leaflet over OpenStreetMap) where a pin
+ * can be dropped anywhere, plus area search by name, which the API geocodes.
+ * All three routes end in the same latitude, longitude and label.
  *
  * Enquiring needs a seeker account: name, phone, and an email proved with a
  * code, once. After that every enquiry is one tap, and "My enquiries" shows
@@ -68,6 +73,7 @@ export default function FindPG() {
   const [auth, setAuth] = useState(null)              // { mode, then }
   const [accountOpen, setAccountOpen] = useState(false)
   const [view, setView] = useState('search')          // search | mine
+  const [layout, setLayout] = useState('list')        // list | map
 
   const [place, setPlace] = useState(null)            // { latitude, longitude, label }
   const [booted, setBooted] = useState(false)
@@ -145,6 +151,11 @@ export default function FindPG() {
   }), [JSON.stringify(applied), place?.latitude, place?.longitude, radius], { enabled: booted })
 
   const rows = results.data || []
+  // Only PGs whose owner actually set a position can be drawn. The rest still
+  // appear in the list, and the count above says how many are missing rather
+  // than letting the map quietly look emptier than the search really was.
+  const mappable = rows.filter((r) => r.latitude != null && r.longitude != null)
+    .map((r) => ({ id: r.id, latitude: r.latitude, longitude: r.longitude, name: titleOf(r) }))
   const wider = RADII.find((r) => r > radius)
   const runSearch = () => setApplied({ ...filters, q: text.trim() })
 
@@ -248,6 +259,14 @@ export default function FindPG() {
                     ? 'border-brand-400 text-brand-800 bg-brand-50' : 'bg-white border-line text-slate-600'}`}>
                   <SlidersHorizontal size={13} /> Filters
                 </button>
+                <button type="button" onClick={() => setLayout(layout === 'map' ? 'list' : 'map')}
+                  aria-pressed={layout === 'map'}
+                  className={`h-8 px-3 rounded-full text-xs whitespace-nowrap border inline-flex items-center gap-1.5 ml-auto ${layout === 'map'
+                    ? 'border-brand-400 text-brand-800 bg-brand-50' : 'bg-white border-line text-slate-600'}`}>
+                  {layout === 'map'
+                    ? <><ListIcon size={13} /> List</>
+                    : <><MapIcon size={13} /> Map</>}
+                </button>
               </div>
 
               {showFilters && (
@@ -313,12 +332,31 @@ export default function FindPG() {
                 <p className="text-xs text-slate-500 mb-3 tnum">
                   {rows.length} PG{rows.length === 1 ? '' : 's'}
                   {place ? ` within ${radius} km, closest first` : ', cheapest first'}
+                  {layout === 'map' && mappable.length < rows.length
+                    ? ` · ${rows.length - mappable.length} not on the map yet` : ''}
                 </p>
-                <div className="grid sm:grid-cols-2 gap-3">
-                  {rows.map((pg) => (
-                    <PgCard key={pg.id} pg={pg} onOpen={() => setDetail(pg)} onEnquire={() => enquire(pg)} />
-                  ))}
-                </div>
+
+                {layout === 'map' ? (
+                  <div className="space-y-3">
+                    <PgMap value={place} radiusKm={place ? radius : null} height={380}
+                      results={mappable}
+                      onPick={(point) => setPlace({ ...point, label: 'the pin you dropped' })}
+                      onOpenResult={(id) => {
+                        const found = rows.find((r) => r.id === id)
+                        if (found) setDetail(found)
+                      }} />
+                    <p className="text-xs text-slate-500">
+                      Tap a green dot to open that PG. Drag the blue pin to search
+                      somewhere else.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="grid sm:grid-cols-2 gap-3">
+                    {rows.map((pg) => (
+                      <PgCard key={pg.id} pg={pg} onOpen={() => setDetail(pg)} onEnquire={() => enquire(pg)} />
+                    ))}
+                  </div>
+                )}
               </>
             )}
 
@@ -332,6 +370,7 @@ export default function FindPG() {
       </main>
 
       <LocationPicker open={pickerOpen} onClose={() => setPickerOpen(false)}
+        value={place} locating={locating}
         onPick={(p) => { setPlace(p); setLocError(null); setPickerOpen(false) }}
         onUseGps={() => { setPickerOpen(false); detect() }} />
       <PgDetail pg={detail} onClose={() => setDetail(null)}
@@ -353,8 +392,23 @@ export default function FindPG() {
 /* --------------------------------------------------------------- card */
 function PgCard({ pg, onOpen, onEnquire }) {
   const rent = lowestRent(pg)
+  // The search sends the lead photo only - forty results carrying six 5 KB
+  // photos each would be over a megabyte of base64 on mobile data.
+  const lead = pg.photos?.[0]
   return (
-    <Card className="p-4 flex flex-col">
+    <Card className="overflow-hidden flex flex-col">
+      <button type="button" onClick={onOpen} className="block w-full text-left">
+        {lead ? (
+          <img src={lead.data_url} alt={lead.caption || titleOf(pg)}
+            className="w-full h-32 object-cover bg-slate-100" />
+        ) : (
+          <div className="w-full h-32 bg-slate-50 flex flex-col items-center justify-center gap-1 text-slate-300">
+            <ImageOff size={20} />
+            <span className="text-2xs text-slate-400">No photo yet</span>
+          </div>
+        )}
+      </button>
+      <div className="p-4 flex flex-col flex-1">
       <button type="button" onClick={onOpen} className="text-left">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">
@@ -417,13 +471,39 @@ function PgCard({ pg, onOpen, onEnquire }) {
           <Button size="sm" variant="primary" icon={Send} onClick={onEnquire}>Enquire</Button>
         </div>
       </div>
+      </div>
     </Card>
   )
 }
 
 /* ------------------------------------------------------------- detail */
-function PgDetail({ pg, onClose, onEnquire }) {
-  if (!pg) return null
+function PgDetail({ pg: summary, onClose, onEnquire }) {
+  /**
+   * Opening a PG fetches it again, for one reason: photos.
+   *
+   * The search deliberately sends only the lead photo per result, so the whole
+   * gallery does not exist in the row that was tapped. Everything else is
+   * already correct in the summary, so the fetched copy is merged over it and
+   * the sheet renders immediately either way - no spinner over content the
+   * person can already see.
+   */
+  const [full, setFull] = useState(null)
+
+  useEffect(() => {
+    setFull(null)
+    if (!summary?.id) return undefined
+    let cancelled = false
+    ;(async () => {
+      try {
+        const found = await publicApi.getPg(summary.id)
+        if (!cancelled && found) setFull(found)
+      } catch { /* the summary is enough to show the sheet */ }
+    })()
+    return () => { cancelled = true }
+  }, [summary?.id])
+
+  if (!summary) return null
+  const pg = full ? { ...summary, ...full, distance_m: summary.distance_m } : summary
   return (
     <Modal open={!!pg} onClose={onClose} size="md" title={titleOf(pg)}
       subtitle={[pg.pg_name && pg.pg_name !== pg.name ? pg.name : null, pg.city]
@@ -438,6 +518,21 @@ function PgDetail({ pg, onClose, onEnquire }) {
         <Button variant="primary" icon={Send} onClick={() => onEnquire(pg)}>Enquire</Button>
       </>}>
       <div className="space-y-5">
+        {pg.photos?.length > 0 && (
+          <div className="-mx-4 sm:-mx-5 px-4 sm:px-5 flex gap-2 overflow-x-auto pb-1">
+            {pg.photos.map((photo) => (
+              <figure key={photo.id} className="shrink-0 w-44">
+                <img src={photo.data_url} alt={photo.caption || titleOf(pg)}
+                  className="w-44 h-32 object-cover rounded-lg bg-slate-100" />
+                {photo.caption && (
+                  <figcaption className="text-2xs text-slate-500 mt-1 truncate">
+                    {photo.caption}
+                  </figcaption>
+                )}
+              </figure>
+            ))}
+          </div>
+        )}
         {pg.headline && <p className="text-sm font-medium text-slate-800">{pg.headline}</p>}
         {pg.description && <p className="text-sm text-slate-600 whitespace-pre-line">{pg.description}</p>}
 
@@ -496,68 +591,35 @@ function PgDetail({ pg, onClose, onEnquire }) {
 }
 
 /* ------------------------------------------------------ area picker */
-function LocationPicker({ open, onClose, onPick, onUseGps }) {
-  const [q, setQ] = useState('')
-  const [items, setItems] = useState([])
-  const [busy, setBusy] = useState(false)
-  const [note, setNote] = useState(null)
-  const timer = useRef(0)
+/**
+ * Where to search.
+ *
+ * Was a text box and a list of names. That works for "PGs in Koramangala" and
+ * fails for everything else - most of all for the person looking on behalf of
+ * someone who is moving to a city they have never been to. A map they can point
+ * at answers that; a list of place names does not.
+ *
+ * The three routes in (GPS, typing, dropping a pin) all live in PlaceChooser
+ * and all produce the same { latitude, longitude, label }, so nothing
+ * downstream has to know which one was used.
+ */
+function LocationPicker({ open, onClose, onPick, onUseGps, value, locating }) {
+  const [draft, setDraft] = useState(value || null)
 
-  useEffect(() => { if (open) { setQ(''); setItems([]); setNote(null) } }, [open])
-
-  useEffect(() => {
-    if (!open) return undefined
-    clearTimeout(timer.current)
-    const term = q.trim()
-    if (term.length < 2) { setItems([]); setBusy(false); return undefined }
-    setBusy(true)
-    timer.current = setTimeout(async () => {
-      try {
-        const res = await publicApi.places(term)
-        const found = res?.places || []
-        setItems(found)
-        setNote(res?.source === 'listings' && found.length
-          ? 'Showing areas that have listed PGs.' : null)
-      } catch {
-        setItems([])
-        setNote('Area search is not available right now. Type the area in the main search box instead.')
-      } finally { setBusy(false) }
-    }, 350)
-    return () => clearTimeout(timer.current)
-  }, [q, open])
+  useEffect(() => { if (open) setDraft(value || null) }, [open, value])
 
   return (
-    <Modal open={open} onClose={onClose} size="sm" title="Search near">
-      <div className="space-y-3">
-        <Button icon={Crosshair} className="w-full" onClick={onUseGps}>Use my current location</Button>
-        <div className="relative">
-          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
-          <Input value={q} autoFocus placeholder="Area, locality or landmark" className="pl-9 pr-9"
-            onChange={(e) => setQ(e.target.value)} />
-          {busy && <Loader2 size={15} className="absolute right-3 top-1/2 -translate-y-1/2 animate-spin text-slate-400" />}
-        </div>
-        {note && <p className="text-xs text-slate-500">{note}</p>}
-        <ul className="divide-y divide-line">
-          {items.map((p) => (
-            <li key={`${p.latitude},${p.longitude},${p.label}`}>
-              <button type="button"
-                onClick={() => onPick({ latitude: p.latitude, longitude: p.longitude, label: p.label })}
-                className="w-full text-left py-2.5 px-1 flex items-start gap-2.5 rounded-md hover:bg-slate-50">
-                <MapPin size={15} className="text-slate-400 mt-0.5 shrink-0" />
-                <span className="min-w-0">
-                  <span className="block text-sm text-slate-900 truncate">{p.label}</span>
-                  <span className="block text-xs text-slate-500 truncate">{p.detail}</span>
-                </span>
-              </button>
-            </li>
-          ))}
-        </ul>
-        {!busy && q.trim().length >= 2 && items.length === 0 && !note && (
-          <p className="text-sm text-slate-500 py-2">
-            No area by that name. Try the locality or a nearby landmark.
-          </p>
-        )}
-      </div>
+    <Modal open={open} onClose={onClose} size="md" title="Search near"
+      subtitle="Use your location, type an area, or drop a pin anywhere."
+      footer={<>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button variant="primary" disabled={!draft} icon={Search}
+          onClick={() => draft && onPick(draft)}>
+          Search here
+        </Button>
+      </>}>
+      <PlaceChooser value={draft} onChange={setDraft} onUseGps={onUseGps}
+        locating={locating} height={300} />
     </Modal>
   )
 }

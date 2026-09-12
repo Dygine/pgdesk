@@ -27,7 +27,8 @@ from sqlalchemy import Numeric, and_, func, or_, select
 from sqlalchemy.orm import Session
 
 from app.core.exceptions import ConflictError, NotFoundError
-from app.models import Bed, Branch, Organization, PgEnquiry, Room
+from app.models import Bed, Branch, BranchPhoto, Organization, PgEnquiry, Room
+from app.models.branch import PHOTOS_PER_BRANCH
 from app.models.enums import (
     BedStatus, BranchStatus, NotificationType, OrganizationStatus,
 )
@@ -188,8 +189,32 @@ class PublicService:
         options.sort(key=lambda o: (o["sharing"] or 99, o["from_rent"] or 0))
         return options, len(rows)
 
+    def _photos(self, branch_id: uuid.UUID, *, limit: int) -> list[dict]:
+        """
+        Listing photos, smallest useful payload first.
+
+        `limit` is 1 on a search card and the full set on a detail view. Forty
+        results each carrying six 5 KB photos would be 1.2 MB of base64 on a
+        phone that is probably on mobile data - so the search sends the lead
+        photo only, and the rest arrive when someone actually opens the PG.
+
+        These are already public by the owner's own decision, so there is no
+        permission check here. That is the whole difference from a resident
+        document, and the reason the two live in different tables.
+        """
+        import base64
+        rows = self.db.scalars(
+            select(BranchPhoto).where(BranchPhoto.branch_id == branch_id)
+            .order_by(BranchPhoto.position, BranchPhoto.created_at)
+            .limit(limit)).all()
+        return [
+            {"id": str(p.id), "caption": p.caption, "width": p.width, "height": p.height,
+             "data_url": f"data:{p.mime_type};base64,{base64.b64encode(p.content).decode()}"}
+            for p in rows
+        ]
+
     def _listing(self, branch: Branch, free: int, distance: float | None, *,
-                 options: list[dict] | None = None) -> dict:
+                 options: list[dict] | None = None, photo_limit: int = 1) -> dict:
         """
         Exactly the fields chosen for publication, listed one by one.
 
@@ -215,6 +240,7 @@ class PublicService:
             "vacancy": _vacancy_band(free),
             "has_vacancy": free > 0,
             "room_options": options or [],
+            "photos": self._photos(branch.id, limit=photo_limit),
             "distance_m": round(distance, 1) if distance is not None else None,
         }
 
@@ -250,7 +276,8 @@ class PublicService:
             # cannot be used to discover which PGs exist but chose privacy.
             raise NotFoundError("That PG listing is not available.")
         options, free = self._room_options(branch.id)
-        return self._listing(branch, free, None, options=options)
+        # A detail view is one PG the seeker chose to open: send every photo.
+        return self._listing(branch, free, None, options=options, photo_limit=PHOTOS_PER_BRANCH)
 
     # ----------------------------------------------------------- enquiries
     def create_enquiry(self, *, branch_id: uuid.UUID, full_name: str, email: str,

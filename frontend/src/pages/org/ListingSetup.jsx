@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
-import { Globe, Eye, EyeOff, IndianRupee } from 'lucide-react'
 import { branchApi } from '@/services/api/branchApi'
+import { BranchPhotos } from '@/components/domain/BranchPhotos'
 import { useToast } from '@/context/ToastContext'
 import {
   Modal, Button, FormField, Input, Select, Textarea, Toggle, InlineAlert,
@@ -135,7 +135,17 @@ export function ListingSetup({ branch, open, onClose, onSaved }) {
         </FormField>
       </div>
 
-      <div className="mt-5">
+      <div className="mt-6">
+        <p className="text-sm font-medium text-slate-800">Photos</p>
+        <p className="text-xs text-slate-500 mb-2.5">
+          A listing with photos gets opened far more often than one without. Take
+          them on your phone - they are shrunk to under 5 KB here before anything
+          is uploaded, so this works on any connection.
+        </p>
+        <BranchPhotos branchId={branch?.id} />
+      </div>
+
+      <div className="mt-6">
         <p className="text-sm font-medium text-slate-800 mb-2">Amenities</p>
         <div className="flex flex-wrap gap-2">
           {AMENITIES.map((a) => {

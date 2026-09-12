@@ -6,7 +6,7 @@ model is re-exported here and `alembic/env.py` imports this package.
 """
 from app.models.audit import AuditLog
 from app.models.base import BranchMixin, TenantMixin, Timestamps, UUIDPrimaryKey
-from app.models.branch import Branch
+from app.models.branch import Branch, BranchPhoto
 from app.models.billing import (
     GatewayOrder, Invoice, InvoiceItem, Payment, PaymentSettings,
 )
@@ -40,7 +40,7 @@ from app.models.user import User
 
 __all__ = [
     "Announcement", "Asset", "Attendance", "AuditAction", "AuditLog", "Bed", "BedStatus",
-    "BillingCycle", "Branch", "BranchMixin", "Complaint", "ComplaintUpdate", "Expense",
+    "BillingCycle", "Branch", "BranchPhoto", "BranchMixin", "Complaint", "ComplaintUpdate", "Expense",
     "FoodMenu", "GateLog", "GatePass", "InventoryItem", "InventoryTransaction",
     "Invoice", "InvoiceItem", "LaundryRequest", "LaundrySlot", "MealAttendance",
     "Notification", "OrganizationSettings", "Payment", "QueryMessage", "ResidentKyc",

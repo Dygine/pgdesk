@@ -67,38 +67,39 @@ class AuthService:
     def __init__(self, db: Session):
         self.db = db
 
-    def _refresh_days(self, native: bool) -> int:
+    def _refresh_window(self, native: bool) -> timedelta:
         """
         How long a refresh token lives, by client.
 
-        A browser keeps the short window: a shared or public computer is a real
-        possibility there, and the session lives in a cookie the user cannot see
-        or manage.
+        Browser: 24 hours, full stop. A laptop is shared, borrowed and left
+        open in a way a phone is not, and the session lives in a cookie the
+        person cannot see or manage. A day means an unattended machine is safe
+        by tomorrow morning without anyone having to remember to sign out.
 
-        An installed app gets the long one, read from platform settings and
-        defaulting to ten years - "signed in until you remove the app", which is
-        what people expect from every other app on the phone. The device is
-        personal, it is lock-screened, and the token lives in the app's private
-        storage, which no other app can read.
+        Installed app: effectively forever, and renewed on every rotation, so
+        the clock never runs down on someone who keeps using it. That is what
+        every other app on the phone does, and the reasoning is that the device
+        is personal, lock-screened, and the token sits in the app's private
+        storage where no other app can read it. The number is a platform
+        setting rather than a constant, so an operator who thinks ten years is
+        too long for a manager's handset can shorten it without a code change.
 
-        This is a real trade. A staff phone with a permanent session is a
-        standing risk if it is lost, which is why the number is a setting rather
-        than a constant: an operator who decides ten years is too long for their
-        managers can shorten it without touching code, and signing out or
-        resetting a password still revokes every session immediately.
+        Signing out, changing a password and deactivating an account still
+        revoke every session immediately, on both kinds of client. Permanent
+        means "not expired by a timer", never "cannot be withdrawn".
         """
         if not native:
-            return settings.refresh_token_expire_days
+            return timedelta(hours=settings.browser_session_hours)
         try:
             from app.models.platform import SINGLETON_ID
             row = self.db.get(PlatformSettings, uuid.UUID(SINGLETON_ID))
-            if row is not None:
-                return row.native_session_days
+            if row is not None and row.native_session_days:
+                return timedelta(days=row.native_session_days)
         except Exception:
             # Settings unreadable during a migration window: fall back rather
             # than refusing a login over a preference.
             pass
-        return 3650
+        return timedelta(days=3650)
 
     # ------------------------------------------------------------ lookups --
     def _find_user(self, email: str) -> User | None:
@@ -213,17 +214,27 @@ class AuthService:
     # ------------------------------------------------------------- tokens --
     def issue_tokens(
         self, principal: Principal, *, user_agent: str | None = None,
-        ip: str | None = None, native: bool = False
+        ip: str | None = None, native: bool = False,
+        family_id: uuid.UUID | None = None,
     ) -> tuple[str, str]:
+        """
+        A fresh access token and a fresh refresh token.
+
+        `family_id` is supplied by a rotation, so the new token stays in the
+        same device chain as the one it replaces. A login leaves it empty and a
+        new family is minted - that is what makes the phone's chain and the
+        laptop's chain separable later.
+        """
         access = create_access_token(str(principal.id), principal=principal.kind.value)
 
         raw = generate_opaque_token()
         row = RefreshToken(
             token_hash=hash_token(raw),
-            expires_at=datetime.now(timezone.utc)
-            + timedelta(days=self._refresh_days(native)),
+            expires_at=datetime.now(timezone.utc) + self._refresh_window(native),
             user_agent=user_agent,
             ip_address=ip,
+            family_id=family_id or uuid.uuid4(),
+            is_native=bool(native),
         )
         if principal.is_user:
             row.user_id = principal.id
@@ -238,12 +249,31 @@ class AuthService:
         ip: str | None = None, native: bool = False
     ) -> tuple[str, str, Principal]:
         """
-        Single-use refresh with reuse detection.
+        Single-use refresh with reuse detection, confined to one device.
 
-        Presenting an already-rotated token means either a replay or a stolen
-        token being used alongside the legitimate one. Either way the safe
-        response is to invalidate every session for that account and make them
-        sign in again.
+        Presenting an already-rotated token is either a retry whose reply was
+        lost, or a stolen token being replayed. `_is_lost_reply` separates the
+        two where it can; where it cannot, the token chain is revoked.
+
+        What changed, and why it matters
+        --------------------------------
+        Revocation used to take out every session for the account. So one
+        unlucky refresh on a laptop signed out the owner's phone, the manager's
+        phone and every resident app in the building - and the most common
+        trigger was not theft at all but a deploy: the rotation commits, the
+        instance is replaced mid-reply, the app retries with a token the server
+        has already spent.
+
+        Now only the presenting device's chain is revoked. A stolen token can
+        still be used to mint tokens until the theft is noticed, exactly as
+        before - but that was already true of the honest half of every ambiguous
+        case, and the account-wide blast radius was buying nothing except
+        spurious sign-outs. Real remedies stay account-wide: signing out, a
+        password change, or deactivating the account still revoke everything.
+
+        Session length is read from the stored row rather than from the caller's
+        header. An app whose header is stripped by a proxy keeps its permanent
+        session instead of being quietly downgraded to a browser one.
         """
         row = self.db.scalars(
             select(RefreshToken).where(RefreshToken.token_hash == hash_token(raw_token))
@@ -252,21 +282,26 @@ class AuthService:
         if row is None:
             raise AuthenticationError("That refresh token is not valid.")
 
+        # Once a chain is native it stays native, whatever this request claims.
+        native = bool(native or row.is_native)
+        family = row.family_id
+
         now = datetime.now(timezone.utc)
         if row.revoked_at is not None:
             successor = self.db.get(RefreshToken, row.replaced_by) if row.replaced_by else None
             if not self._is_lost_reply(row, successor, now):
-                self._revoke_all_for(row)
+                self._revoke_family(row)
                 raise AuthenticationError(
-                    "This session was already refreshed elsewhere. For safety every "
-                    "session has been signed out - please sign in again."
+                    "This session was already refreshed elsewhere. For safety this "
+                    "device has been signed out - please sign in again."
                 )
             # The replacement never reached the device, so nobody legitimate holds
             # it. Retire it: if it is ever presented, that IS theft and gets the
-            # full sign-out-everywhere response. Then issue a fresh pair.
+            # chain revoked. Then issue a fresh pair in the same family.
             successor.revoked_at = now
             principal = self._principal_from_token_row(row)
-            access, raw = self.issue_tokens(principal, user_agent=user_agent, ip=ip, native=native)
+            access, raw = self.issue_tokens(principal, user_agent=user_agent, ip=ip,
+                                            native=native, family_id=family)
             new_row = self.db.scalars(
                 select(RefreshToken).where(RefreshToken.token_hash == hash_token(raw))
             ).first()
@@ -279,7 +314,8 @@ class AuthService:
 
         principal = self._principal_from_token_row(row)
         row.revoked_at = now
-        access, raw = self.issue_tokens(principal, user_agent=user_agent, ip=ip, native=native)
+        access, raw = self.issue_tokens(principal, user_agent=user_agent, ip=ip,
+                                        native=native, family_id=family)
         new_row = self.db.scalars(
             select(RefreshToken).where(RefreshToken.token_hash == hash_token(raw))
         ).first()
@@ -336,14 +372,26 @@ class AuthService:
         return Principal(PrincipalKind.CUSTOMER, customer.id, customer.email or "",
                          customer.full_name, customer.organization_id, customer)
 
-    def _revoke_all_for(self, row: RefreshToken) -> int:
+    def _revoke_family(self, row: RefreshToken) -> int:
+        """
+        Revoke one device's chain of tokens - not the whole account.
+
+        A row written before families existed has no family id. Those are
+        treated as a chain of one: the single row is revoked and nothing else,
+        which is the conservative reading of "we cannot tell which device this
+        was". They disappear within a day for browsers and on the next rotation
+        for apps, so this is a migration-window path only.
+        """
         now = datetime.now(timezone.utc)
-        stmt = select(RefreshToken).where(RefreshToken.revoked_at.is_(None))
-        stmt = stmt.where(
-            RefreshToken.user_id == row.user_id if row.user_id
-            else RefreshToken.customer_id == row.customer_id
-        )
-        rows = list(self.db.scalars(stmt).all())
+        if row.family_id is None:
+            row.revoked_at = now
+            return 1
+        rows = list(self.db.scalars(
+            select(RefreshToken).where(
+                RefreshToken.family_id == row.family_id,
+                RefreshToken.revoked_at.is_(None),
+            )
+        ).all())
         for r in rows:
             r.revoked_at = now
         return len(rows)

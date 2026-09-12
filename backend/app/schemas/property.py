@@ -68,6 +68,29 @@ class BranchListingUpdate(BaseModel):
     contact_phone_public: str | None = Field(default=None, max_length=20)
 
 
+class BranchPhotoUpload(BaseModel):
+    """
+    One listing photo.
+
+    `image` is a data URL or bare base64. The length cap here only stops absurd
+    bodies before they are decoded; the real 5 KB rule is applied to the decoded
+    bytes so the owner is told the true size of their picture rather than the
+    size of its base64, which is a third larger and would read as a bug.
+    """
+
+    image: str = Field(min_length=16, max_length=20000)
+    caption: str | None = Field(default=None, max_length=80)
+    source: str = Field(default="camera", pattern="^(camera|upload)$")
+    width: int | None = Field(default=None, ge=1, le=10000)
+    height: int | None = Field(default=None, ge=1, le=10000)
+
+
+class BranchPhotoReorder(BaseModel):
+    """Ids in the order they should appear. The first one leads the listing."""
+
+    photo_ids: list[uuid.UUID] = Field(min_length=1, max_length=12)
+
+
 class EnquiryUpdate(BaseModel):
     status: str | None = None
     staff_notes: str | None = Field(default=None, max_length=2000)

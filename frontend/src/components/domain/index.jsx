@@ -166,6 +166,7 @@ export function PageHeader({ title, subtitle, actions, breadcrumb, children, cla
 
 export { UpdateBanner } from './UpdateBanner'
 export { ResidentDocuments, DocumentCapture } from './ResidentDocuments'
+export { BranchPhotos, PhotoCapture, PhotoSummary } from './BranchPhotos'
 export {
   PermissionOnboarding, shouldAskPermissions, resetPermissionOnboarding,
 } from './PermissionOnboarding'

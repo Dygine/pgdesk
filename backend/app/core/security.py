@@ -65,8 +65,15 @@ def create_access_token(subject: str, **claims: Any) -> str:
 
 
 def create_refresh_token(subject: str, **claims: Any) -> str:
+    """
+    Unused: refresh tokens are opaque and stored (see generate_opaque_token).
+
+    Kept because the symmetry with create_access_token is what stops someone
+    reaching for a JWT refresh token later without noticing the choice was
+    already made deliberately.
+    """
     return _create_token(
-        subject, "refresh", timedelta(days=settings.refresh_token_expire_days), claims
+        subject, "refresh", timedelta(hours=settings.browser_session_hours), claims
     )
 
 
