@@ -17,6 +17,7 @@ import SiteFeatures from '@/pages/site/Features'
 import SitePricing from '@/pages/site/Pricing'
 import SiteFaq from '@/pages/site/Faq'
 import SiteContact from '@/pages/site/Contact'
+import { Privacy as SitePrivacy, Terms as SiteTerms } from '@/pages/site/Legal'
 import Enquiries from '@/pages/org/Enquiries'
 
 /* Master portal */
@@ -244,6 +245,10 @@ export const router = createBrowserRouter([
       { path: 'pricing', element: <SitePricing /> },
       { path: 'faq', element: <SiteFaq /> },
       { path: 'contact', element: <SiteContact /> },
+      // Required by the Play Store, and by the DPDP Act for a product that
+      // holds identity documents. Public and crawlable on purpose.
+      { path: 'privacy', element: <SitePrivacy /> },
+      { path: 'terms', element: <SiteTerms /> },
     ],
   },
 
