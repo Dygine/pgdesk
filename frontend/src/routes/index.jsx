@@ -10,6 +10,7 @@ import Login from '@/pages/auth/Login'
 import ForgotPassword from '@/pages/auth/ForgotPassword'
 import Signup from '@/pages/auth/Signup'
 import FindPG from '@/pages/public/FindPG'
+import Home from '@/pages/public/Home'
 import Enquiries from '@/pages/org/Enquiries'
 
 /* Master portal */
@@ -21,6 +22,7 @@ import Subscriptions from '@/pages/master/Subscriptions'
 import Usage from '@/pages/master/Usage'
 import MasterAudit from '@/pages/master/MasterAudit'
 import MasterSettings from '@/pages/master/MasterSettings'
+import MasterWebsite from '@/pages/master/MasterWebsite'
 
 /* Org portal */
 import OwnerDashboard from '@/pages/org/OwnerDashboard'
@@ -200,7 +202,11 @@ export const router = createBrowserRouter([
   // account and will not make one to browse - putting this behind a login would
   // mean nobody ever sees a listing.
   { path: '/find-pg', element: <FindPG /> },
-  { path: '/', element: <RootRedirect /> },
+  // The public website. Everyone lands here - signed in or not - because this
+  // is the front door of the product, not a redirect on the way to a
+  // dashboard. Someone already signed in clicks Sign in and /login sends
+  // them straight on to their own portal.
+  { path: '/', element: <Home /> },
 
   {
     path: '/master',
@@ -213,6 +219,7 @@ export const router = createBrowserRouter([
       { path: 'subscriptions', element: guard('master.subscriptions', <Subscriptions />) },
       { path: 'usage', element: guard('master.usage', <Usage />) },
       { path: 'audit', element: guard('master.audit', <MasterAudit />) },
+      { path: 'website', element: guard('master.settings', <MasterWebsite />) },
       { path: 'settings', element: guard('master.settings', <MasterSettings />) },
     ],
   },

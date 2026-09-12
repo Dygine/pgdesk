@@ -42,3 +42,24 @@
     transition-duration: .01ms !important;
   }
 }
+
+/* ---------------------------------------------------------------- leaflet
+   Leaflet ships z-index values of its own: 400 on the map panes, 600 on
+   markers, 800 on controls and 1000 on the corner containers. Every one of
+   those is above this app's modal layer (z-80), and a plain positioned div
+   does not create a stacking context - so a map sitting behind a dialog
+   painted straight through it. The Sign in sheet on Find PG appeared sliced in
+   half, with the map drawn over its body and buttons.
+
+   `isolation: isolate` gives the map container a stacking context of its own.
+   Leaflet's internal ordering is preserved exactly (tiles under overlays under
+   markers under popups); the whole stack is simply confined to the container,
+   which then sits at z-index 0 in the page like any other element.
+
+   Do not "fix" this by raising the modal's z-index instead. The next component
+   with its own opinionated z-index would start the same fight over again.
+   -------------------------------------------------------------------------- */
+.leaflet-container {
+  isolation: isolate;
+  z-index: 0;
+}

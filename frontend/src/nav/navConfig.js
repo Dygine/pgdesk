@@ -1,4 +1,5 @@
 import {
+  Globe,
   LayoutDashboard, Building2, Layers3, DoorOpen, BedDouble, Users, UserPlus, LogOut as CheckoutIcon,
   Repeat, ReceiptIndianRupee, Wallet, TrendingDown, MessageSquareWarning, UtensilsCrossed,
   WashingMachine, CalendarCheck, QrCode, UserCheck, TicketCheck, Megaphone, MessagesSquare,
@@ -89,6 +90,7 @@ export const MASTER_NAV = [
     group: 'Governance',
     items: [
       { label: 'Platform audit log', to: '/master/audit', icon: ScrollText, perm: 'master.audit' },
+      { label: 'Website', to: '/master/website', icon: Globe, perm: 'master.settings' },
       { label: 'Settings', to: '/master/settings', icon: Settings, perm: 'master.settings' },
     ],
   },

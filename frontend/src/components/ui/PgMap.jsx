@@ -26,6 +26,11 @@
  * Leaflet is loaded lazily, on first open. It is around 40 KB gzipped, and
  * nobody who never opens the map should pay for it on a phone.
  *
+ * Note on stacking: the wrapper carries `isolate` and `.leaflet-container` is
+ * pinned to z-index 0 in index.css. Leaflet's own panes and controls run up to
+ * z-index 1000, which is above this app's modals - without a stacking context
+ * of its own, a map behind a dialog paints straight over it.
+ *
  * Note on the marker icon: Leaflet's default icon is loaded from image files
  * resolved relative to the CSS, which a bundler rewrites and then cannot find -
  * the classic "markers are invisible" bug. A divIcon with inline SVG has no
@@ -206,7 +211,7 @@ export function PgMap({ value, onPick, results = [], onOpenResult, radiusKm, hei
   }
 
   return (
-    <div className="relative rounded-xl overflow-hidden border border-line bg-slate-100"
+    <div className="relative isolate rounded-xl overflow-hidden border border-line bg-slate-100"
       style={{ height }}>
       <div ref={holder} className="absolute inset-0" aria-label="Map of the search area" />
       {!ready && (
