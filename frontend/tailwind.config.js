@@ -9,6 +9,14 @@ export default {
           400: '#6472D4', 500: '#4750C4', 600: '#373DA6', 700: '#2C3182',
           800: '#232764', 900: '#1B1E4D', 950: '#121432',
         },
+        // The gold from the logo's "uru". The indigo above carries the product;
+        // this carries the marketing site, where a single accent is the
+        // difference between "clean" and "blank".
+        accent: {
+          50: '#FFF8EC', 100: '#FEEDCC', 200: '#FDDB99', 300: '#FBC35C',
+          400: '#F7AC2E', 500: '#EE9612', 600: '#D2790B', 700: '#A85A0D',
+          800: '#894913', 900: '#713D13',
+        },
         canvas: '#F5F6FA',
         line: '#E4E7EF',
       },

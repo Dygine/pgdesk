@@ -10,7 +10,12 @@ import Login from '@/pages/auth/Login'
 import ForgotPassword from '@/pages/auth/ForgotPassword'
 import Signup from '@/pages/auth/Signup'
 import FindPG from '@/pages/public/FindPG'
-import Home from '@/pages/public/Home'
+import SiteLayout from '@/components/site/SiteLayout'
+import Home from '@/pages/site/Home'
+import SiteFeatures from '@/pages/site/Features'
+import SitePricing from '@/pages/site/Pricing'
+import SiteFaq from '@/pages/site/Faq'
+import SiteContact from '@/pages/site/Contact'
 import Enquiries from '@/pages/org/Enquiries'
 
 /* Master portal */
@@ -202,11 +207,21 @@ export const router = createBrowserRouter([
   // account and will not make one to browse - putting this behind a login would
   // mean nobody ever sees a listing.
   { path: '/find-pg', element: <FindPG /> },
-  // The public website. Everyone lands here - signed in or not - because this
-  // is the front door of the product, not a redirect on the way to a
-  // dashboard. Someone already signed in clicks Sign in and /login sends
-  // them straight on to their own portal.
-  { path: '/', element: <Home /> },
+  // The public website. Several pages sharing one layout, which fetches the
+  // content once - so moving between them is instant and makes no request.
+  // Everyone lands here, signed in or not: this is the front door of the
+  // product, not a redirect on the way to a dashboard.
+  {
+    path: '/',
+    element: <SiteLayout />,
+    children: [
+      { index: true, element: <Home /> },
+      { path: 'features', element: <SiteFeatures /> },
+      { path: 'pricing', element: <SitePricing /> },
+      { path: 'faq', element: <SiteFaq /> },
+      { path: 'contact', element: <SiteContact /> },
+    ],
+  },
 
   {
     path: '/master',

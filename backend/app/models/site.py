@@ -53,20 +53,22 @@ SITE_IMAGE_MAX_COUNT = 24
 #: The blocks the website is built from, in the order they appear on the page.
 #: A block the editor has never touched simply falls back to its preset.
 SITE_BLOCKS = (
-    "brand",        # name, tagline, logo, the "by <company>" line
-    "hero",         # headline, sub-headline, the two buttons, hero image
-    "trust",        # the strip of numbers under the hero
-    "problem",      # what it replaces
-    "features",     # the cards
-    "screenshots",  # captioned images of the product
-    "how",          # numbered steps
-    "pricing",      # plans and what each includes
-    "testimonials", # quotes, with attribution
-    "faq",          # questions and answers
-    "cta",          # the closing call to action
-    "contact",      # phone, email, address, hours
-    "footer",       # links, legal entity, copyright
-    "seo",          # title, description, keywords, social image
+    "brand",            # name, tagline, logo, the "by <company>" line
+    "hero",             # headline, sub-headline, the two buttons, illustration
+    "trust",            # the strip of numbers under the hero
+    "problem",          # what it replaces
+    "features",         # the cards on the home page
+    "features_detail",  # the long-form capability groups on /features
+    "screenshots",      # captioned images of the product
+    "how",              # numbered steps
+    "pricing",          # plans, editable
+    "pricing_compare",  # the comparison table on /pricing
+    "testimonials",     # quotes, with attribution
+    "faq",              # questions and answers
+    "cta",              # the closing call to action
+    "contact",          # phone, email, address, hours
+    "footer",           # links, legal entity, copyright
+    "seo",              # title, description, keywords, social image
 )
 
 

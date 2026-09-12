@@ -34,19 +34,6 @@ from app.models.site import (
     SITE_BLOCKS, SITE_IMAGE_MAX_BYTES, SITE_IMAGE_MAX_COUNT, SiteBlock, SiteImage,
 )
 
-# Placeholder photography.
-#
-# picsum.photos rather than a named stock library: it returns a real photograph
-# for any seed, needs no key, and - the part that matters - is guaranteed to
-# resolve. A hand-picked stock URL that 404s leaves a broken image on the
-# homepage, which is worse than a generic one that loads.
-#
-# These are stand-ins. Every one is replaceable from Master -> Website in about
-# a minute, and photographs of the actual property will always beat them.
-def _photo(seed: str, w: int = 1200, h: int = 800) -> str:
-    return f"https://picsum.photos/seed/{seed}/{w}/{h}"
-
-
 #: The website as it ships. Every block the editor has not touched renders from
 #: here, so the site is complete and coherent from the first page load.
 PRESETS: dict[str, dict] = {
@@ -68,7 +55,7 @@ PRESETS: dict[str, dict] = {
         "primary_href": "/login",
         "secondary_label": "Find a PG",
         "secondary_href": "/find-pg",
-        "image_slot": "hero",
+        "illustration": "room",
     },
     "trust": {
         # Statements about what the product does, not claims about how many
@@ -100,24 +87,84 @@ PRESETS: dict[str, dict] = {
     "features": {
         "title": "What's inside",
         "items": [
-            {"icon": "bed", "image_slot": "feature-beds", "title": "Rooms and beds",
+            {"icon": "bed", "illustration": "beds", "title": "Rooms and beds",
              "text": "Buildings, floors, rooms and individual beds. Vacant, occupied, "
                      "on notice or under maintenance - at a glance, per branch."},
-            {"icon": "users", "title": "Residents and KYC",
+            {"icon": "users", "illustration": "docs", "title": "Residents and KYC",
              "text": "Full profiles, stay history and scanned ID documents held "
                      "against each resident, behind their own permission."},
-            {"icon": "rupee", "image_slot": "feature-rent", "title": "Rent and payments",
+            {"icon": "rupee", "illustration": "rent", "title": "Rent and payments",
              "text": "Invoices, part payments, dues and receipts. UPI, cash and bank "
                      "transfers all recorded the same way."},
-            {"icon": "portal", "image_slot": "feature-portal", "title": "A portal for every tenant",
+            {"icon": "portal", "illustration": "portal", "title": "A portal for every tenant",
              "text": "Residents see their rent, raise complaints, book laundry and "
                      "give notice themselves - instead of messaging you."},
-            {"icon": "search", "title": "Public listing",
+            {"icon": "search", "illustration": "map", "title": "Public listing",
              "text": "Show your free beds to people searching nearby. Enquiries land "
                      "in your inbox. No broker, no commission."},
-            {"icon": "shield", "title": "Roles and permissions",
+            {"icon": "shield", "illustration": "roles", "title": "Roles and permissions",
              "text": "A manager, a warden and an accountant should not see the same "
                      "screens. Build the roles you actually have."},
+        ],
+    },
+    "features_detail": {
+        "title": "In detail",
+        "intro": "The whole of a PG's day, not the parts that are easy to build.",
+        "groups": [
+            {"illustration": "beds", "title": "Property and beds",
+             "text": "Branches, buildings, floors, rooms and individual beds. Bulk-create "
+                     "rooms so setting up a 200-bed hostel is an evening, not a week.",
+             "points": "Bed-level status: vacant, occupied, notice, maintenance, "
+                       "Room types and sharing counts, Bulk room creation, "
+                       "Transfers between beds and branches, Blueprint view of the whole property"},
+            {"illustration": "docs", "title": "Residents and KYC",
+             "text": "Full profiles with stay history and scanned identity documents, "
+                     "held behind their own permission so not every staff member sees them.",
+             "points": "Aadhaar, PAN, passport, licence, voter ID, Up to three scans per "
+                       "resident under 5 KB each, Camera capture on any phone, "
+                       "Separate view permission for ID images, Full stay and transfer history"},
+            {"illustration": "rent", "title": "Rent, invoices and payments",
+             "text": "Set the rent once and the month runs itself. Part payments, dues and "
+                     "receipts all recorded the same way whether the money arrived by UPI or cash.",
+             "points": "Automatic monthly invoices, Part payments and outstanding dues, "
+                       "UPI, cash and bank transfer, Digital receipts, Expense tracking, "
+                       "Profit and loss by branch"},
+            {"illustration": "portal", "title": "The resident's own portal",
+             "text": "Most PG software stops at the owner. Every resident here gets a login, "
+                     "so they stop messaging you at eleven at night.",
+             "points": "See rent and download receipts, Raise and follow complaints, "
+                       "Book laundry and see the food menu, Give checkout notice, "
+                       "Mark attendance at the gate, Read announcements"},
+            {"illustration": "map", "title": "Filling empty beds",
+             "text": "A public listing with photos and a real map. People searching nearby "
+                     "find you and enquire directly. No broker and no commission.",
+             "points": "Up to six photos per branch, Search by pin, area or current location, "
+                       "Free beds shown as a band, never an exact count, "
+                       "Enquiries land in your inbox, Resident details never published"},
+            {"illustration": "roles", "title": "Staff, roles and control",
+             "text": "A manager, a warden and an accountant should not see the same screens. "
+                     "Build the roles you actually have rather than the three somebody assumed.",
+             "points": "Custom roles with per-module permissions, Branch-scoped access, "
+                       "Staff records and salaries, Visitors and gate passes, "
+                       "QR gate attendance, Full audit log"},
+        ],
+    },
+    "pricing_compare": {
+        "title": "What each plan includes",
+        "rows": [
+            {"label": "Branches", "starter": "1", "professional": "3", "business": "10", "enterprise": "50"},
+            {"label": "Beds", "starter": "60", "professional": "300", "business": "1,200", "enterprise": "8,000"},
+            {"label": "Staff logins", "starter": "5", "professional": "20", "business": "75", "enterprise": "400"},
+            {"label": "Resident portal", "starter": "yes", "professional": "yes", "business": "yes", "enterprise": "yes"},
+            {"label": "Public listing and enquiries", "starter": "yes", "professional": "yes", "business": "yes", "enterprise": "yes"},
+            {"label": "Rent, invoices and receipts", "starter": "yes", "professional": "yes", "business": "yes", "enterprise": "yes"},
+            {"label": "Custom roles", "starter": "", "professional": "yes", "business": "yes", "enterprise": "yes"},
+            {"label": "QR gate attendance", "starter": "", "professional": "yes", "business": "yes", "enterprise": "yes"},
+            {"label": "Food and laundry", "starter": "", "professional": "yes", "business": "yes", "enterprise": "yes"},
+            {"label": "Assets and inventory", "starter": "", "professional": "", "business": "yes", "enterprise": "yes"},
+            {"label": "Audit log export", "starter": "", "professional": "", "business": "yes", "enterprise": "yes"},
+            {"label": "API access", "starter": "", "professional": "", "business": "", "enterprise": "yes"},
+            {"label": "Support", "starter": "Email", "professional": "Email + phone", "business": "Priority", "enterprise": "Dedicated manager"},
         ],
     },
     "screenshots": {
@@ -189,6 +236,18 @@ PRESETS: dict[str, dict] = {
             {"q": "Is my tenants' ID data safe?",
              "a": "Scanned documents sit behind a separate permission, so only staff you "
                   "explicitly allow can view them. Everything travels over HTTPS."},
+            {"q": "How long does setting up take?",
+             "a": "A single branch with a few rooms takes about fifteen minutes. Rooms can be "
+                  "created in bulk, so a 200-bed hostel is an evening rather than a week."},
+            {"q": "Do I have to publish my PG publicly?",
+             "a": "No. Public listing is off until you switch it on, branch by branch. Nothing "
+                  "about your property is visible until you decide it should be."},
+            {"q": "What do my tenants see about each other?",
+             "a": "Nothing. A resident sees only their own rent, complaints and bookings. The "
+                  "public listing never shows resident details either."},
+            {"q": "Can staff be limited to one branch?",
+             "a": "Yes. Roles carry per-module permissions and staff can be scoped to the "
+                  "branches they actually work at."},
         ],
     },
     "cta": {
@@ -199,7 +258,6 @@ PRESETS: dict[str, dict] = {
         "primary_href": "/signup",
         "secondary_label": "Download for Android",
         "secondary_href": "/pgguru.apk",
-        "image_slot": "cta",
     },
     "contact": {
         "title": "Talk to us",
@@ -230,39 +288,24 @@ PRESETS: dict[str, dict] = {
         "keywords": "PG management software, hostel management software India, "
                     "paying guest software, PG software Bengaluru, bed management",
         "canonical": "https://pgguru.in/",
-        "social_image_slot": "social",
+        "social_image_slot": "logo",
         "locale": "en_IN",
     },
 }
 
-#: The images the site ships with, so nothing renders as a grey box on day one.
+#: The images the site ships with.
 #:
-#: `logo` points at the real logo file bundled with the front end rather than at
-#: a remote URL - it is the one image that must never depend on a network it
-#: does not control.
+#: Exactly one, and it is local. Everything else on the marketing site is drawn
+#: as inline SVG (src/components/site/Illustrations.jsx) rather than fetched,
+#: after a version that pointed at a random-photo service put a mountain in fog
+#: on the homepage of a PG product. Guaranteed-to-load was the wrong thing to
+#: optimise for; relevant-and-on-brand is the right one.
+#:
+#: Real photographs of a real property beat both. Every slot can be filled from
+#: Master -> Website, and once a slot has an image the page uses it in place of
+#: the drawing.
 PRESET_IMAGES: dict[str, dict] = {
-    "logo":            {"url": "/pgguru-logo.png",
-                        "alt_text": "PGuru"},
-    "hero":            {"url": _photo("pgguru-hero-room", 1400, 1000),
-                        "alt_text": "A bright shared room in a well-run PG"},
-    "shot-dashboard":  {"url": _photo("pgguru-dashboard", 1200, 780),
-                        "alt_text": "The owner dashboard: occupancy and collections"},
-    "shot-beds":       {"url": _photo("pgguru-beds", 1200, 780),
-                        "alt_text": "The bed grid, live across every branch"},
-    "shot-findpg":     {"url": _photo("pgguru-findpg", 1200, 780),
-                        "alt_text": "Find a PG: public search on a real map"},
-    "shot-portal":     {"url": _photo("pgguru-portal", 1200, 780),
-                        "alt_text": "The resident's own portal"},
-    "feature-beds":    {"url": _photo("pgguru-feature-beds", 900, 600),
-                        "alt_text": "Rooms and beds"},
-    "feature-rent":    {"url": _photo("pgguru-feature-rent", 900, 600),
-                        "alt_text": "Rent and payments"},
-    "feature-portal":  {"url": _photo("pgguru-feature-portal", 900, 600),
-                        "alt_text": "A portal for every resident"},
-    "cta":             {"url": _photo("pgguru-cta", 1600, 700),
-                        "alt_text": "A PG common area"},
-    "social":          {"url": _photo("pgguru-social", 1200, 630),
-                        "alt_text": "PGuru - PG and hostel management"},
+    "logo": {"url": "/pgguru-logo.png", "alt_text": "PGuru"},
 }
 
 
