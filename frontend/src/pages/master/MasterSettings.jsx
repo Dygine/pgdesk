@@ -120,7 +120,7 @@ export default function MasterSettings() {
   if (settings.loading && !form) {
     return (
       <>
-        <PageHeader title="Platform settings" subtitle="Defaults applied to every tenant on PGDesk." />
+        <PageHeader title="Platform settings" subtitle="Defaults applied to every tenant on PGuru." />
         <div className="grid lg:grid-cols-2 gap-4">
           {[0, 1].map((i) => <Card key={i} className="p-5 space-y-3">
             <Skeleton className="h-10" /><Skeleton className="h-10" /><Skeleton className="h-10" />
@@ -149,7 +149,7 @@ export default function MasterSettings() {
   return (
     <>
       <PageHeader title="Platform settings"
-        subtitle="Defaults applied to every tenant on PGDesk."
+        subtitle="Defaults applied to every tenant on PGuru."
         actions={
           <Button variant="primary" disabled={!dirty || save.busy} loading={save.busy}
             onClick={() => save.run()}>

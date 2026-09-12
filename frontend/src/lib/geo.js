@@ -93,7 +93,7 @@ export async function currentPosition({ timeout = 15000, highAccuracy = true, ma
     if (raw.includes('denied') || raw.includes('permission')) {
       throw new LocationError(
         'denied',
-        'Location permission is off. Allow it for PGDesk, then try again.')
+        'Location permission is off. Allow it for PGuru, then try again.')
     }
     if (raw.includes('timeout') || raw.includes('timed out')) {
       throw new LocationError(

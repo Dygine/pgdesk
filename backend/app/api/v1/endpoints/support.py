@@ -565,4 +565,4 @@ def export_report(key: str, db: DbSession, scope: Tenant,
     return Response(
         content=service.to_csv(report), media_type="text/csv",
         headers={"Content-Disposition":
-                 f'attachment; filename="pgdesk-{key}-{date.today()}.csv"'})
+                 f'attachment; filename="pgguru-{key}-{date.today()}.csv"'})

@@ -332,11 +332,11 @@ def test_must_change_password_flag_is_reported_then_cleared(client, db):
 
 
 # ------------------------------------------------- lost replies (the app's case)
-NATIVE = {**CSRF, "X-PGDesk-Client": "native"}
+NATIVE = {**CSRF, "X-PGuru-Client": "native"}
 
 
 def native_login(client) -> str:
-    r = client.post("/api/v1/auth/login", headers={"X-PGDesk-Client": "native"},
+    r = client.post("/api/v1/auth/login", headers={"X-PGuru-Client": "native"},
                     json={"email": "owner@session.test", "password": PASSWORD})
     assert r.status_code == 200, r.text
     return r.json()["data"]["refresh_token"]

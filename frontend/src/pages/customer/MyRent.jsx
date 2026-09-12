@@ -194,8 +194,8 @@ export default function MyRent() {
 
   useEffect(() => {
     const onResume = () => reload()
-    window.addEventListener('pgdesk:resume', onResume)
-    return () => window.removeEventListener('pgdesk:resume', onResume)
+    window.addEventListener('pgguru:resume', onResume)
+    return () => window.removeEventListener('pgguru:resume', onResume)
   }, [reload])
 
   if (error) {

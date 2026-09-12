@@ -4,7 +4,7 @@
  * Every call here runs with `auth: false`: these endpoints are for people with
  * no staff or resident account, and a stale access token left in memory must
  * not change what a stranger sees. Seeker calls carry their own header instead
- * (`X-PGDesk-Seeker`), which nothing outside /public/seeker/* accepts.
+ * (`X-PGuru-Seeker`), which nothing outside /public/seeker/* accepts.
  */
 import { api, unwrap } from './client'
 import { readSeekerToken } from '@/lib/seekerSession'
@@ -13,7 +13,7 @@ const anon = { auth: false }
 
 async function asSeeker() {
   const token = await readSeekerToken()
-  return { auth: false, headers: token ? { 'X-PGDesk-Seeker': token } : {} }
+  return { auth: false, headers: token ? { 'X-PGuru-Seeker': token } : {} }
 }
 
 export const publicApi = {

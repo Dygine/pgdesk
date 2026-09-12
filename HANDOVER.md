@@ -1,9 +1,9 @@
-# PGDesk — complete handover
+# PGuru — complete handover
 
 Everything needed to run, build, deploy and debug this project. Written to be
 handed to someone (or something) with no prior context.
 
-Owner: **Dygine Software Solution**. Product: **PGDesk**, PG and hostel
+Owner: **Dygine Software Solution**. Product: **PGuru**, PG and hostel
 management for Indian operators.
 
 ---
@@ -25,7 +25,7 @@ see another's data. Three portals share one React bundle:
 ## 2. Where everything lives
 
 ```
-pgdesk/
+pgguru/
 ├── backend/          FastAPI + PostgreSQL. The brain.
 │   ├── app/
 │   │   ├── api/v1/endpoints/   14 route modules
@@ -51,7 +51,7 @@ pgdesk/
 │   ├── scripts/                build guard (checks API URL and app URL)
 │   └── .env.local              VITE_API_URL  (gitignored, must exist)
 │
-├── landing/          Static marketing page + pgdesk.apk download
+├── landing/          Static marketing page + pgguru.apk download
 └── scripts/          Windows setup helpers
 ```
 
@@ -64,12 +64,12 @@ thin — read request, call service, commit, shape the envelope.
 
 | Thing | Where | Notes |
 |---|---|---|
-| API | Render service `pgdesk-api` (Singapore) | `https://pgdesk-api.onrender.com` |
-| App | Render static site `pgdesk` | `https://pgdesk.dygine.com` |
-| Landing | Render static site `pgdesk-get` | `https://get.dygine.com` |
+| API | Render service `pgguru-api` (Singapore) | `https://pgguru-api.onrender.com` |
+| App | Render static site `pgguru` | `https://pgguru.in` |
+| Landing | Render static site `pgguru-get` | `https://get.dygine.com` |
 | Database | Neon PostgreSQL | |
 | Email | Brevo API | free tier, 300/day |
-| Repo | `github.com/Dygine/pgdesk` | push to `main` auto-deploys |
+| Repo | `github.com/Dygine/pgguru` | push to `main` auto-deploys |
 
 Deploy = `git push`. Render rebuilds both. Migrations run on API boot.
 
@@ -142,7 +142,7 @@ java -version
 
 ```powershell
 cd frontend
-Set-Content -Path .env.local -Value "VITE_API_URL=https://pgdesk-api.onrender.com/api/v1" -Encoding ascii
+Set-Content -Path .env.local -Value "VITE_API_URL=https://pgguru-api.onrender.com/api/v1" -Encoding ascii
 ```
 
 `-Encoding ascii`, not `utf8`. PowerShell 5.1's `utf8` writes a byte-order mark
@@ -161,7 +161,7 @@ npm run build:android
 **Stop and read the output.** You must see:
 
 ```
-  App opens  : https://pgdesk.dygine.com  (screens update with every website deploy)
+  App opens  : https://pgguru.in  (screens update with every website deploy)
 [info] Found 7 Capacitor plugins for android:
        @capacitor-mlkit/barcode-scanning@8.1.1
        @capacitor/app@8.1.1
@@ -197,7 +197,7 @@ cd ..
 adb install -r android\app\build\outputs\apk\debug\app-debug.apk
 
 cd ..
-Copy-Item frontend\android\app\build\outputs\apk\debug\app-debug.apk landing\pgdesk.apk
+Copy-Item frontend\android\app\build\outputs\apk\debug\app-debug.apk landing\pgguru.apk
 git add -A
 git commit -m "Rebuild APK"
 git push
@@ -206,7 +206,7 @@ git push
 ### Step 5 — verify on the phone
 
 - **Forgot password?** under the password field
-- **PG name** in the sidebar with "Powered by PGDesk" below
+- **PG name** in the sidebar with "Powered by PGuru" below
 - **Permission prompts** after sign-in: notifications → location → camera
 - **Gate → Scan with camera** actually opens the camera
 
@@ -223,7 +223,7 @@ to uninstall first. Set up signing before handing the APK to real PG owners.
 ## 6. Shipping updates - the app opens the live website
 
 **The APK does not contain the screens any more.** `capacitor.config.json` sets
-`server.url` to `https://pgdesk.dygine.com`, so the Android app opens the live
+`server.url` to `https://pgguru.in`, so the Android app opens the live
 website inside the app, exactly like a browser - with the camera, GPS,
 notifications and saved login still native.
 
@@ -236,7 +236,7 @@ git push
 ```
 
 Render rebuilds the site; the next time the app or a browser tab opens, it has
-the new version. A screen that was already open shows *"A new version of PGDesk
+the new version. A screen that was already open shows *"A new version of PGuru
 is ready - Reload"* (`src/lib/liveUpdate.js`, `UpdateBanner.jsx`). It never
 reloads by itself, because a reload mid-form loses what was typed.
 
@@ -248,7 +248,7 @@ the app's own files, and no installed app ever saw an update.)
 With no internet the app shows `public/offline.html`, the one page that lives
 inside the APK (`server.errorPath`); it retries when the connection returns.
 
-**Recommended once, on Render:** static site `pgdesk` → Settings → Headers →
+**Recommended once, on Render:** static site `pgguru` → Settings → Headers →
 path `/*`, header `Cache-Control`, value `no-cache`. Asset files are hashed, so
 this only makes the phone re-check `index.html` on each open (a cheap 304) and
 guarantees a fresh open never shows old screens.
@@ -271,11 +271,11 @@ will be running the new screens without that plugin.
 
 - **Needs internet.** It did before too - every screen reads the API - so the
   offline page replaces what was a broken screen, not a working one.
-- **The website controls the app.** Whoever can change pgdesk.dygine.com (the
+- **The website controls the app.** Whoever can change pgguru.in (the
   GitHub repo, the Render account, the dygine.com DNS) can change what runs in
   the app, native plugins included. Protect those accounts with 2FA.
 - Capacitor's docs call `server.url` "not intended for production", for those
-  two reasons and because Apple rejects plain website wrappers. PGDesk is
+  two reasons and because Apple rejects plain website wrappers. PGuru is
   Android-only and distributed as its own APK, so no store rule applies.
 
 ---
@@ -346,7 +346,7 @@ logcat as `"Preferences.then()" is not implemented on android`.
 
 ### The app shows the website, not a copy of it
 
-Since September 2026 the APK loads `https://pgdesk.dygine.com` (`server.url`).
+Since September 2026 the APK loads `https://pgguru.in` (`server.url`).
 If phones ever show old screens after a deploy, the cause is caching of
 `index.html`, not the APK - see §6 for the Render header. The old live-update
 plugin and its `notifyAppReady()` handshake are gone.
@@ -356,7 +356,7 @@ plugin and its `notifyAppReady()` handshake are gone.
 The WebView serves from `https://localhost` while the API is on another domain,
 so every call is cross-site and a `SameSite=Lax` cookie is never attached. On
 native, the refresh token is stored in Capacitor Preferences and sent in the
-request body. Signalled by the `X-PGDesk-Client: native` header, which also
+request body. Signalled by the `X-PGuru-Client: native` header, which also
 gives the session a 10-year lifetime instead of 14 days.
 
 ### Settings save payload is generated, not hand-written
@@ -372,7 +372,7 @@ round trips on one dropdown.
 
 Only an HTTP **401** from `/auth/refresh` means the saved login is gone. A
 network error, a timeout, a 5xx or a host error page means "try again" - the
-app keeps the token and shows *Connecting to PGDesk…* with automatic retry
+app keeps the token and shows *Connecting to PGuru…* with automatic retry
 (`SESSION` in `client.js`, `restoreSession` in `AuthContext.jsx`). It used to
 delete the token on any failure, which signed everyone out after every deploy.
 The server side is `AuthService._is_lost_reply`: a rotated token presented again
@@ -384,7 +384,7 @@ Do not "simplify" either back.
 ~15 minutes idle, then ~50 seconds to wake. The first person to open the app
 each morning stares at a splash screen. `/auth/refresh` has a 60-second timeout
 so it lands on the login screen rather than hanging forever, but the wait is
-real. **Upgrading the `pgdesk-api` service fixes this.**
+real. **Upgrading the `pgguru-api` service fixes this.**
 
 ### PowerShell
 
@@ -465,7 +465,7 @@ Off by default per branch. `Branches → Listing` turns it on, or the dashboard'
 | **KYC scans are small** | Up to 3 images per resident, 5 KB each, in the database (`resident_documents`). Name and ID number read fine; fine print (Aadhaar address) usually does not. Full-resolution scans would need object storage. |
 | **No frontend tests** | Build check only. |
 | **SMS / WhatsApp** | Structure exists, nothing sends. |
-| **Duplicate Render static site** | `pgdesk-get` and `pgdesk` both deployed. Confirm which is the landing page and which is the app. |
+| **Duplicate Render static site** | `pgguru-get` and `pgguru` both deployed. Confirm which is the landing page and which is the app. |
 | **One gate per branch** | Multiple entrances need a `gates` table. |
 
 ---
@@ -474,7 +474,7 @@ Off by default per branch. `Branches → Listing` turns it on, or the dashboard'
 
 | Role | Email | Password |
 |---|---|---|
-| Master admin | `master@pgdesk.local` | `Master@2024` |
+| Master admin | `master@pgguru.local` | `Master@2024` |
 | PG owner | `owner@sunrise.local` | `Owner@2024` |
 | Branch manager | `manager@sunrise.local` | `Manager@2024` |
 | Resident | `customer@sunrise.local` | `Customer@2024` |
@@ -492,8 +492,8 @@ Eight more staff accounts (`rahul@sunriselivingpg.com` and colleagues) use
 ```powershell
 adb devices
 adb logcat -c
-adb shell am force-stop in.kredo.pgdesk
-adb shell monkey -p in.kredo.pgdesk -c android.intent.category.LAUNCHER 1
+adb shell am force-stop in.kredo.pgguru
+adb shell monkey -p in.kredo.pgguru -c android.intent.category.LAUNCHER 1
 Start-Sleep -Seconds 20
 adb logcat -d > log.txt
 Select-String -Path log.txt -Pattern "Capacitor|Console|FATAL|not implemented"
@@ -509,7 +509,7 @@ defaults it on for debug builds, off for release, which is correct).
 
 ## 14. Next priorities
 
-1. **Upgrade Render `pgdesk-api`** — kills the cold start. Biggest user-visible win.
+1. **Upgrade Render `pgguru-api`** — kills the cold start. Biggest user-visible win.
 2. **Signing keystore + release build + ABI splits** — 30 MB → ~10 MB, and makes
    upgrades possible.
 3. **Verify `dygine.com` in Brevo** — real sender domain on password resets.
@@ -529,7 +529,7 @@ Full list in `CHANGELOG-2026-09.md`. What matters operationally:
 - **Razorpay is per PG, and the money goes to the PG.** Each owner pastes their
   own key id and key secret under Settings → Payments ("Check the keys work"
   calls Razorpay). The secret is write-only, like the Brevo key. For the webhook,
-  the owner adds `https://pgdesk-api.onrender.com/api/v1/payments/razorpay/webhook/<their org id>`
+  the owner adds `https://pgguru-api.onrender.com/api/v1/payments/razorpay/webhook/<their org id>`
   in Razorpay with events `payment.captured` and `payment.failed` - the exact
   URL is shown on the settings screen with a copy button.
 - **Only verified payments move a balance** - unchanged. Razorpay payments are

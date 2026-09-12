@@ -44,7 +44,7 @@ const PUBLIC_ROUTES = ['/login']
 const PORTALS = [
   {
     name: 'master',
-    email: 'master@pgdesk.local', password: 'Master@2024',
+    email: 'master@pgguru.local', password: 'Master@2024',
     routes: [
       '/master', '/master/organizations', '/master/organizations/new',
       '/master/subscriptions', '/master/usage', '/master/audit', '/master/settings',

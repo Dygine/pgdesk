@@ -144,7 +144,7 @@ export default function PaymentSetup() {
               Webhook (recommended) {f.has_webhook_secret && <span className="text-emerald-700 font-normal">· set</span>}
             </summary>
             <p className="text-xs text-slate-500 mt-2">
-              If a resident's phone dies mid-payment, Razorpay still tells PGDesk through this
+              If a resident's phone dies mid-payment, Razorpay still tells PGuru through this
               address. In Razorpay: Settings, Webhooks, add this URL with the events
               payment.captured and payment.failed, and paste the same secret here.
             </p>

@@ -1,4 +1,4 @@
-# PGDesk API — backend
+# PGuru API — backend
 
 Multi-tenant PG / hostel management API. FastAPI · PostgreSQL · SQLAlchemy 2.x · Alembic.
 
@@ -32,9 +32,9 @@ done* at the bottom.
 sudo -u postgres psql
 ```
 ```sql
-CREATE USER pgdesk WITH PASSWORD 'pgdesk' CREATEDB;
-CREATE DATABASE pgdesk      OWNER pgdesk;
-CREATE DATABASE pgdesk_test OWNER pgdesk;   -- the test suite uses its own database
+CREATE USER pgguru WITH PASSWORD 'pgguru' CREATEDB;
+CREATE DATABASE pgguru      OWNER pgguru;
+CREATE DATABASE pgguru_test OWNER pgguru;   -- the test suite uses its own database
 \q
 ```
 
@@ -102,7 +102,7 @@ authenticating as entirely the wrong account.
 
 | Role | Email | Password | Scope |
 |---|---|---|---|
-| Master Admin | `master@pgdesk.local` | `Master@2024` | Platform — no tenant data, 9 master permissions |
+| Master Admin | `master@pgguru.local` | `Master@2024` | Platform — no tenant data, 9 master permissions |
 | PG Owner | `owner@sunrise.local` | `Owner@2024` | Sunrise Living PG, all 3 branches, 87 permissions |
 | Branch Manager | `manager@sunrise.local` | `Manager@2024` | Koramangala + BTM, 55 permissions |
 | Resident | `customer@sunrise.local` | `Customer@2024` | Their own stay only, 0 module permissions |
@@ -110,7 +110,7 @@ authenticating as entirely the wrong account.
 
 The eight accounts the React demo already used still work on `demo1234`:
 `rahul@`, `priya@`, `deepak@`, `accounts@`, `reception@`, `security@`, `maintenance@`,
-`kitchen@` `sunriselivingpg.com`. `master@pgdesk.io` remains as an alias.
+`kitchen@` `sunriselivingpg.com`. `master@pgguru.in` remains as an alias.
 
 Two accounts exist specifically to prove the negative cases:
 
@@ -319,7 +319,7 @@ endpoints.
 **`DATABASE_URL must name the driver`** — use `postgresql+psycopg://`, not
 `postgresql://`. This project uses psycopg 3; psycopg2 is not installed.
 
-**`password authentication failed`** — the `pgdesk` role doesn't exist or has a
+**`password authentication failed`** — the `pgguru` role doesn't exist or has a
 different password. Re-run the `CREATE USER` above.
 
 **`Target database is not up to date`** — run `alembic upgrade head`.

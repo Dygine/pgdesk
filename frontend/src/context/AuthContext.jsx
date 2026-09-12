@@ -69,11 +69,11 @@ export function AuthProvider({ children }) {
     const timer = setTimeout(restoreSession, delay)
     const now = () => restoreSession()
     window.addEventListener('online', now)
-    window.addEventListener('pgdesk:resume', now)
+    window.addEventListener('pgguru:resume', now)
     return () => {
       clearTimeout(timer)
       window.removeEventListener('online', now)
-      window.removeEventListener('pgdesk:resume', now)
+      window.removeEventListener('pgguru:resume', now)
     }
   }, [status, attempts, restoreSession])
 

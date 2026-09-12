@@ -1,4 +1,4 @@
-# PGDesk — friendliness review
+# PGuru — friendliness review
 
 You asked me to make the tool less likely to draw client complaints and to
 "minimise" where possible. Here's what I did and what I recommend.
@@ -10,7 +10,7 @@ get.dygine.com — and that's exactly where "old app / can't download / confusin
 lives. So I fixed that end to end:
 
 - **Steered non-technical users to the zero-install path.** The web version
-  (pgdesk.dygine.com) needs no download, no "unknown sources", no sideloading — it
+  (pgguru.in) needs no download, no "unknown sources", no sideloading — it
   works on any phone including iPhone. The page now says so plainly and points to
   "Add to Home screen" for an app-style icon. Fewer clients get stuck in the
   sideload warnings, fewer support calls.

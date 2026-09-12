@@ -1,5 +1,5 @@
 """
-The text encoded in a PGDesk QR code.
+The text encoded in a PGuru QR code.
 
     PGD1:R:<token>    a resident's identity card, scanned by a guard
     PGD1:G:<token>    a gate's own code, scanned by a resident

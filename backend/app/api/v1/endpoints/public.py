@@ -175,7 +175,7 @@ def send_code(body: SendCodeRequest, request: Request, db: DbSession) -> dict:
     try:
         EmailService(db).send_otp(
             to=address, code=code, purpose_label="verifying your email address",
-            minutes=10, platform_name=platform.platform_name or "PGDesk")
+            minutes=10, platform_name=platform.platform_name or "PGuru")
     except EmailNotConfigured:
         db.commit()
         raise ServiceUnavailableError(

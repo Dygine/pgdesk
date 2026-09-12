@@ -30,7 +30,7 @@ from app.services.public_service import PublicService
 
 #: The header a seeker's app sends. Never `Authorization`, so a seeker token can
 #: never be mistaken for a staff or resident session by any other endpoint.
-SEEKER_HEADER = "X-PGDesk-Seeker"
+SEEKER_HEADER = "X-PGuru-Seeker"
 
 #: Long, because the device is personal and the token can only send enquiries.
 SESSION_DAYS = 180

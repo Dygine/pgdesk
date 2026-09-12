@@ -242,7 +242,7 @@ def test_razorpay(db: DbSession, scope: Tenant,
              summary="Razorpay webhook (called by Razorpay, not by people)")
 async def razorpay_webhook(organization_id: uuid.UUID, request: Request, db: DbSession) -> dict:
     """
-    Public on purpose - Razorpay has no PGDesk login. Authenticity comes from the
+    Public on purpose - Razorpay has no PGuru login. Authenticity comes from the
     X-Razorpay-Signature HMAC over the raw body, keyed with this PG's webhook
     secret; anything that fails it is refused before the body is even parsed.
     """

@@ -26,11 +26,11 @@ export function UpdateBanner() {
 
   useEffect(() => {
     const onVisible = () => { if (document.visibilityState === 'visible') check() }
-    window.addEventListener('pgdesk:resume', check)
+    window.addEventListener('pgguru:resume', check)
     document.addEventListener('visibilitychange', onVisible)
     const timer = setInterval(check, CHECK_EVERY_MS)
     return () => {
-      window.removeEventListener('pgdesk:resume', check)
+      window.removeEventListener('pgguru:resume', check)
       document.removeEventListener('visibilitychange', onVisible)
       clearInterval(timer)
     }
@@ -45,7 +45,7 @@ export function UpdateBanner() {
           <RefreshCw size={17} />
         </span>
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium text-slate-900">A new version of PGDesk is ready</p>
+          <p className="text-sm font-medium text-slate-900">A new version of PGuru is ready</p>
           <p className="text-xs text-slate-500">Reload to get the latest screens.</p>
         </div>
         <Button size="sm" variant="primary" onClick={reloadToLatest}>Reload</Button>

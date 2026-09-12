@@ -42,7 +42,7 @@ from app.models.platform import SINGLETON_ID
 from app.services.audit import AuditService
 from app.services.notification_service import NotificationService
 
-log = logging.getLogger("pgdesk.subscriptions")
+log = logging.getLogger("pgguru.subscriptions")
 
 
 @dataclass

@@ -27,12 +27,12 @@
  */
 import { Capacitor } from '@capacitor/core'
 
-const KEY = 'pgdesk.refresh'
+const KEY = 'pgguru.refresh'
 
 export const isNativeApp = () => Capacitor.isNativePlatform()
 
 /** Tells the API to issue a long session and hand the token back. */
-export const NATIVE_CLIENT_HEADER = 'X-PGDesk-Client'
+export const NATIVE_CLIENT_HEADER = 'X-PGuru-Client'
 
 /**
  * Never `return` a Capacitor plugin object from an `async` function.

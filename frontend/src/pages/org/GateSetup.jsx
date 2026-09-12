@@ -148,7 +148,7 @@ export function GateSetup({ branch, open, onClose, onSaved }) {
   <h2>Scan to mark your entry and exit</h2>
   <img src="${dataUrl}" alt="Gate QR code">
   <ol>
-    <li>Open PGDesk and go to <strong>Gate</strong>.</li>
+    <li>Open PGuru and go to <strong>Gate</strong>.</li>
     <li>Wait until it shows you are at the gate.</li>
     <li>Tap the scan button and point your camera here.</li>
   </ol>

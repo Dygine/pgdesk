@@ -50,7 +50,7 @@ function makeClient() {
     get token() { return accessToken },
     setToken(t) { accessToken = t },
     async call(method, pathname, body, { auth = true } = {}) {
-      const headers = { 'Content-Type': 'application/json', 'X-PGDesk-Auth': '1' }
+      const headers = { 'Content-Type': 'application/json', 'X-PGuru-Auth': '1' }
       if (auth && accessToken) headers.Authorization = `Bearer ${accessToken}`
       if (jar.size) {
         headers.Cookie = [...jar.entries()].map(([k, v]) => `${k}=${v}`).join('; ')
@@ -81,7 +81,7 @@ async function login(client, email, password) {
 }
 
 /* ---------------------------------------------------------------- server */
-const api = spawn(process.env.PGDESK_PYTHON || './.venv/bin/python', ['-m', 'uvicorn', 'app.main:app',
+const api = spawn(process.env.PGGURU_PYTHON || './.venv/bin/python', ['-m', 'uvicorn', 'app.main:app',
   '--host', '127.0.0.1', '--port', '8009', '--log-level', 'warning'],
   { cwd: BACKEND, env: { ...process.env } })
 
@@ -122,7 +122,7 @@ try {
   // ------------------------------------------------------------ 1. master
   section('1. Master admin')
   const master = makeClient()
-  const masterLogin = await login(master, 'master@pgdesk.local', 'Master@2024')
+  const masterLogin = await login(master, 'master@pgguru.local', 'Master@2024')
   check('master signs in', masterLogin.status === 200, `status ${masterLogin.status}`)
   if (masterLogin.status !== 200) {
     console.error('\nCannot continue without the seeded master account. Run: python seed.py')
@@ -130,7 +130,7 @@ try {
   }
   check('refresh token is NOT in the login body',
     !JSON.stringify(masterLogin.body).includes('refresh_token'))
-  check('refresh session cookie was set', masterLogin.cookies.has('pgdesk_refresh'))
+  check('refresh session cookie was set', masterLogin.cookies.has('pgguru_refresh'))
 
   const dashboard = await master.call('GET', '/master/dashboard')
   check('master dashboard loads', dashboard.status === 200)
@@ -144,7 +144,7 @@ try {
   const created = await master.call('POST', '/master/organizations', {
     name: `E2E PG ${unique}`,
     owner_name: 'E2E Owner',
-    owner_email: `owner.${unique}@e2e-pgdesk.com`,
+    owner_email: `owner.${unique}@e2e-pgguru.com`,
     plan_code: planCode,
     city: 'Bengaluru',
   })
@@ -164,7 +164,7 @@ try {
   // ------------------------------------------------------- 3. owner signs in
   section('3. PG owner')
   const owner = makeClient()
-  const ownerEmail = `owner.${unique}@e2e-pgdesk.com`
+  const ownerEmail = `owner.${unique}@e2e-pgguru.com`
   const ownerLogin = await login(owner, ownerEmail, tempPassword)
   check('new owner signs in with the temporary password', ownerLogin.status === 200,
     `status ${ownerLogin.status}`)
@@ -229,7 +229,7 @@ try {
   section('5. Resident admission')
   const resident = await owner.call('POST', '/residents', {
     first_name: 'Arjun', last_name: 'Rao', phone: `+9198${unique.slice(-8)}`,
-    email: `arjun.${unique}@e2e-pgdesk.com`, branch_id: branchId,
+    email: `arjun.${unique}@e2e-pgguru.com`, branch_id: branchId,
     // Portal access is opt-in, and the API issues the first password itself -
     // the caller does not choose it, exactly as for a new organisation owner.
     create_portal_login: true,
@@ -313,7 +313,7 @@ try {
   // ------------------------------------------------------ 8. resident portal
   section('8. Resident portal')
   const tenant = makeClient()
-  const tenantLogin = await login(tenant, `arjun.${unique}@e2e-pgdesk.com`, residentPassword)
+  const tenantLogin = await login(tenant, `arjun.${unique}@e2e-pgguru.com`, residentPassword)
   check('resident signs in', tenantLogin.status === 200, `status ${tenantLogin.status}`)
 
   if (tenantLogin.status === 200) {

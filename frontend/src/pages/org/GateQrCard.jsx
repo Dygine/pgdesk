@@ -78,7 +78,7 @@ export default function GateQrCard() {
         )}
 
       <Modal open={big} onClose={() => setBig(false)} size="md" title={current?.name}
-        subtitle="Scan with the PGDesk app to check in or out.">
+        subtitle="Scan with the PGuru app to check in or out.">
         {current?.gate_payload && (
           <div className="flex flex-col items-center gap-3 py-2">
             <QrCode value={current.gate_payload} size={300} alt={`Gate QR for ${current.name}`} />

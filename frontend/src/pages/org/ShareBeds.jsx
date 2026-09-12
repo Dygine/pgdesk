@@ -24,7 +24,7 @@ import {
 } from '@/components/ui'
 
 const SNOOZE_DAYS = 7
-const snoozeKey = (orgId) => `pgdesk.shareBeds.snoozed.${orgId || 'org'}`
+const snoozeKey = (orgId) => `pgguru.shareBeds.snoozed.${orgId || 'org'}`
 
 function snoozedRecently(orgId) {
   try {

@@ -431,8 +431,8 @@ def send_test_email(body: TestEmailRequest, db: DbSession, scope: Master,
     try:
         EmailService(db).send(
             to=body.to,
-            subject=f"{settings_row.platform_name or 'PGDesk'} test message",
-            body=("This is a test message from your PGDesk installation.\n\n"
+            subject=f"{settings_row.platform_name or 'PGuru'} test message",
+            body=("This is a test message from your PGuru installation.\n\n"
                   "If you are reading it, outgoing mail works: password resets "
                   "and verification codes will be delivered.\n"))
     except EmailNotConfigured as exc:

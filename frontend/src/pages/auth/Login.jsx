@@ -42,7 +42,7 @@ export default function Login() {
 
   /* Seeded by `backend/seed.py`. Development only — see SHOW_SEED_ACCOUNTS. */
   const DEMO_LOGINS = SHOW_SEED_ACCOUNTS ? [
-    { email: 'master@pgdesk.local', password: 'Master@2024', label: 'Master Admin',
+    { email: 'master@pgguru.local', password: 'Master@2024', label: 'Master Admin',
       sub: 'Platform owner \u00b7 all organisations' },
     { email: 'owner@sunrise.local', password: 'Owner@2024', label: 'PG Owner',
       sub: 'Sunrise Living PG \u00b7 all 3 branches' },
@@ -101,7 +101,7 @@ export default function Login() {
         <div className="flex items-center gap-3">
           <span className="h-10 w-10 rounded-xl bg-white text-brand-900 inline-flex items-center justify-center font-bold">P</span>
           <div>
-            <p className="font-semibold leading-tight">PGDesk</p>
+            <p className="font-semibold leading-tight">PGuru</p>
             <p className="text-xs text-brand-300">PG &amp; hostel operations</p>
           </div>
         </div>
@@ -141,14 +141,14 @@ export default function Login() {
         <div className="lg:hidden flex items-center gap-2.5 mb-8">
           <span className="h-9 w-9 rounded-lg bg-brand-800 text-white inline-flex items-center justify-center font-bold text-sm">P</span>
           <div>
-            <p className="font-semibold text-slate-900 leading-tight">PGDesk</p>
+            <p className="font-semibold text-slate-900 leading-tight">PGuru</p>
             <p className="text-xs text-slate-500">PG &amp; hostel operations</p>
           </div>
         </div>
 
         <div className="w-full max-w-sm mx-auto lg:mx-0">
           <h2 className="text-2xl font-semibold text-slate-900">Sign in</h2>
-          <p className="text-sm text-slate-500 mt-1.5">Sign in with your PGDesk account.</p>
+          <p className="text-sm text-slate-500 mt-1.5">Sign in with your PGuru account.</p>
 
           <form onSubmit={submit} className="mt-7 space-y-4">
             <FormField label="Email address" htmlFor="email" required>

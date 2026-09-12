@@ -34,9 +34,9 @@ def actors(db, client):
     org = make_org(db, "Sunrise PG")
     owner_role = make_role(db, org, "Owner", ["*"], all_branches=True, is_system=True)
     make_user(db, org, "owner@sunrise.test", role=owner_role)
-    make_user(db, None, "root@pgdesk.test", is_master=True)
+    make_user(db, None, "root@pgguru.test", is_master=True)
     db.commit()
-    return dict(master=login(client, "root@pgdesk.test"),
+    return dict(master=login(client, "root@pgguru.test"),
                 owner=login(client, "owner@sunrise.test"))
 
 

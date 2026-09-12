@@ -1,6 +1,6 @@
 {
-  "appId": "in.kredo.pgdesk",
-  "appName": "PGDesk",
+  "appId": "in.kredo.pgguru",
+  "appName": "PGuru",
   "webDir": "dist",
   "android": {
     "allowMixedContent": false,

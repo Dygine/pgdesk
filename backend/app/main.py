@@ -22,7 +22,7 @@ logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
     format="%(asctime)s %(levelname)-8s %(name)s: %(message)s",
 )
-logger = logging.getLogger("pgdesk")
+logger = logging.getLogger("pgguru")
 
 
 @asynccontextmanager
@@ -70,8 +70,8 @@ app.add_middleware(
     allow_origins=settings.cors_origin_list,     # never "*" - see config.assert_production_safe
     allow_credentials=True,
     allow_methods=["GET", "POST", "PATCH", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-PGDesk-Auth",
-                   "X-PGDesk-Client", "X-PGDesk-Seeker"],
+    allow_headers=["Authorization", "Content-Type", "X-Request-ID", "X-PGuru-Auth",
+                   "X-PGuru-Client", "X-PGuru-Seeker"],
     expose_headers=["X-Request-ID"],
 )
 
@@ -87,5 +87,5 @@ def root() -> dict:
     return {
         "success": True,
         "data": {"name": settings.project_name, "version": "0.1.0", "docs": "/docs"},
-        "message": "PGDesk API",
+        "message": "PGuru API",
     }

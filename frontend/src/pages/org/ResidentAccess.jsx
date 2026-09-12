@@ -84,7 +84,7 @@ export function PortalAccessCard({ resident: r, onChanged }) {
 
   return (
     <Card>
-      <CardHeader title="App access" subtitle="How this resident signs in to the PGDesk app"
+      <CardHeader title="App access" subtitle="How this resident signs in to the PGuru app"
         action={<StatusBadge status={state.label} tone={state.tone} dot />} />
       <div className="px-5 py-4 space-y-1">
         <p className="text-sm text-slate-600">{state.text}</p>

@@ -77,7 +77,7 @@ export async function scanNative() {
   if (permission !== 'granted' && permission !== 'limited') {
     throw new ScannerError(
       'denied',
-      'Camera permission is off. Allow the camera for PGDesk in your phone '
+      'Camera permission is off. Allow the camera for PGuru in your phone '
       + 'settings, then try again.')
   }
 
@@ -150,7 +150,7 @@ export async function startWebCamera(videoEl) {
 /**
  * Decode one frame. Returns the string or null.
  *
- * `dontInvert` because a PGDesk code is always dark on light: allowing jsQR to
+ * `dontInvert` because a PGuru code is always dark on light: allowing jsQR to
  * try inverted costs a second pass over every frame for a case that cannot
  * occur, and the frame budget is what decides whether scanning feels instant.
  */

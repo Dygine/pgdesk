@@ -39,7 +39,7 @@ from sqlalchemy.orm import Session
 from app.models import OtpCode
 from app.models.otp import OtpPurpose
 
-log = logging.getLogger("pgdesk.otp")
+log = logging.getLogger("pgguru.otp")
 
 CODE_LENGTH = 6
 CODE_TTL_MINUTES = 10

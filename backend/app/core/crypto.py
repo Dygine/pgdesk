@@ -42,7 +42,7 @@ from app.core.config import settings
 #: Distinguishes this key from any other future use of SECRET_KEY. Without a
 #: label, two features deriving "a key" from the same secret would get the same
 #: key, and a ciphertext from one would decrypt in the other.
-_LABEL = b"pgdesk.secretbox.v1"
+_LABEL = b"pgguru.secretbox.v1"
 
 
 def _key() -> bytes:

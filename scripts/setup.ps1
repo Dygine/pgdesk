@@ -2,12 +2,12 @@
 <#
   Run once per machine. Safe to re-run: every step checks before acting.
 
-  Assumes PostgreSQL is installed and the pgdesk role/databases exist:
+  Assumes PostgreSQL is installed and the pgguru role/databases exist:
 
       psql -U postgres
-      CREATE USER pgdesk WITH PASSWORD 'pgdesk' CREATEDB;
-      CREATE DATABASE pgdesk OWNER pgdesk;
-      CREATE DATABASE pgdesk_test OWNER pgdesk;
+      CREATE USER pgguru WITH PASSWORD 'pgguru' CREATEDB;
+      CREATE DATABASE pgguru OWNER pgguru;
+      CREATE DATABASE pgguru_test OWNER pgguru;
 #>
 
 $ErrorActionPreference = 'Stop'
@@ -30,7 +30,7 @@ function Fail($text) {
 }
 
 Write-Host ''
-Write-Host '  PGDesk first-time setup' -ForegroundColor Cyan
+Write-Host '  PGuru first-time setup' -ForegroundColor Cyan
 Write-Host '  =======================' -ForegroundColor Cyan
 
 # --- 1. python -------------------------------------------------------------
@@ -88,14 +88,14 @@ if (Test-Path $envPath) {
 Step 5 'CORS header check'
 $mainPath = Join-Path $Backend 'app\main.py'
 $main     = Get-Content $mainPath -Raw
-if ($main -match 'X-PGDesk-Auth') {
-    Write-Host '      allow_headers already includes X-PGDesk-Auth.'
+if ($main -match 'X-PGuru-Auth') {
+    Write-Host '      allow_headers already includes X-PGuru-Auth.'
 } else {
     $main = $main -replace `
         '(allow_headers=\[[^\]]*)"X-Request-ID"\]', `
-        '$1"X-Request-ID", "X-PGDesk-Auth"]'
+        '$1"X-Request-ID", "X-PGuru-Auth"]'
     Set-Content $mainPath $main -NoNewline
-    Write-Host '      Added X-PGDesk-Auth to allow_headers.' -ForegroundColor Green
+    Write-Host '      Added X-PGuru-Auth to allow_headers.' -ForegroundColor Green
     Write-Host '      Without it the browser blocks every API call, including login.' -ForegroundColor DarkGray
 }
 
@@ -105,7 +105,7 @@ Push-Location $Backend
 & $VenvPy -m alembic upgrade head
 if ($LASTEXITCODE -ne 0) {
     Pop-Location
-    Fail 'alembic failed. Is PostgreSQL running, and does backend\.env match your pgdesk password?'
+    Fail 'alembic failed. Is PostgreSQL running, and does backend\.env match your pgguru password?'
 }
 Pop-Location
 
@@ -129,5 +129,5 @@ Pop-Location
 
 Write-Host ''
 Write-Host '  Setup complete.' -ForegroundColor Green
-Write-Host '  Now press Ctrl+Shift+B, or Ctrl+Shift+P then "Tasks: Run Task" -> PGDesk: Start All'
+Write-Host '  Now press Ctrl+Shift+B, or Ctrl+Shift+P then "Tasks: Run Task" -> PGuru: Start All'
 Write-Host ''

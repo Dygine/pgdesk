@@ -38,7 +38,7 @@ from app.services.email_service import (
 from app.services.otp_service import OtpService, normalise_email
 from app.services.platform_settings_service import PlatformSettingsService
 
-log = logging.getLogger("pgdesk.password_reset")
+log = logging.getLogger("pgguru.password_reset")
 
 #: Said to everyone, whether or not the address is known. Deliberately phrased
 #: as a condition rather than a claim - "we sent you an email" would be a lie
@@ -98,7 +98,7 @@ class PasswordResetService:
         try:
             self.mail.send_otp(
                 to=address, code=code, purpose_label="resetting your password",
-                minutes=10, platform_name=platform.platform_name or "PGDesk")
+                minutes=10, platform_name=platform.platform_name or "PGuru")
         except EmailNotConfigured:
             # Worth a loud log: an operator who has not configured SMTP has a
             # reset flow that silently does nothing, and nobody will report it

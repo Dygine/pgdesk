@@ -14,7 +14,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import settings
 
-logger = logging.getLogger("pgdesk")
+logger = logging.getLogger("pgguru")
 
 
 class AppError(Exception):

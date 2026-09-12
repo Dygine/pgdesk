@@ -2,20 +2,20 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "PGDesk: Start All",
+      "label": "PGuru: Start All",
       "detail": "Backend + Frontend + browser. This is the one you want.",
       "dependsOrder": "parallel",
       "dependsOn": [
-        "pgdesk:backend",
-        "pgdesk:frontend",
-        "pgdesk:open-browser"
+        "pgguru:backend",
+        "pgguru:frontend",
+        "pgguru:open-browser"
       ],
       "group": { "kind": "build", "isDefault": true },
       "problemMatcher": []
     },
 
     {
-      "label": "PGDesk: First-time Setup",
+      "label": "PGuru: First-time Setup",
       "detail": "venv, pip install, .env, CORS patch, migrations, seed, npm install. Run once per machine.",
       "type": "shell",
       "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${workspaceFolder}/scripts/setup.ps1\"",
@@ -25,7 +25,7 @@
     },
 
     {
-      "label": "PGDesk: Stop All",
+      "label": "PGuru: Stop All",
       "detail": "Frees ports 8000 and 5173 after a crash.",
       "type": "shell",
       "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${workspaceFolder}/scripts/stop.ps1\"",
@@ -35,7 +35,7 @@
     },
 
     {
-      "label": "PGDesk: Reseed Database",
+      "label": "PGuru: Reseed Database",
       "detail": "alembic upgrade head, then seed.py --reset",
       "type": "shell",
       "command": "& .\\.venv\\Scripts\\python.exe -m alembic upgrade head; & .\\.venv\\Scripts\\python.exe seed.py --reset",
@@ -45,8 +45,8 @@
     },
 
     {
-      "label": "PGDesk: Backend Tests",
-      "detail": "The full pytest suite (needs the pgdesk_test database).",
+      "label": "PGuru: Backend Tests",
+      "detail": "The full pytest suite (needs the pgguru_test database).",
       "type": "shell",
       "command": "& .\\.venv\\Scripts\\python.exe -m pytest",
       "options": { "cwd": "${workspaceFolder}/backend" },
@@ -56,7 +56,7 @@
     },
 
     {
-      "label": "PGDesk: Frontend Build",
+      "label": "PGuru: Frontend Build",
       "detail": "vite build - doubles as the import/static check.",
       "type": "shell",
       "command": "npm run build",
@@ -66,7 +66,7 @@
     },
 
     {
-      "label": "pgdesk:backend",
+      "label": "pgguru:backend",
       "hide": true,
       "type": "shell",
       "command": "& .\\.venv\\Scripts\\python.exe -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8000",
@@ -74,7 +74,7 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "pgdesk",
+        "group": "pgguru",
         "clear": true,
         "focus": false
       },
@@ -82,7 +82,7 @@
     },
 
     {
-      "label": "pgdesk:frontend",
+      "label": "pgguru:frontend",
       "hide": true,
       "type": "shell",
       "command": "npm run dev",
@@ -90,7 +90,7 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "pgdesk",
+        "group": "pgguru",
         "clear": true,
         "focus": false
       },
@@ -98,7 +98,7 @@
     },
 
     {
-      "label": "pgdesk:open-browser",
+      "label": "pgguru:open-browser",
       "hide": true,
       "type": "shell",
       "command": "powershell -NoProfile -ExecutionPolicy Bypass -File \"${workspaceFolder}/scripts/open-when-ready.ps1\"",
@@ -106,7 +106,7 @@
       "presentation": {
         "reveal": "always",
         "panel": "dedicated",
-        "group": "pgdesk",
+        "group": "pgguru",
         "clear": true,
         "focus": true
       },

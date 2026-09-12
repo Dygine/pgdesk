@@ -4,7 +4,7 @@
  * Everything here is a no-op on the web, so it can be imported unconditionally
  * from main.jsx and there is no second code path to keep in sync.
  *
- * Scope is deliberately small. PGDesk is a web application in a WebView; the
+ * Scope is deliberately small. PGuru is a web application in a WebView; the
  * only native concerns are the ones a WebView genuinely cannot express:
  * the hardware back button, the status bar, and the keyboard.
  */
@@ -66,6 +66,6 @@ export async function initNative(router) {
     // Coming back from the background after a while, the 30-minute access token
     // is usually stale. Nudging the app to revalidate here means the user sees
     // fresh data rather than a burst of 401-then-retry on their first tap.
-    window.dispatchEvent(new CustomEvent('pgdesk:resume'))
+    window.dispatchEvent(new CustomEvent('pgguru:resume'))
   })
 }

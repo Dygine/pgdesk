@@ -78,7 +78,7 @@ export function ListingSetup({ branch, open, onClose, onSaved }) {
 
       <InlineAlert tone={f.listed_publicly ? 'warn' : 'info'}
         title={f.listed_publicly ? 'This branch is public' : 'What becomes public'}>
-        Anyone searching PGDesk sees the name, area, starting rent, amenities,
+        Anyone searching PGuru sees the name, area, starting rent, amenities,
         which kinds of room have a free bed and the phone number you enter here.
         Availability shows only as a rough
         band — “a few beds”, never an exact count — so nobody can track your

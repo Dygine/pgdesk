@@ -49,7 +49,7 @@ export default function MasterDashboard() {
   return (
     <>
       <PageHeader title="Platform dashboard"
-        subtitle="Every PG on PGDesk, their subscriptions and what they are running."
+        subtitle="Every PG on PGuru, their subscriptions and what they are running."
         actions={<>
           <Button icon={RefreshCw} onClick={runSweep}>Recompute expiry</Button>
           <Link to="/master/organizations/new">

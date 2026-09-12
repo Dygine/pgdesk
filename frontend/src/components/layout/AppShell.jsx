@@ -54,18 +54,17 @@ function Brand({ compact, theme = PORTAL_THEME.org }) {
   // sidebar footer has been showing it all along - so this is a relabel, not a
   // new lookup.
   //
-  // Master admins keep "PGDesk": that portal is the platform, not a tenant, and
+  // Master admins keep "PGuru": that portal is the platform, not a tenant, and
   // borrowing a customer's name there would be confusing rather than friendly.
   const { org, role } = useAuth() || {}
   const isMaster = role === 'master' || !org?.name
-  const title = isMaster ? 'PGDesk' : org.name
-  const subtitle = isMaster ? 'PG & hostel operations' : 'Powered by PGDesk'
-  const initial = (title || 'P').trim().charAt(0).toUpperCase()
-
+  const title = isMaster ? 'PGuru' : org.name
+  const subtitle = isMaster ? 'PG & hostel operations' : 'Powered by PGuru'
   return (
     <div className="flex items-center gap-2.5 min-w-0">
-      <span className={cx('h-8 w-8 rounded-lg text-white inline-flex items-center justify-center shrink-0 font-bold text-sm', theme.chip)}>
-        {initial}
+      {/* PGuru mark (house + guru) on a white chip so it stays legible on any sidebar colour */}
+      <span className="h-8 w-8 rounded-lg bg-white inline-flex items-center justify-center shrink-0 overflow-hidden ring-1 ring-black/5">
+        <img src="/pgguru-icon.png" alt="PGuru" className="h-7 w-7 object-contain" />
       </span>
       {!compact && (
         <span className="min-w-0">
@@ -267,8 +266,8 @@ function NotificationBell() {
     load()
     const timer = setInterval(load, NOTIFICATION_POLL_MS)
     const onResume = () => load()
-    window.addEventListener('pgdesk:resume', onResume)
-    return () => { clearInterval(timer); window.removeEventListener('pgdesk:resume', onResume) }
+    window.addEventListener('pgguru:resume', onResume)
+    return () => { clearInterval(timer); window.removeEventListener('pgguru:resume', onResume) }
   }, [load])
 
   // Reading one is optimistic: the badge should drop the instant it is clicked,
@@ -635,7 +634,7 @@ export function AppShell({ navGroups, bottomItems, children, banner, showBranchS
               {(org?.name || 'P').trim().charAt(0).toUpperCase()}
             </span>
             <span className="text-sm font-semibold text-slate-900 truncate">
-              {org?.name || 'PGDesk'}
+              {org?.name || 'PGuru'}
             </span>
           </Link>
           {showSearch && <div className="hidden md:flex flex-1 min-w-0"><GlobalSearch /></div>}

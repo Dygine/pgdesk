@@ -269,7 +269,7 @@ export default function Staff() {
             <Input value={f.id_proof_reference || ''} onChange={set('id_proof_reference')} />
           </FormField>
           {can('users.view') && (
-            <FormField label="App login" hint="Only if this person also signs in to PGDesk.">
+            <FormField label="App login" hint="Only if this person also signs in to PGuru.">
               <Select value={f.user_id || ''} onChange={set('user_id')}>
                 <option value="">No login</option>
                 {(logins.data?.items || []).map((u) =>

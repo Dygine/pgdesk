@@ -179,7 +179,7 @@ def test_a_master_admin_has_no_tenant_to_search(db, client, world):
     Search is a tenant operation. A master admin holds no organisation scope, so
     the endpoint refuses rather than quietly searching everything.
     """
-    make_user(db, None, "root@pgdesk.test", is_master=True)
+    make_user(db, None, "root@pgguru.test", is_master=True)
     db.commit()
-    token = login(client, "root@pgdesk.test")
+    token = login(client, "root@pgguru.test")
     assert search(client, token, "Kumar").status_code == 403

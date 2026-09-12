@@ -1,7 +1,7 @@
 """
 Sending email.
 
-Until now nothing in PGDesk sent a message anywhere - the notification service
+Until now nothing in PGuru sent a message anywhere - the notification service
 wrote rows to a table and the settings screen honestly reported email as "not
 configured". This is the part that actually delivers.
 
@@ -37,7 +37,7 @@ from app.core.crypto import decrypt
 from app.models import PlatformSettings
 from app.models.platform import SINGLETON_ID
 
-log = logging.getLogger("pgdesk.email")
+log = logging.getLogger("pgguru.email")
 
 #: Long enough for a slow relay, short enough that a dead host does not hold a
 #: web worker open. A user waiting 10 seconds for "check your email" is already
@@ -101,7 +101,7 @@ def _from_environment() -> MailConfig | None:
         username=os.getenv("SMTP_USERNAME") or None,
         password=os.getenv("SMTP_PASSWORD") or None,
         from_email=sender,
-        from_name=os.getenv("SMTP_FROM_NAME") or "PGDesk",
+        from_name=os.getenv("SMTP_FROM_NAME") or "PGuru",
         use_tls=(os.getenv("SMTP_USE_TLS", "true").lower() != "false"),
         use_ssl=(os.getenv("SMTP_USE_SSL", "false").lower() == "true"),
         source="environment",
@@ -120,7 +120,7 @@ def _from_database(db: Session) -> MailConfig | None:
         username=row.smtp_username or None,
         password=decrypt(row.smtp_password_encrypted),
         from_email=row.smtp_from_email,
-        from_name=row.smtp_from_name or (row.platform_name or "PGDesk"),
+        from_name=row.smtp_from_name or (row.platform_name or "PGuru"),
         use_tls=bool(row.smtp_use_tls),
         use_ssl=bool(row.smtp_use_ssl),
         source="platform settings",
@@ -133,7 +133,7 @@ def _brevo_from_environment() -> BrevoConfig | None:
     if not (key and sender):
         return None
     return BrevoConfig(api_key=key, from_email=sender,
-                       from_name=os.getenv("BREVO_SENDER_NAME") or "PGDesk",
+                       from_name=os.getenv("BREVO_SENDER_NAME") or "PGuru",
                        source="environment")
 
 
@@ -148,7 +148,7 @@ def _brevo_from_database(db: Session) -> BrevoConfig | None:
         return None
     return BrevoConfig(
         api_key=key, from_email=row.brevo_sender_email,
-        from_name=row.brevo_sender_name or (row.platform_name or "PGDesk"),
+        from_name=row.brevo_sender_name or (row.platform_name or "PGuru"),
         source="platform settings")
 
 
@@ -306,7 +306,7 @@ class EmailService:
 
     # ------------------------------------------------------------ templates
     def send_otp(self, *, to: str, code: str, purpose_label: str,
-                 minutes: int, platform_name: str = "PGDesk") -> None:
+                 minutes: int, platform_name: str = "PGuru") -> None:
         """
         The one-time code mail.
 

@@ -1,7 +1,7 @@
-# PGDesk on Android
+# PGuru on Android
 
 > **How the app loads (since September 2026):** the APK opens
-> https://pgdesk.dygine.com (`capacitor.config.json` → `server.url`). Screens
+> https://pgguru.in (`capacitor.config.json` → `server.url`). Screens
 > update with every website deploy; rebuild the APK only for native changes.
 > Any older notes below about live-update bundles are superseded - see HANDOVER.md §6.
 
@@ -17,8 +17,8 @@ React / Vite  ──▶  dist/  ──▶  Capacitor  ──▶  Android WebView
 
 | | |
 |---|---|
-| Application ID | `in.kredo.pgdesk` |
-| App name | PGDesk |
+| Application ID | `in.kredo.pgguru` |
+| App name | PGuru |
 | minSdk / targetSdk | 24 (Android 7.0) / 36 |
 | Permissions | `INTERNET` only |
 | Project path | `frontend/android` |
@@ -84,7 +84,7 @@ http, and the session cookie will not survive (see below).
 This is the part that bites, so it is worth understanding rather than
 copy-pasting.
 
-PGDesk keeps the refresh token in an **HttpOnly, Secure cookie** scoped to
+PGuru keeps the refresh token in an **HttpOnly, Secure cookie** scoped to
 `/api/v1/auth`. That is the correct design: script on the page cannot read the
 long-lived credential.
 
@@ -120,7 +120,7 @@ production on purpose — a token in the body is readable by anything that can
 hook `fetch`. A WebView still runs your JavaScript, so that risk is real here
 too. Keeping the cookie HttpOnly and allowing it natively is the safer trade.
 
-The `X-PGDesk-Auth` CSRF header works unchanged: `https://localhost` is a normal
+The `X-PGuru-Auth` CSRF header works unchanged: `https://localhost` is a normal
 origin subject to preflight, which is exactly the property the header relies on.
 
 ---
@@ -176,16 +176,16 @@ Create a keystore once, and keep it somewhere backed up — losing it means you
 can never update the app on Play:
 
 ```bash
-keytool -genkey -v -keystore pgdesk-release.jks \
-        -keyalg RSA -keysize 2048 -validity 10000 -alias pgdesk
+keytool -genkey -v -keystore pgguru-release.jks \
+        -keyalg RSA -keysize 2048 -validity 10000 -alias pgguru
 ```
 
 Then either create `frontend/android/keystore.properties` (gitignored):
 
 ```properties
-storeFile=C:/keys/pgdesk-release.jks
+storeFile=C:/keys/pgguru-release.jks
 storePassword=...
-keyAlias=pgdesk
+keyAlias=pgguru
 keyPassword=...
 ```
 
@@ -193,7 +193,7 @@ or, for CI, set environment variables instead — the Gradle config checks the
 file first and falls back to them:
 
 ```
-PGDESK_KEYSTORE, PGDESK_KEYSTORE_PASSWORD, PGDESK_KEY_ALIAS, PGDESK_KEY_PASSWORD
+PGGURU_KEYSTORE, PGGURU_KEYSTORE_PASSWORD, PGGURU_KEY_ALIAS, PGGURU_KEY_PASSWORD
 ```
 
 If neither is present the release build still runs and produces an **unsigned**
@@ -212,7 +212,7 @@ clone builds without secrets.
 | Status bar | Light icons on the brand slate background, not overlaying the WebView |
 | Keyboard | Sets `--kb-height` and `.kb-open`, so the fixed bottom nav hides instead of covering the focused field |
 | Safe areas | `viewport-fit=cover` plus the existing `.safe-b` (`env(safe-area-inset-bottom)`) |
-| App resume | Emits `pgdesk:resume` so screens can revalidate a stale 30-minute token |
+| App resume | Emits `pgguru:resume` so screens can revalidate a stale 30-minute token |
 | Network errors | Already handled — `client.js` raises `NetworkError` with a human message |
 
 Nothing else is native. No camera, storage, location or push — the app requests
@@ -234,7 +234,7 @@ Check `REFRESH_COOKIE_SAMESITE=none`, `REFRESH_COOKIE_SECURE=true`,
 the `setAcceptThirdPartyCookies` call.
 
 **CORS errors in `chrome://inspect`** — add `https://localhost` to
-`CORS_ORIGINS` and confirm `allow_headers` includes `X-PGDesk-Auth`.
+`CORS_ORIGINS` and confirm `allow_headers` includes `X-PGuru-Auth`.
 
 **Cannot reach the API at all** — you built without `VITE_API_URL`, or with an
 http one. The app should have told you at startup; check logcat.

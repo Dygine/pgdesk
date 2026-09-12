@@ -1,10 +1,10 @@
-# PGDesk — multi-tenant PG & hostel management
+# PGuru — multi-tenant PG & hostel management
 
 A SaaS platform for Indian paying-guest and hostel operators. Four portals,
 one responsive React application, a FastAPI backend, PostgreSQL underneath.
 
 **One deploy updates everything.** The website and the Android app run the
-same screens: the APK opens https://pgdesk.dygine.com inside the app (see
+same screens: the APK opens https://pgguru.in inside the app (see
 [The Android app](#the-android-app)), so a `git push` updates both.
 
 **The frontend talks to the API for everything.** There is no browser demo store:
@@ -54,7 +54,7 @@ Full detail in [`CHANGELOG-2026-09.md`](CHANGELOG-2026-09.md); operations notes 
 ## The Android app
 
 The APK is a thin shell: `frontend/capacitor.config.json` sets `server.url` to
-`https://pgdesk.dygine.com`, so the app shows the live website, while the
+`https://pgguru.in`, so the app shows the live website, while the
 camera, GPS, notifications and the saved login stay native.
 
 | You change | What to do |
@@ -62,7 +62,7 @@ camera, GPS, notifications and the saved login stay native.
 | Screens, features, fixes, API | `git push` - Render deploys, the app shows it on next open |
 | A new native plugin or Android permission, the icon or name, the website address | Build and share a new APK (HANDOVER §5) |
 
-An already-open screen offers "A new version of PGDesk is ready - Reload". With
+An already-open screen offers "A new version of PGuru is ready - Reload". With
 no internet the app shows `public/offline.html` and retries by itself.
 
 ---
@@ -111,8 +111,8 @@ including one from another tenant.
 ### 1. PostgreSQL
 
 ```bash
-createdb pgdesk
-createdb pgdesk_test          # the suite runs against a separate database
+createdb pgguru
+createdb pgguru_test          # the suite runs against a separate database
 ```
 
 ### 2. Backend
@@ -175,7 +175,7 @@ client calls `/auth/refresh`, which the cookie authenticates, so the session
 survives without anything durable on disk.
 
 **CSRF.** A cookie is attached by the browser whether or not the page asked for
-it, so cookie-authenticated calls require the `X-PGDesk-Auth` header as a second
+it, so cookie-authenticated calls require the `X-PGuru-Auth` header as a second
 factor. A cross-site `<form>` post cannot set a custom header, and a
 cross-origin `fetch` that sets one must pass a preflight that is only answered
 for the origins in `CORS_ORIGINS`.
@@ -435,7 +435,7 @@ Never set it in production: these are working credentials.
 
 | Piece | Production form |
 |---|---|
-| Frontend | `npm run build` -> static files on any CDN or web server (Render static site `pgdesk`) |
+| Frontend | `npm run build` -> static files on any CDN or web server (Render static site `pgguru`) |
 | Android app | APK that opens the live site (`server.url`); rebuilt only for native changes |
 | Backend | `uvicorn app.main:app` behind a process manager, multiple workers |
 | Database | Managed PostgreSQL 16, migrations applied by `alembic upgrade head` |

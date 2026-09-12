@@ -20,7 +20,7 @@ guarantee that must never slip within reach of the least trusted account type.
 
 Instead a seeker session is a separate, deliberately weak credential:
 
-  - its own table and its own header (`X-PGDesk-Seeker`), never `Authorization`
+  - its own table and its own header (`X-PGuru-Seeker`), never `Authorization`
   - accepted only by `/public/seeker/*`; nothing else in the API reads it
   - it can do exactly three things: read listings, send enquiries, and read the
     seeker's own enquiries back

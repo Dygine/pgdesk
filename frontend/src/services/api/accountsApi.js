@@ -15,7 +15,7 @@ export const accountsApi = {
     const blob = await res.blob()
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
-    link.download = `pgdesk-profit-and-loss-${params.from_date || ''}-${params.to_date || ''}.csv`
+    link.download = `pgguru-profit-and-loss-${params.from_date || ''}-${params.to_date || ''}.csv`
     link.click()
     URL.revokeObjectURL(link.href)
   },

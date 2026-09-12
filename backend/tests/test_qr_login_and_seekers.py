@@ -229,7 +229,7 @@ def test_a_seeker_signs_up_once_and_enquires_without_new_codes(client, db, liste
     assert r.status_code == 200, r.text
     data = r.json()["data"]
     assert data["created"] is True
-    h = {"X-PGDesk-Seeker": data["token"]}
+    h = {"X-PGuru-Seeker": data["token"]}
 
     assert client.get(f"{API}/public/seeker/me", headers=h).json()["data"]["full_name"] == "Neha Rao"
     for _ in range(2):
@@ -250,7 +250,7 @@ def test_a_seeker_signs_up_once_and_enquires_without_new_codes(client, db, liste
 def test_seeker_endpoints_need_a_session(client):
     assert client.get(f"{API}/public/seeker/me").status_code == 401
     assert client.get(f"{API}/public/seeker/me",
-                      headers={"X-PGDesk-Seeker": "not-a-token"}).status_code == 401
+                      headers={"X-PGuru-Seeker": "not-a-token"}).status_code == 401
 
 
 def test_listings_show_room_types_as_bands_never_counts(client, listed):

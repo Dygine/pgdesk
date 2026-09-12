@@ -21,7 +21,7 @@ import { Card, Button, InlineAlert } from '@/components/ui'
  * Shown once, tracked in Preferences. Native only - a browser prompts at the
  * moment of use and has no equivalent of a permanent denial.
  */
-const STORAGE_KEY = 'pgdesk.permissions.asked'
+const STORAGE_KEY = 'pgguru.permissions.asked'
 
 const ITEMS = [
   {

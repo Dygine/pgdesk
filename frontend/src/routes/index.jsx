@@ -103,7 +103,7 @@ function SessionLoading() {
           </>
         ) : (
           <>
-            <p className="text-base font-semibold text-slate-900">Connecting to PGDesk…</p>
+            <p className="text-base font-semibold text-slate-900">Connecting to PGuru…</p>
             <p className="text-sm text-slate-600 leading-relaxed">
               The server is starting up or your internet dropped. If you were signed in,
               you stay signed in - this screen continues by itself once it connects.

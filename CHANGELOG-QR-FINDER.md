@@ -78,7 +78,7 @@ this device a fresh pair. `current_password` is optional only while
   - Cards show the room types with a free bed and their "from" rent, plus Call,
     WhatsApp, Directions and Enquire.
 - **Seeker accounts**: name, phone and an emailed code, with no password. The
-  session is a separate low-power token (`X-PGDesk-Seeker`) accepted only by
+  session is a separate low-power token (`X-PGuru-Seeker`) accepted only by
   `/public/seeker/*`, never tenant data. Enquiries are one tap (15 a day cap),
   and **My enquiries** shows each PG's status.
 - **Owner notifications**: every new enquiry now pings the bell of staff with
@@ -96,9 +96,9 @@ current page is not one of the tabs.
 
 317 pass (301 existing + 16 in `tests/test_qr_login_and_seekers.py`). Locally
 they need both of these set, or `conftest.py` also rewrites the DB *user* to
-`pgdesk_test`, and Secure cookies never reach the http test client:
+`pgguru_test`, and Secure cookies never reach the http test client:
 
 ```
-TEST_DATABASE_URL=postgresql+psycopg://pgdesk:pgdesk@localhost:5432/pgdesk_test
+TEST_DATABASE_URL=postgresql+psycopg://pgguru:pgguru@localhost:5432/pgguru_test
 REFRESH_COOKIE_SECURE=false
 ```

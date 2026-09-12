@@ -33,7 +33,7 @@ from urllib import error as urlerror, parse as urlparse, request as urlrequest
 
 from app.core.config import settings
 
-log = logging.getLogger("pgdesk.geocode")
+log = logging.getLogger("pgguru.geocode")
 
 #: Seconds to wait for the geocoder. Short: a seeker is watching a spinner.
 TIMEOUT = 6

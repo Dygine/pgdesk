@@ -16,10 +16,10 @@ if (keystorePropsFile.exists()) {
     keystoreProps.load(new FileInputStream(keystorePropsFile))
 }
 
-def storeFilePath = keystoreProps['storeFile'] ?: System.getenv('PGDESK_KEYSTORE')
-def storePassword_ = keystoreProps['storePassword'] ?: System.getenv('PGDESK_KEYSTORE_PASSWORD')
-def keyAlias_      = keystoreProps['keyAlias'] ?: System.getenv('PGDESK_KEY_ALIAS')
-def keyPassword_   = keystoreProps['keyPassword'] ?: System.getenv('PGDESK_KEY_PASSWORD')
+def storeFilePath = keystoreProps['storeFile'] ?: System.getenv('PGGURU_KEYSTORE')
+def storePassword_ = keystoreProps['storePassword'] ?: System.getenv('PGGURU_KEYSTORE_PASSWORD')
+def keyAlias_      = keystoreProps['keyAlias'] ?: System.getenv('PGGURU_KEY_ALIAS')
+def keyPassword_   = keystoreProps['keyPassword'] ?: System.getenv('PGGURU_KEY_PASSWORD')
 def hasSigning     = storeFilePath != null && file(storeFilePath).exists()
 
 apply plugin: 'com.android.application'
@@ -28,20 +28,20 @@ apply plugin: 'com.android.application'
 // the update manifest and the APK together. Three hand-edited numbers is three
 // chances to ship an APK that reports the wrong version to the update check.
 def pkg = new groovy.json.JsonSlurper().parseText(file("../../package.json").text)
-def pgdeskVersion = pkg.version
+def pgguruVersion = pkg.version
 // versionCode must be a monotonically increasing integer, so 1.2.3 -> 10203.
-def parts = pgdeskVersion.tokenize('.')
-def pgdeskVersionCode = (parts[0] as int) * 10000 + (parts[1] as int) * 100 + (parts[2] as int)
+def parts = pgguruVersion.tokenize('.')
+def pgguruVersionCode = (parts[0] as int) * 10000 + (parts[1] as int) * 100 + (parts[2] as int)
 
 android {
-    namespace = "in.kredo.pgdesk"
+    namespace = "in.kredo.pgguru"
     compileSdk = rootProject.ext.compileSdkVersion
     defaultConfig {
-        applicationId "in.kredo.pgdesk"
+        applicationId "in.kredo.pgguru"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
-        versionCode pgdeskVersionCode
-        versionName pgdeskVersion
+        versionCode pgguruVersionCode
+        versionName pgguruVersion
         testInstrumentationRunner "androidx.test.runner.AndroidJUnitRunner"
         aaptOptions {
              // Files and dirs to omit from the packaged assets dir, modified to accommodate modern web apps.

@@ -2,7 +2,7 @@
  * Keeping every screen on the latest version.
  *
  * The Android app no longer carries its own copy of the screens. It opens
- * https://pgdesk.dygine.com inside the app (capacitor.config.json, server.url),
+ * https://pgguru.in inside the app (capacitor.config.json, server.url),
  * exactly like a browser does. So deploying the website IS the update, for the
  * browser and the app alike: git push, Render rebuilds the site, and the next
  * time anything loads, it gets the new version. There is no bundle to publish,

@@ -17,7 +17,7 @@ from app.core.config import settings
 from app.core.database import Base, get_db
 from app.main import app
 
-TEST_URL = settings.test_database_url or settings.database_url.replace("/pgdesk", "/pgdesk_test")
+TEST_URL = settings.test_database_url or settings.database_url.replace("/pgguru", "/pgguru_test")
 
 engine = create_engine(TEST_URL, poolclass=None)
 TestSession = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False)

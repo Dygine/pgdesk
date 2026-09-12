@@ -15,14 +15,14 @@ class Settings(BaseSettings):
     )
 
     # --- application ---
-    project_name: str = "PGDesk API"
+    project_name: str = "PGuru API"
     api_v1_prefix: str = "/api/v1"
     environment: Literal["development", "staging", "production"] = "development"
     debug: bool = True
 
     # --- database ---
     database_url: str = Field(
-        default="postgresql+psycopg://pgdesk:pgdesk@localhost:5432/pgdesk",
+        default="postgresql+psycopg://pgguru:pgguru@localhost:5432/pgguru",
         description="SQLAlchemy URL. Must name the psycopg (v3) driver explicitly.",
     )
     test_database_url: str | None = None
@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     # The cookie is scoped to the auth path, so it is not attached to the
     # hundred-odd other API calls the app makes - a token that is never sent is
     # a token that cannot leak from a log or a proxy.
-    refresh_cookie_name: str = "pgdesk_refresh"
+    refresh_cookie_name: str = "pgguru_refresh"
     refresh_cookie_path: str = "/api/v1/auth"
     refresh_cookie_secure: bool = True
     refresh_cookie_samesite: Literal["lax", "strict", "none"] = "lax"
@@ -69,7 +69,7 @@ class Settings(BaseSettings):
     # at a self-hosted or paid Nominatim when traffic grows; set it empty to
     # switch area search off (the text search keeps working).
     geocoder_url: str = "https://nominatim.openstreetmap.org"
-    geocoder_user_agent: str = "PGDesk/1.0 (PG finder; https://get.dygine.com)"
+    geocoder_user_agent: str = "PGuru/1.0 (PG finder; https://get.dygine.com)"
 
     # --- development conveniences ---
     demo_password: str = "demo1234"

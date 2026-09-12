@@ -11,7 +11,7 @@
  */
 import { Capacitor } from '@capacitor/core'
 
-const KEY = 'pgdesk.seeker'
+const KEY = 'pgguru.seeker'
 
 // Never return the plugin object from an async function - see nativeSession.js.
 const loadPreferences = () => import('@capacitor/preferences')

@@ -102,7 +102,7 @@ class PlatformSettings(Base, UUIDPrimaryKey, Timestamps):
 
     # --- platform identity ---
     platform_name: Mapped[str] = mapped_column(
-        String(80), nullable=False, default="PGDesk")
+        String(80), nullable=False, default="PGuru")
     support_email: Mapped[str | None] = mapped_column(String(255))
 
     extra: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)

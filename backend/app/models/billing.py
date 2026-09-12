@@ -205,7 +205,7 @@ class PaymentSettings(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
     by design - Razorpay Checkout needs it in the browser.
 
     Money paid through Razorpay lands in the PG owner's own Razorpay account.
-    PGDesk never holds it.
+    PGuru never holds it.
     """
 
     __tablename__ = "payment_settings"

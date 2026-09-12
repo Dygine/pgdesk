@@ -21,7 +21,7 @@ export const reportApi = {
     const blob = await res.blob()
     const link = document.createElement('a')
     link.href = URL.createObjectURL(blob)
-    link.download = `pgdesk-${key}.csv`
+    link.download = `pgguru-${key}.csv`
     link.click()
     URL.revokeObjectURL(link.href)
   },

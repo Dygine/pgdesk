@@ -32,4 +32,4 @@ def export_profit_and_loss(db: DbSession, scope: Tenant,
     return Response(
         content=service.to_csv(report), media_type="text/csv",
         headers={"Content-Disposition":
-                 f'attachment; filename="pgdesk-pnl-{report["from_date"]}-{report["to_date"]}.csv"'})
+                 f'attachment; filename="pgguru-pnl-{report["from_date"]}-{report["to_date"]}.csv"'})

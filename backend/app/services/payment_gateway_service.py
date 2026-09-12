@@ -18,7 +18,7 @@ bank statement. Only a verified payment moves an invoice balance; that rule
 predates this module and it is not relaxed here.
 
 Money paid through Razorpay goes to the PG owner's own Razorpay account.
-PGDesk never touches it and never sees card or UPI details.
+PGuru never touches it and never sees card or UPI details.
 """
 from __future__ import annotations
 

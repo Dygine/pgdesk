@@ -123,7 +123,7 @@ export function SmtpCard({ form, onChange, onSaved, dirty = false }) {
                 hint="What residents see the message came from.">
                 <Input value={form.brevo_sender_name || ''}
                   onChange={onChange('brevo_sender_name')}
-                  placeholder={form.platform_name || 'PGDesk'} disabled={fromEnv} />
+                  placeholder={form.platform_name || 'PGuru'} disabled={fromEnv} />
               </FormField>
             </div>
 
@@ -193,7 +193,7 @@ export function SmtpCard({ form, onChange, onSaved, dirty = false }) {
           </FormField>
           <FormField label="From name">
             <Input value={form.smtp_from_name || ''} onChange={onChange('smtp_from_name')}
-              placeholder={form.platform_name || 'PGDesk'} disabled={fromEnv} />
+              placeholder={form.platform_name || 'PGuru'} disabled={fromEnv} />
           </FormField>
         </div>
 

@@ -31,9 +31,9 @@ def _ip(request: Request) -> str | None:
 
 
 def current_seeker(db: DbSession,
-                   x_pgdesk_seeker: Annotated[str | None, Header()] = None) -> PgSeeker:
-    """The seeker behind `X-PGDesk-Seeker`, or a 401 the app answers with sign-in."""
-    return SeekerService(db).resolve(x_pgdesk_seeker)
+                   x_pgguru_seeker: Annotated[str | None, Header()] = None) -> PgSeeker:
+    """The seeker behind `X-PGuru-Seeker`, or a 401 the app answers with sign-in."""
+    return SeekerService(db).resolve(x_pgguru_seeker)
 
 
 CurrentSeeker = Annotated[PgSeeker, Depends(current_seeker)]
@@ -77,8 +77,8 @@ def start_session(body: SessionRequest, request: Request, db: DbSession) -> dict
 
 
 @router.post("/logout", summary="Sign out on this device")
-def logout(db: DbSession, x_pgdesk_seeker: Annotated[str | None, Header()] = None) -> dict:
-    SeekerService(db).logout(x_pgdesk_seeker)
+def logout(db: DbSession, x_pgguru_seeker: Annotated[str | None, Header()] = None) -> dict:
+    SeekerService(db).logout(x_pgguru_seeker)
     db.commit()
     return ok(None, message="Signed out.")
 

@@ -60,7 +60,7 @@ export function ScannerModal({
         if (value === null) { onClose?.(); return }
         if (filter && !looksLikeOurs(value)) {
           setError(new ScannerError(
-            'foreign', 'That is not a PGDesk code. Scan the code on the card '
+            'foreign', 'That is not a PGuru code. Scan the code on the card '
             + 'or at the gate.'))
           return
         }
@@ -187,8 +187,8 @@ export function ScannerModal({
               <p className="text-xs text-slate-500 mt-3 text-center">{hint}</p>
               {ignored && (
                 <p className="text-2xs text-amber-600 mt-1 text-center">
-                  A code was read but it is not a PGDesk one. Keep looking for
-                  the PGDesk code.
+                  A code was read but it is not a PGuru one. Keep looking for
+                  the PGuru code.
                 </p>
               )}
             </>

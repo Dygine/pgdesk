@@ -11,7 +11,7 @@ import uuid
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.requests import Request
 
-logger = logging.getLogger("pgdesk.request")
+logger = logging.getLogger("pgguru.request")
 
 
 class RequestContextMiddleware(BaseHTTPMiddleware):

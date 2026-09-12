@@ -7,7 +7,7 @@ at the gate gets recorded.
 
 ## Read this first: the APK in `landing/` is stale
 
-`landing/pgdesk.apk` is the **previous** build. It predates everything below, so
+`landing/pgguru.apk` is the **previous** build. It predates everything below, so
 it has no camera scanning and no self check-in — installing it and finding no
 camera would look like this work failed.
 

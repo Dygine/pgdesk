@@ -82,7 +82,7 @@ try { appUrl = new URL(JSON.parse(fs.readFileSync('capacitor.config.json', 'utf8
 catch { appUrl = null }
 if (!appUrl || appUrl.protocol !== 'https:') {
   console.error('\n  Android build refused.\n\n  capacitor.config.json needs server.url set to the live site over https,\n' +
-    '  e.g. "server": { "url": "https://pgdesk.dygine.com", "errorPath": "offline.html" }\n')
+    '  e.g. "server": { "url": "https://pgguru.in", "errorPath": "offline.html" }\n')
   process.exit(1)
 }
 console.log(`  App opens  : ${appUrl.origin}  (screens update with every website deploy)`)

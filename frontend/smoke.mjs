@@ -42,7 +42,7 @@ const ROUTES = {
              '/me/visitors','/me/gate-pass','/me/queries','/me/announcements','/me/profile'],
 }
 const CREDS = {
-  master:   ['master@pgdesk.local',   'Master@2024'],
+  master:   ['master@pgguru.local',   'Master@2024'],
   org:      ['owner@sunrise.local',   'Owner@2024'],
   customer: ['customer@sunrise.local','Customer@2024'],
 }
@@ -64,7 +64,7 @@ const errors = []
 const noise = []
 page.on('pageerror', (e) => errors.push(`[PAGEERROR] ${page.url().replace(BASE,'')} :: ${e.message}`))
 /* Third-party resource failures (a blocked webfont CDN, for instance) say
-   nothing about whether PGDesk works. They are still recorded and printed, but
+   nothing about whether PGuru works. They are still recorded and printed, but
    a route is only judged failing on a real JS exception or an error raised by
    our own code. Without this every route reports ERR on any network where
    fonts.googleapis.com is unreachable. */

@@ -4,9 +4,9 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <meta name="theme-color" content="#1B1E4D" />
-  <title>PGDesk - no connection</title>
+  <title>PGuru - no connection</title>
   <!--
-    Shown by the Android app when it cannot load https://pgdesk.dygine.com
+    Shown by the Android app when it cannot load https://pgguru.in
     (capacitor.config.json -> server.errorPath). It is the one page that lives
     inside the APK, so it must work with no network: no scripts from anywhere
     else, no fonts, no images. Capacitor plugins are not available here.
@@ -31,14 +31,14 @@
   <main>
     <div class="box">
       <span class="mark">P</span>
-      <h1>No connection to PGDesk</h1>
+      <h1>No connection to PGuru</h1>
       <p>Check your mobile data or Wi-Fi. You are still signed in &mdash; nothing is lost.</p>
       <button type="button" id="retry">Try again</button>
       <small>Trying again automatically when your connection is back.</small>
     </div>
   </main>
   <script>
-    var APP = 'https://pgdesk.dygine.com/';
+    var APP = 'https://pgguru.in/';
     function go() { window.location.replace(APP); }
     document.getElementById('retry').addEventListener('click', go);
     window.addEventListener('online', go);

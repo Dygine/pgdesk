@@ -100,7 +100,7 @@ export default function CreateOrgWizard() {
   const download = () => {
     const c = created.owner
     const body = [
-      'PGDesk — owner credentials', '',
+      'PGuru — owner credentials', '',
       `Organisation : ${created.organization.name}`,
       `Owner        : ${c.name}`,
       `Email        : ${c.email}`,
@@ -111,7 +111,7 @@ export default function CreateOrgWizard() {
     const url = URL.createObjectURL(new Blob([body], { type: 'text/plain' }))
     const a = document.createElement('a')
     a.href = url
-    a.download = `pgdesk-owner-${created.organization.slug}.txt`
+    a.download = `pgguru-owner-${created.organization.slug}.txt`
     a.click()
     URL.revokeObjectURL(url)
   }

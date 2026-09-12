@@ -26,7 +26,7 @@ from tests.conftest import TEST_URL
 
 #: Sacrificial database, dropped and recreated for this module alone so a failed
 #: run can never leave a half-migrated schema behind for the next one.
-SCRATCH = f"pgdesk_mig_{uuid.uuid4().hex[:8]}"
+SCRATCH = f"pgguru_mig_{uuid.uuid4().hex[:8]}"
 
 
 def _admin_engine():

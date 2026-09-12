@@ -51,7 +51,7 @@ const waDigits = (phone) => {
   return d.length === 10 ? `91${d}` : d
 }
 const whatsappUrl = (pg) => `https://wa.me/${waDigits(pg.contact_phone)}?text=${
-  encodeURIComponent(`Hi, I found ${titleOf(pg)} on PGDesk. Is a bed available?`)}`
+  encodeURIComponent(`Hi, I found ${titleOf(pg)} on PGuru. Is a bed available?`)}`
 const mapsUrl = (pg) => (pg.latitude != null && pg.longitude != null
   ? `https://www.google.com/maps/dir/?api=1&destination=${pg.latitude},${pg.longitude}`
   : `https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(

@@ -43,7 +43,7 @@ if (Capacitor.isNativePlatform()) {
   const url = CONFIGURED || ''
   if (!url || /(^|\/\/)(localhost|127\.0\.0\.1|10\.0\.2\.2)/.test(url)) {
     throw new Error(
-      'PGDesk was built without a reachable VITE_API_URL. On a device, ' +
+      'PGuru was built without a reachable VITE_API_URL. On a device, ' +
       'localhost is the phone itself. Rebuild with the real API origin: ' +
       'VITE_API_URL=https://api.<your-domain>/api/v1 npm run build:android',
     )
@@ -52,7 +52,7 @@ if (Capacitor.isNativePlatform()) {
     // The refresh cookie is Secure; over http it is never sent and the session
     // dies at the first refresh. Better to say so now than to debug it later.
     throw new Error(
-      'PGDesk on Android requires an https API origin. The refresh cookie is ' +
+      'PGuru on Android requires an https API origin. The refresh cookie is ' +
       'Secure + SameSite=None and will not be sent over http.',
     )
   }
@@ -61,7 +61,7 @@ if (Capacitor.isNativePlatform()) {
 const BASE_URL = CONFIGURED || FALLBACK
 
 /** Header proving the request came from our own front end — the CSRF factor. */
-const CSRF_HEADER = 'X-PGDesk-Auth'
+const CSRF_HEADER = 'X-PGuru-Auth'
 
 /* --------------------------------------------------------- native sessions */
 import {

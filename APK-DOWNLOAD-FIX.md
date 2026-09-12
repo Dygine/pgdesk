@@ -2,8 +2,8 @@
 
 Short version:
 
-1. The `pgdesk.apk` currently served at **get.dygine.com** is the **old
-   self-contained build**. It does **not** load pgdesk.dygine.com, so it shows old
+1. The `pgguru.apk` currently served at **get.dygine.com** is the **old
+   self-contained build**. It does **not** load pgguru.in, so it shows old
    screens and can never update itself. That is why every device gets the old app,
    no matter how many times you re-download.
 2. The **"29.54 MB → 30 MB" jump is not a bug.** Same file, two units.
@@ -16,7 +16,7 @@ Short version:
 ## 1. The APK on the download page is the old build (this is the real problem)
 
 An `.apk` is just a ZIP. Inside it, `assets/capacitor.config.json` decides how the
-app behaves. The file currently in `landing/pgdesk.apk` contains:
+app behaves. The file currently in `landing/pgguru.apk` contains:
 
 ```json
 "server": { "androidScheme": "https" },          // ← no "url"
@@ -34,24 +34,24 @@ The **current source** (`frontend/capacitor.config.json`) is already the new
 thin-wrapper build:
 
 ```json
-"server": { "url": "https://pgdesk.dygine.com", "errorPath": "offline.html", "cleartext": false }
+"server": { "url": "https://pgguru.in", "errorPath": "offline.html", "cleartext": false }
 // and no CapacitorUpdater block
 ```
 
 So the **code** was migrated to the thin wrapper, but the **APK on the download
 page was never rebuilt from it.** Your mental model ("open the app → it loads
-pgdesk.dygine.com → deploys update it automatically") is correct — but only for a
+pgguru.in → deploys update it automatically") is correct — but only for a
 device running a *new* APK. The one on get.dygine.com is still the old one.
 
 ### Verify which build any `.apk` is (don't take my word for it)
 
 ```powershell
-Expand-Archive .\landing\pgdesk.apk -DestinationPath $env:TEMP\apkcheck -Force
+Expand-Archive .\landing\pgguru.apk -DestinationPath $env:TEMP\apkcheck -Force
 Get-Content $env:TEMP\apkcheck\assets\capacitor.config.json
 Remove-Item $env:TEMP\apkcheck -Recurse -Force
 ```
 
-- **New build** → shows `"url": "https://pgdesk.dygine.com"`, **no** `CapacitorUpdater`.
+- **New build** → shows `"url": "https://pgguru.in"`, **no** `CapacitorUpdater`.
 - **Old build** → no `url`, `CapacitorUpdater` present. ← what's there now.
 
 ---
@@ -87,12 +87,12 @@ cd android
 
 ```powershell
 # release build:
-Copy-Item app\build\outputs\apk\release\app-release.apk ..\..\landing\pgdesk.apk
+Copy-Item app\build\outputs\apk\release\app-release.apk ..\..\landing\pgguru.apk
 # (debug build path is app\build\outputs\apk\debug\app-debug.apk)
 ```
 
 **3. Verify it is the NEW build** using the snippet in section 1 — you must see
-`pgdesk.dygine.com` and **no** `CapacitorUpdater`. Also confirm no demo
+`pgguru.in` and **no** `CapacitorUpdater`. Also confirm no demo
 credentials leaked (the `Owner@2024` check already in `landing/README.md`).
 
 **4. Bump the cache-buster.** In `landing/index.html`, near the bottom, change:
@@ -105,11 +105,11 @@ This makes the browser treat the new file as a new URL instead of serving the ol
 cached one.
 
 **5. Set the CDN cache header once** (so Render's CDN also stops serving the stale
-file). Render → the `pgdesk-get` static site → **Settings → Headers → Add header**:
+file). Render → the `pgguru-get` static site → **Settings → Headers → Add header**:
 
 | Field | Value |
 |---|---|
-| Path | `/pgdesk.apk` |
+| Path | `/pgguru.apk` |
 | Name | `Cache-Control` |
 | Value | `no-cache, must-revalidate` |
 

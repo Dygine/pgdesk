@@ -2,7 +2,7 @@
 """
 Daily subscription sweep. Run from cron.
 
-    0 2 * * *  cd /srv/pgdesk/backend && python expire_subscriptions.py
+    0 2 * * *  cd /srv/pgguru/backend && python expire_subscriptions.py
 
 Idempotent, so a double run or a retry after a failed deploy changes nothing the
 second time. `--dry-run` reports what would happen without writing, which is the

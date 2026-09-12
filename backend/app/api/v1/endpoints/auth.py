@@ -46,7 +46,7 @@ CurrentPrincipal = Annotated[Principal, Depends(get_current_principal)]
 #: cross-site and a SameSite=Lax cookie is never attached - the session would
 #: die thirty minutes after login with no visible cause. Handing the token to
 #: the app to keep in its own private storage sidesteps the cookie entirely.
-NATIVE_CLIENT_HEADER = "X-PGDesk-Client"
+NATIVE_CLIENT_HEADER = "X-PGuru-Client"
 
 
 def _is_native(request: Request) -> bool:

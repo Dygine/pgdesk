@@ -263,8 +263,8 @@ def upsert_master_admin(db: Session) -> User:
     exactly how the React AuthContext resolves them too.
     """
     made = []
-    for email, name in (("master@pgdesk.local", "Platform Admin"),
-                        ("master@pgdesk.io", "Platform Admin (legacy alias)")):
+    for email, name in (("master@pgguru.local", "Platform Admin"),
+                        ("master@pgguru.in", "Platform Admin (legacy alias)")):
         user = db.scalar(select(User).where(User.email == email, User.organization_id.is_(None)))
         if user is None:
             user = User(
@@ -750,7 +750,7 @@ def reset(db: Session) -> None:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Seed the PGDesk development database.")
+    parser = argparse.ArgumentParser(description="Seed the PGuru development database.")
     parser.add_argument("--reset", action="store_true", help="delete seeded tenant data first")
     args = parser.parse_args()
 
@@ -819,7 +819,7 @@ def main() -> int:
 ------------------------------------------------------------------
  DEVELOPMENT DEMO ACCOUNTS - fictional, never use in production
 ------------------------------------------------------------------
- Master Admin   master@pgdesk.local      {master}
+ Master Admin   master@pgguru.local      {master}
  PG Owner       owner@sunrise.local      {owner}
  Branch Manager manager@sunrise.local    {manager}
  Resident       customer@sunrise.local   {customer}

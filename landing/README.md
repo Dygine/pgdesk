@@ -1,7 +1,7 @@
-# PGDesk landing + APK download
+# PGuru landing + APK download
 
-> **⚠ The `pgdesk.apk` in this folder is the OLD self-contained build.**
-> It has no `server.url`, so it does **not** open pgdesk.dygine.com — it runs its
+> **⚠ The `pgguru.apk` in this folder is the OLD self-contained build.**
+> It has no `server.url`, so it does **not** open pgguru.in — it runs its
 > own stale bundled screens and can never update itself. Anyone who downloads it
 > gets the old app, on every device. **Rebuild it (see below) and replace this
 > file before relying on the download.** Full story + how to verify any `.apk`:
@@ -17,19 +17,19 @@ Deployed as its own Render **Static Site** from this same repository.
 
 ## The APK
 
-`pgdesk.apk` must sit in this folder, next to `index.html`.
+`pgguru.apk` must sit in this folder, next to `index.html`.
 
 Copy it from your build output and rename it:
 
 ```powershell
-Copy-Item frontend\android\app\build\outputs\apk\debug\app-debug.apk landing\pgdesk.apk
+Copy-Item frontend\android\app\build\outputs\apk\debug\app-debug.apk landing\pgguru.apk
 ```
 
 **Verify it is the clean build before committing.** A build made with
 `VITE_SHOW_SEED_ACCOUNTS=true` ships working demo credentials inside the APK:
 
 ```powershell
-Expand-Archive landing\pgdesk.apk -DestinationPath $env:TEMP\apkcheck -Force
+Expand-Archive landing\pgguru.apk -DestinationPath $env:TEMP\apkcheck -Force
 Select-String -Path $env:TEMP\apkcheck\assets\public\assets\*.js -Pattern "Owner@2024" -SimpleMatch
 ```
 
@@ -40,7 +40,7 @@ before you push.
 
 Both are hardcoded in `index.html`:
 
-- the web app URL, `https://pgdesk.dygine.com`, in two places
+- the web app URL, `https://pgguru.in`, in two places
 - the version string `v1.0` under the download button
 
 ## Note on repository size
@@ -62,12 +62,12 @@ cd frontend
 npm install
 npm run build:android          # vite build + cap sync android
 cd android && ./gradlew assembleRelease
-cp app/build/outputs/apk/release/app-release.apk ../../landing/pgdesk.apk
+cp app/build/outputs/apk/release/app-release.apk ../../landing/pgguru.apk
 ```
 
 ## Updates
 
-The app opens https://pgdesk.dygine.com inside itself, so deploying the
+The app opens https://pgguru.in inside itself, so deploying the
 website updates the app too - `git push` and you are done. A new APK is only
 needed for native changes (a plugin, a permission, the icon or name) or a new
 website address. See HANDOVER.md §6.
@@ -77,12 +77,12 @@ website address. See HANDOVER.md §6.
 An `.apk` is a ZIP. What matters is `assets/capacitor.config.json` inside it:
 
 ```powershell
-Expand-Archive .\landing\pgdesk.apk -DestinationPath $env:TEMP\apkcheck -Force
+Expand-Archive .\landing\pgguru.apk -DestinationPath $env:TEMP\apkcheck -Force
 Get-Content $env:TEMP\apkcheck\assets\capacitor.config.json
 Remove-Item $env:TEMP\apkcheck -Recurse -Force
 ```
 
-- **New (correct) build** - shows `"url": "https://pgdesk.dygine.com"` and has **no**
+- **New (correct) build** - shows `"url": "https://pgguru.in"` and has **no**
   `CapacitorUpdater` block.
 - **Old build** - no `url`, and a `"CapacitorUpdater"` block is present.
 
@@ -92,7 +92,7 @@ size to the old one. Judge by the config, not the megabytes.
 
 ## Making a new APK actually reach phones (cache)
 
-`pgdesk.apk` is served from the same URL every release, so browsers and the CDN
+`pgguru.apk` is served from the same URL every release, so browsers and the CDN
 keep handing out the previously cached copy - this is why a "new" download can
 still install the old app. Two things fix it:
 
@@ -100,9 +100,9 @@ still install the old app. Two things fix it:
    download link, so a new upload looks like a new URL. **Bump `APK_VERSION`**
    (near the bottom of `index.html`) to that day's date every time you replace
    the APK.
-2. **CDN cache - set once.** On Render, open the `pgdesk-get` static site →
+2. **CDN cache - set once.** On Render, open the `pgguru-get` static site →
    **Settings → Headers → Add header**:
-   - Path: `/pgdesk.apk`
+   - Path: `/pgguru.apk`
    - Name: `Cache-Control`
    - Value: `no-cache, must-revalidate`
 

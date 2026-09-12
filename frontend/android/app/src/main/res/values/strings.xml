@@ -1,7 +1,7 @@
 <?xml version='1.0' encoding='utf-8'?>
 <resources>
-    <string name="app_name">PGDesk</string>
-    <string name="title_activity_main">PGDesk</string>
-    <string name="package_name">in.kredo.pgdesk</string>
-    <string name="custom_url_scheme">in.kredo.pgdesk</string>
+    <string name="app_name">PGuru</string>
+    <string name="title_activity_main">PGuru</string>
+    <string name="package_name">in.kredo.pgguru</string>
+    <string name="custom_url_scheme">in.kredo.pgguru</string>
 </resources>

@@ -207,7 +207,7 @@ export default function MyScan() {
               </Button>
 
               <p className="text-2xs text-slate-500 text-center">
-                Point your camera at the PGDesk code displayed at the gate.
+                Point your camera at the PGuru code displayed at the gate.
               </p>
 
               {/* --- outcome --------------------------------------------- */}

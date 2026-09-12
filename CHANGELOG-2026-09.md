@@ -1,7 +1,7 @@
 # September 2026 update
 
 Twelve requests, all shipped, plus one sign-in fix (below). Backend: 332 tests pass
-(317 before + 12 in `backend/tests/test_pgdesk_updates.py` + 3 in `test_auth_session.py`
+(317 before + 12 in `backend/tests/test_pgguru_updates.py` + 3 in `test_auth_session.py`
 + 8 in `test_resident_documents.py`) - 340 in all. One migration: `0013_staff_notice_menu_pay`.
 **One new APK, once** - it now opens the live website, so everything after
 ships with `git push` alone (see the last section and HANDOVER §6).
@@ -51,7 +51,7 @@ free Render server waking up) triggers:
    token is dead" and removed it from the phone. Now only a real 401 from the
    server removes it; everything else keeps it.
 2. **"Can't reach the server" looked like "not signed in".** The app showed the
-   sign-in form. Now it shows *Connecting to PGDesk…* and retries by itself
+   sign-in form. Now it shows *Connecting to PGuru…* and retries by itself
    (2s, 4s, 8s, then every 15s, and at once when signal returns or the app is
    reopened). It only goes to the sign-in form if the server actually says the
    login is invalid.
@@ -73,7 +73,7 @@ screens. Why: the APK carried its own copy of the screens, and its self-update
 looked for new versions at a relative `/updates/version.json` - inside the app,
 that is the app's own files - so no installed app ever received an update.
 
-Now `capacitor.config.json` has `server.url: https://pgdesk.dygine.com`: the app
+Now `capacitor.config.json` has `server.url: https://pgguru.in`: the app
 opens the website itself. A deploy updates the browser and the app together.
 
 - Removed `@capgo/capacitor-updater`, `scripts/publish-update.mjs` and the

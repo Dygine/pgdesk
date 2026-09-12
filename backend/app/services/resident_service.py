@@ -143,14 +143,14 @@ class ResidentService:
             return
         if self.db.scalars(select(User).where(User.email == email)).first():
             raise ConflictError(
-                "That email already belongs to a staff or owner login on PGDesk. "
+                "That email already belongs to a staff or owner login on PGuru. "
                 "Use a different email for this resident.")
         elsewhere = self.db.scalars(select(Customer).where(
             Customer.email == email, Customer.organization_id != self.org_id,
             Customer.password_hash.is_not(None))).all()
         if any(c.can_sign_in for c in elsewhere):
             raise ConflictError(
-                "That email is already used to sign in to another PG on PGDesk. "
+                "That email is already used to sign in to another PG on PGuru. "
                 "Use a different email for this resident.")
 
     def _revoke_sessions(self, resident: Customer) -> int:

@@ -4,13 +4,37 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#1B1E4D" />
-    <title>PGDesk — PG & Hostel Management</title>
+    <title>PGuru — PG & Hostel Management</title>
+    <link rel="icon" href="/pgguru-icon.png" />
+    <link rel="apple-touch-icon" href="/pgguru-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      /* Branded loading screen shown until the app mounts (also what the APK
+         shows right after the native splash while the web app boots). React
+         renders into #root and replaces this automatically. */
+      #pg-splash {
+        position: fixed; inset: 0; z-index: 9999;
+        display: flex; flex-direction: column; align-items: center; justify-content: center;
+        gap: 28px; background: #ffffff;
+      }
+      #pg-splash img { width: min(320px, 68vw); height: auto; }
+      #pg-splash .sp {
+        width: 34px; height: 34px; border-radius: 50%;
+        border: 3px solid #DDE1F7; border-top-color: #373DA6;
+        animation: pg-spin .8s linear infinite;
+      }
+      @keyframes pg-spin { to { transform: rotate(360deg); } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="pg-splash">
+        <img src="/pgguru-logo.png" alt="PGuru" />
+        <div class="sp"></div>
+      </div>
+    </div>
     <script type="module" src="/src/main.jsx"></script>
   </body>
 </html>

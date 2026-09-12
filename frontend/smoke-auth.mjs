@@ -78,7 +78,7 @@ async function signIn(page, email, password, { fresh = false } = {}) {
 }
 
 const ROLES = [
-  ['Master Admin',   'master@pgdesk.local',            'Master@2024',  '/master'],
+  ['Master Admin',   'master@pgguru.local',            'Master@2024',  '/master'],
   ['PG Owner',       'owner@sunrise.local',            'Owner@2024',   '/app'],
   ['Branch Manager', 'manager@sunrise.local',          'Manager@2024', '/app'],
   ['Accountant',     'accounts@sunriselivingpg.com',   'demo1234',     '/app'],
@@ -96,7 +96,7 @@ for (const [label, email, password, expected] of ROLES) {
   const landed = await signIn(page, email, password, { fresh: true })
   const info = await page.evaluate(() => ({
     nav: [...new Set([...document.querySelectorAll('aside a[href]')].map(a => a.getAttribute('href')))].length,
-    hasToken: !!localStorage.getItem('pgdesk.auth.tokens'),
+    hasToken: !!localStorage.getItem('pgguru.auth.tokens'),
     text: document.body.innerText.slice(0, 45).replace(/\n/g, ' '),
   }))
   const ok = landed.startsWith(expected) && errs.length === 0
@@ -115,7 +115,7 @@ console.log(`  ${url.startsWith('/app') ? 'ok  ' : 'FAIL'} session survives a pa
 if (!url.startsWith('/app')) failures++
 
 const perms = await page.evaluate(async () => {
-  const t = JSON.parse(localStorage.getItem('pgdesk.auth.tokens'))
+  const t = JSON.parse(localStorage.getItem('pgguru.auth.tokens'))
   const r = await fetch('http://127.0.0.1:8000/api/v1/auth/me',
                         { headers: { Authorization: `Bearer ${t.access_token}` } })
   return (await r.json()).data.permissions.length
@@ -124,7 +124,7 @@ console.log(`  ${perms === 116 ? 'ok  ' : 'FAIL'} permissions come from the back
 if (perms !== 98) failures++
 
 // A dead token must send the user back to login rather than hanging.
-await page.evaluate(() => localStorage.setItem('pgdesk.auth.tokens',
+await page.evaluate(() => localStorage.setItem('pgguru.auth.tokens',
   JSON.stringify({ access_token: 'bad.token.here', refresh_token: 'also-bad-'.repeat(3) })))
 await page.goto(BASE + '/app', { waitUntil: 'networkidle0' }); await wait(1800)
 url = page.url().replace(BASE, '')
@@ -143,7 +143,7 @@ await page.evaluate(() => {
 })
 await wait(1500)
 const afterLogout = await page.evaluate(() => ({
-  url: location.pathname, token: localStorage.getItem('pgdesk.auth.tokens'),
+  url: location.pathname, token: localStorage.getItem('pgguru.auth.tokens'),
 }))
 const logoutOk = afterLogout.url.startsWith('/login') && !afterLogout.token
 console.log(`  ${logoutOk ? 'ok  ' : 'FAIL'} logout clears the session -> ${afterLogout.url} token:${afterLogout.token ? 'still set' : 'cleared'}`)

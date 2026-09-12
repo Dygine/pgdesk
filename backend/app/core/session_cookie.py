@@ -38,7 +38,7 @@ from app.core.exceptions import AuthenticationError
 #: Front-end sends this on refresh and logout. Value is irrelevant; presence is
 #: the assertion, because only a preflighted same-origin-approved request can
 #: set it at all.
-CSRF_HEADER = "X-PGDesk-Auth"
+CSRF_HEADER = "X-PGuru-Auth"
 
 
 def set_refresh_cookie(response: Response, token: str) -> None:

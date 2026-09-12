@@ -44,7 +44,7 @@ function Get-LanAddress {
 }
 
 Write-Host ''
-Write-Host '  PGDesk' -ForegroundColor Cyan
+Write-Host '  PGuru' -ForegroundColor Cyan
 Write-Host '  ------' -ForegroundColor Cyan
 
 $apiOk = Wait-ForUrl -Url $ApiHealth   -Label 'API (port 8000)'      -Seconds $TimeoutSec
@@ -56,13 +56,13 @@ if (-not $apiOk) {
     Write-Host '  The API never answered on port 8000.' -ForegroundColor Yellow
     Write-Host '  Check the backend terminal tab for a traceback.' -ForegroundColor Yellow
     Write-Host '  Most common cause: PostgreSQL is not running, or the'   -ForegroundColor Yellow
-    Write-Host '  password in backend\.env does not match the pgdesk role.' -ForegroundColor Yellow
+    Write-Host '  password in backend\.env does not match the pgguru role.' -ForegroundColor Yellow
     Write-Host ''
 }
 
 if (-not $feOk) {
     Write-Host '  Vite never answered on port 5173.'                   -ForegroundColor Yellow
-    Write-Host '  If you have never run it here: PGDesk: First-time Setup' -ForegroundColor Yellow
+    Write-Host '  If you have never run it here: PGuru: First-time Setup' -ForegroundColor Yellow
     Write-Host ''
     exit 1
 }
@@ -79,7 +79,7 @@ if ($lan) {
 Write-Host ''
 Write-Host '  Sign in with' -ForegroundColor DarkGray
 Write-Host '    Owner     owner@sunrise.local     Owner@2024'
-Write-Host '    Master    master@pgdesk.local     Master@2024'
+Write-Host '    Master    master@pgguru.local     Master@2024'
 Write-Host '    Manager   manager@sunrise.local   Manager@2024'
 Write-Host '    Resident  customer@sunrise.local  Customer@2024'
 Write-Host ''
