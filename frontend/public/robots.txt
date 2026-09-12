@@ -1,0 +1,15 @@
+# pgguru.in
+#
+# Everything public is crawlable. The app itself is not: /app, /master and /me
+# are behind a login, so a crawler only ever gets a redirect from them - and a
+# search result pointing at a login screen helps nobody.
+User-agent: *
+Allow: /
+Disallow: /app/
+Disallow: /master/
+Disallow: /me/
+Disallow: /login
+Disallow: /signup
+Disallow: /forgot-password
+
+Sitemap: https://pgguru.in/sitemap.xml

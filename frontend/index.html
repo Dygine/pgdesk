@@ -40,6 +40,59 @@
       }
       @keyframes pg-spin { to { transform: rotate(360deg); } }
     </style>
+    <!--
+      Structured data.
+
+      This tells Google what the thing at this URL actually *is*, rather than
+      leaving it to infer from prose. It matters more here than on most sites
+      because "PG Guru" already means two established things on the internet -
+      a politics and business news portal, and an education news site - and the
+      only way to be understood as the third is to say so in a format search
+      engines read literally.
+
+      Keep the name, the prices and the URL in step with what the site shows.
+      Marked-up prices that contradict the visible page are a manual-action
+      risk, not a clever trick.
+    -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "Organization",
+          "@id": "https://pgguru.in/#organization",
+          "name": "PGuru",
+          "url": "https://pgguru.in/",
+          "logo": "https://pgguru.in/pgguru-logo.png",
+          "areaServed": { "@type": "Country", "name": "India" }
+        },
+        {
+          "@type": "WebSite",
+          "@id": "https://pgguru.in/#website",
+          "url": "https://pgguru.in/",
+          "name": "PGuru",
+          "publisher": { "@id": "https://pgguru.in/#organization" },
+          "inLanguage": "en-IN"
+        },
+        {
+          "@type": "SoftwareApplication",
+          "name": "PGuru",
+          "applicationCategory": "BusinessApplication",
+          "operatingSystem": "Android, Web",
+          "url": "https://pgguru.in/",
+          "description": "PG and hostel management software for Indian owners: rooms, beds, residents, rent, complaints and a public listing that fills empty beds. A portal for every tenant.",
+          "publisher": { "@id": "https://pgguru.in/#organization" },
+          "offers": {
+            "@type": "AggregateOffer",
+            "priceCurrency": "INR",
+            "lowPrice": "1499",
+            "highPrice": "19999",
+            "offerCount": "4"
+          }
+        }
+      ]
+    }
+    </script>
   </head>
   <body>
     <div id="root">
