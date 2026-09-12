@@ -98,13 +98,7 @@ export default function Login() {
       {/* Left: what the product does. No figures — a public page must not
           publish tenant counts, and invented ones would be worse. */}
       <div className="hidden lg:flex flex-col justify-between bg-brand-900 text-white p-12 xl:p-16">
-        <div className="flex items-center gap-3">
-          <span className="h-10 w-10 rounded-xl bg-white text-brand-900 inline-flex items-center justify-center font-bold">P</span>
-          <div>
-            <p className="font-semibold leading-tight">PGuru</p>
-            <p className="text-xs text-brand-300">PG &amp; hostel operations</p>
-          </div>
-        </div>
+        <img src="/pgguru-logo-white.png" alt="PGuru" className="w-64 max-w-full h-auto" />
 
         <div className="max-w-md">
           <h1 className="text-[2.6rem] leading-[1.1] font-semibold tracking-[-0.02em]">
@@ -139,7 +133,7 @@ export default function Login() {
       {/* Right: sign in */}
       <div className="flex flex-col justify-center px-5 sm:px-8 lg:px-14 py-10 bg-white min-h-screen lg:min-h-0">
         <div className="lg:hidden flex items-center gap-2.5 mb-8">
-          <span className="h-9 w-9 rounded-lg bg-brand-800 text-white inline-flex items-center justify-center font-bold text-sm">P</span>
+          <span className="h-9 w-9 rounded-lg bg-white ring-1 ring-black/5 inline-flex items-center justify-center overflow-hidden"><img src="/pgguru-icon.png" alt="PGuru" className="h-8 w-8 object-contain" /></span>
           <div>
             <p className="font-semibold text-slate-900 leading-tight">PGuru</p>
             <p className="text-xs text-slate-500">PG &amp; hostel operations</p>
@@ -226,7 +220,7 @@ export default function Login() {
         {!Capacitor.isNativePlatform() && (
           <a href="https://get.dygine.com"
             className="mt-8 flex items-center gap-3 rounded-lg border border-line px-3.5 py-3 hover:bg-slate-50 transition-colors">
-            <span className="h-9 w-9 rounded-lg bg-brand-800 text-white inline-flex items-center justify-center font-bold text-sm shrink-0">P</span>
+            <span className="h-9 w-9 rounded-lg bg-white ring-1 ring-black/5 inline-flex items-center justify-center overflow-hidden shrink-0"><img src="/pgguru-icon.png" alt="" className="h-8 w-8 object-contain" /></span>
             <span className="min-w-0 flex-1">
               <span className="block text-sm font-medium text-slate-900">Get the Android app</span>
               <span className="block text-xs text-slate-500">Same account, on your phone</span>

@@ -178,7 +178,8 @@ export default function FindPG() {
               className="h-9 w-9 -ml-2 inline-flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 shrink-0">
               <ArrowLeft size={18} />
             </Link>
-            <h1 className="text-base font-semibold text-slate-900 flex-1 min-w-0 truncate">Find a PG</h1>
+            <img src="/pgguru-logo.png" alt="PGuru" className="h-10 w-auto flex-1 min-w-0 object-contain object-left" />
+            <h1 className="sr-only">Find a PG</h1>
             {seeker ? (
               <button type="button" onClick={() => setAccountOpen(true)}
                 className="flex items-center gap-2 rounded-full pl-1 pr-3 py-1 hover:bg-slate-100">
