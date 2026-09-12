@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { Mail, KeyRound, Lock, ArrowLeft, CheckCircle2 } from 'lucide-react'
 import { authApi } from '@/services/api/authApi'
-import { Card, Button, FormField, Input, InlineAlert } from '@/components/ui'
+import { Card, Button, FormField, Input, InlineAlert, BrandLogo } from '@/components/ui'
 
 /**
  * Forgotten password, in three steps.
@@ -67,7 +67,7 @@ export default function ForgotPassword() {
     <div className="min-h-dvh flex items-center justify-center p-4 bg-slate-50">
       <Card className="w-full max-w-md">
         <div className="p-6 sm:p-8">
-          <img src="/pgguru-logo.png" alt="PGuru" className="h-10 w-auto mb-5" />
+          <BrandLogo className="h-10 w-auto mb-5" />
           <Link to="/login"
             className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 mb-5">
             <ArrowLeft size={13} /> Back to sign in

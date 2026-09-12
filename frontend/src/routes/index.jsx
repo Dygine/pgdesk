@@ -97,7 +97,7 @@ function SessionLoading() {
   }, [])
 
   return (
-    <div className="min-h-screen bg-canvas flex items-center justify-center p-6">
+    <div className="min-h-screen flex items-center justify-center p-6">
       <div className="max-w-sm w-full flex flex-col items-center text-center gap-3">
         <img src="/pgguru-logo.png" alt="PGuru" className="w-[320px] max-w-[85%] h-auto animate-pulse" />
         {!isOffline ? (
@@ -210,7 +210,7 @@ function LoginRoute() {
 
 function NotFound() {
   return (
-    <div className="min-h-screen bg-canvas flex items-center justify-center p-6">
+    <div className="min-h-screen flex items-center justify-center p-6">
       <Card className="max-w-md w-full">
         <EmptyState title="Page not found"
           message="That address does not exist in this demo. It may have been a link from an older build."

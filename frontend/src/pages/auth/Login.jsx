@@ -4,7 +4,7 @@ import {
   ArrowRight, Building2, Eye, EyeOff, ShieldCheck, Users, BedDouble, Copy, QrCode, MapPin,
 } from 'lucide-react'
 import { useAuth } from '@/context/AuthContext'
-import { Button, FormField, Input, InlineAlert, StatusBadge, ScannerModal } from '@/components/ui'
+import { Button, FormField, Input, InlineAlert, StatusBadge, ScannerModal, BrandLogo } from '@/components/ui'
 import { parse as parseQr, KIND_LOGIN } from '@/lib/qr'
 import { useToast } from '@/context/ToastContext'
 import { Capacitor } from '@capacitor/core'
@@ -98,7 +98,7 @@ export default function Login() {
       {/* Left: what the product does. No figures — a public page must not
           publish tenant counts, and invented ones would be worse. */}
       <div className="hidden lg:flex flex-col justify-between bg-brand-900 text-white p-12 xl:p-16">
-        <img src="/pgguru-logo-white.png" alt="PGuru" className="w-64 max-w-full h-auto" />
+        <BrandLogo tone="dark" className="w-64 max-w-full h-auto" />
 
         <div className="max-w-md">
           <h1 className="text-[2.6rem] leading-[1.1] font-semibold tracking-[-0.02em]">
@@ -140,7 +140,7 @@ export default function Login() {
         <div className="w-full max-w-sm mx-auto lg:mx-0
                         card lg:border-0 lg:shadow-none lg:bg-transparent lg:rounded-none
                         p-6 sm:p-8 lg:p-0 animate-[popIn_.35s_cubic-bezier(.16,1,.3,1)]">
-          <img src="/pgguru-logo.png" alt="PGuru" className="h-10 w-auto mb-6 lg:hidden" />
+          <BrandLogo className="h-10 w-auto mb-6 lg:hidden" />
           <h2 className="text-2xl font-semibold text-slate-900">Sign in</h2>
           <p className="text-sm text-slate-500 mt-1.5">Sign in with your PGuru account.</p>
 

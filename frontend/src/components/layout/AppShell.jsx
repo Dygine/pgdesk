@@ -571,7 +571,9 @@ export function AppShell({ navGroups, bottomItems, children, banner, showBranchS
   const bottom = (bottomItems || []).filter((i) => !i.perm || can(i.perm))
 
   return (
-    <div className="min-h-screen bg-canvas">
+    // No background of its own: the body carries the brand wash (index.css)
+    // and a flat fill here painted straight over it.
+    <div className="min-h-screen">
       {/* Both live above the layout on purpose. The update gate has to be able
           to cover a screen whose API calls are already failing, and the
           permission flow has to run before anyone reaches a scanner that would

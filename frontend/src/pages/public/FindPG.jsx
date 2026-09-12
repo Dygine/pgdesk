@@ -12,8 +12,7 @@ import { readSeekerToken, writeSeekerToken } from '@/lib/seekerSession'
 import { relative } from '@/lib/format'
 import {
   Card, Button, FormField, Input, Select, Textarea, Modal, InlineAlert, EmptyState,
-  Skeleton, StatusBadge, PgMap, PlaceChooser,
-} from '@/components/ui'
+  Skeleton, StatusBadge, PgMap, PlaceChooser, BrandLogo } from '@/components/ui'
 import { useToast } from '@/context/ToastContext'
 
 /**
@@ -181,7 +180,7 @@ export default function FindPG() {
   }
 
   return (
-    <div className="min-h-dvh bg-canvas">
+    <div className="min-h-dvh">
       <header className="bg-white border-b border-line sticky top-0 z-20 safe-t">
         <div className="max-w-5xl mx-auto px-4 pt-3 pb-3 space-y-2.5">
           <div className="flex items-center gap-2">
@@ -189,7 +188,7 @@ export default function FindPG() {
               className="h-9 w-9 -ml-2 inline-flex items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 shrink-0">
               <ArrowLeft size={18} />
             </Link>
-            <img src="/pgguru-logo.png" alt="PGuru" className="h-10 w-auto flex-1 min-w-0 object-contain object-left" />
+            <BrandLogo className="h-10 w-auto flex-1 min-w-0 object-contain object-left" />
             <h1 className="sr-only">Find a PG</h1>
             {seeker ? (
               <button type="button" onClick={() => setAccountOpen(true)}
