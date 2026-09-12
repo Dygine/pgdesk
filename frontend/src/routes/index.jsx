@@ -91,7 +91,7 @@ function SessionLoading() {
   return (
     <div className="min-h-screen bg-canvas flex items-center justify-center p-6">
       <div className="max-w-sm w-full flex flex-col items-center text-center gap-3">
-        <span className="h-10 w-10 rounded-xl bg-brand-900 text-white inline-flex items-center justify-center font-bold animate-pulse">P</span>
+        <img src="/pgguru-logo.png" alt="PGuru" className="w-[320px] max-w-[85%] h-auto animate-pulse" />
         {!isOffline ? (
           <>
             <p className="text-sm text-slate-500">Restoring your session…</p>
