@@ -132,12 +132,8 @@ export default function Login() {
 
       {/* Right: sign in */}
       <div className="flex flex-col justify-center px-5 sm:px-8 lg:px-14 py-10 bg-white min-h-screen lg:min-h-0">
-        <div className="lg:hidden flex items-center gap-2.5 mb-8">
-          <span className="h-9 w-9 rounded-lg bg-white ring-1 ring-black/5 inline-flex items-center justify-center overflow-hidden"><img src="/pgguru-icon.png" alt="PGuru" className="h-8 w-8 object-contain" /></span>
-          <div>
-            <p className="font-semibold text-slate-900 leading-tight">PGuru</p>
-            <p className="text-xs text-slate-500">PG &amp; hostel operations</p>
-          </div>
+        <div className="lg:hidden mb-8">
+          <img src="/pgguru-logo.png" alt="PGuru" className="h-10 w-auto" />
         </div>
 
         <div className="w-full max-w-sm mx-auto lg:mx-0">

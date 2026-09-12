@@ -262,6 +262,7 @@ function Shell({ children, onBack }) {
     <div className="min-h-dvh flex items-center justify-center p-4 bg-slate-50">
       <Card className="w-full max-w-lg">
         <div className="p-6 sm:p-8">
+          <img src="/pgguru-logo.png" alt="PGuru" className="h-10 w-auto mb-5" />
           {onBack ? (
             <button type="button" onClick={onBack}
               className="inline-flex items-center gap-1.5 text-xs text-slate-500

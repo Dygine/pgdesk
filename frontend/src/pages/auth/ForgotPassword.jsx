@@ -67,6 +67,7 @@ export default function ForgotPassword() {
     <div className="min-h-dvh flex items-center justify-center p-4 bg-slate-50">
       <Card className="w-full max-w-md">
         <div className="p-6 sm:p-8">
+          <img src="/pgguru-logo.png" alt="PGuru" className="h-10 w-auto mb-5" />
           <Link to="/login"
             className="inline-flex items-center gap-1.5 text-xs text-slate-500 hover:text-slate-800 mb-5">
             <ArrowLeft size={13} /> Back to sign in
