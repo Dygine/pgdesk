@@ -1,4 +1,4 @@
-package in.kredo.pgdesk;
+package in.pgguru.app;
 
 import static org.junit.Assert.*;
 
@@ -21,6 +21,6 @@ public class ExampleInstrumentedTest {
         // Context of the app under test.
         Context appContext = InstrumentationRegistry.getInstrumentation().getTargetContext();
 
-        assertEquals("in.kredo.pgdesk", appContext.getPackageName());
+        assertEquals("in.pgguru.app", appContext.getPackageName());
     }
 }

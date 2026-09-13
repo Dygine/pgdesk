@@ -351,21 +351,63 @@ function NotificationBell() {
 
 /* --------------------------------------------------------------- profile */
 function ProfileMenu() {
-  const { user, customer, role, org, logout, isMaster, mustChangePassword } = useAuth()
+  const { user, customer, role, org, logout: rawLogout, isMaster, mustChangePassword } = useAuth()
+
+  // Revoke before signing out, not after: the call needs the session it is
+  // about to destroy. Without this the next person to sign in on this handset
+  // keeps receiving the previous one's rent reminders until Firebase happens
+  // to rotate the token, which can be months.
+  const logout = useCallback(async (...args) => {
+    try {
+      const { unregisterFromPush } = await import('@/lib/push')
+      await unregisterFromPush({
+        post: (path, body) => notificationApi.revokeDevice(body),
+      })
+    } catch {
+      /* Signing out must never fail because push cleanup did. */
+    }
+    return rawLogout(...args)
+  }, [rawLogout])
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [pwOpen, setPwOpen] = useState(false)
   const ref = useRef(null)
+  const me = user || customer
 
   // An account created with a temporary password is asked to change it up front.
   useEffect(() => { if (mustChangePassword) setPwOpen(true) }, [mustChangePassword])
+
+  // Hand this phone's push token to the server, once there is a session to
+  // attach it to. Runs on every mount, not only after a fresh sign-in, because
+  // Firebase rotates tokens between app starts and a token registered once
+  // eventually stops delivering with no visible symptom.
+  //
+  // Silent by design: a phone that has not granted permission, or a browser,
+  // simply returns without doing anything. Nothing here should ever surface an
+  // error to somebody who just wanted to open the app.
+  useEffect(() => {
+    if (!me) return
+    let cancelled = false
+    ;(async () => {
+      try {
+        const { registerForPush } = await import('@/lib/push')
+        if (cancelled) return
+        await registerForPush({
+          post: (path, body) => notificationApi.registerDevice(body),
+          onNavigate: (link) => navigate(link),
+        })
+      } catch {
+        /* Push is an enhancement. The app works without it. */
+      }
+    })()
+    return () => { cancelled = true }
+  }, [me?.id])
   useEffect(() => {
     const h = (e) => { if (ref.current && !ref.current.contains(e.target)) setOpen(false) }
     document.addEventListener('mousedown', h)
     return () => document.removeEventListener('mousedown', h)
   }, [])
 
-  const me = user || customer
   if (!me) return null
 
   return (

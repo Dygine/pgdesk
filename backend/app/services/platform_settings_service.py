@@ -31,7 +31,12 @@ from app.models.platform import SINGLETON_ID
 WRITABLE = {
     "default_trial_days", "grace_period_days", "auto_suspend_after_grace",
     "expiry_warning_days", "notify_email_enabled", "notify_sms_enabled",
-    "notify_whatsapp_enabled", "platform_name", "support_email",
+    "notify_whatsapp_enabled", "notify_push_enabled", "platform_name",
+    "support_email",
+    # Push audience and reminder timing. The Firebase key itself is NOT here,
+    # for the same reason the SMTP password is not: it takes a separate path
+    # that encrypts on the way in and offers no way out.
+    "push_to_residents", "push_to_staff", "rent_reminder_days",
     # Mail server. The password is deliberately NOT here - it takes a different
     # path (`set_smtp_password`) because it must be encrypted on the way in and
     # must never come back out. Listing it as an ordinary writable field would
@@ -82,6 +87,18 @@ def channel_status(db: Session | None = None) -> dict[str, dict]:
             if row is not None and row.smtp_host and row.smtp_from_email:
                 email_ready = True
                 email_source = "platform settings"
+    # Push is configured when a Firebase key is readable, from either source.
+    # "Readable" rather than "present": a key stored before a SECRET_KEY
+    # rotation is still in the column and is no longer usable, and reporting it
+    # as configured would send an operator hunting the wrong fault.
+    push_ready = bool(os.getenv("FIREBASE_CREDENTIALS_JSON"))
+    push_source = "environment"
+    if not push_ready and db is not None:
+        row = db.get(PlatformSettings, uuid.UUID(SINGLETON_ID))
+        if row is not None and is_readable(row.fcm_credentials_encrypted):
+            push_ready = True
+            push_source = "platform settings"
+
     sms_ready = bool(os.getenv("SMS_PROVIDER_KEY"))
     whatsapp_ready = bool(os.getenv("WHATSAPP_PROVIDER_KEY")
                           and os.getenv("WHATSAPP_PHONE_ID"))
@@ -100,6 +117,13 @@ def channel_status(db: Session | None = None) -> dict[str, dict]:
                         "sender below." if provider == "brevo" else
                         "Not configured. Set a mail server below, or supply "
                         "SMTP_HOST and SMTP_FROM in the environment.")),
+        },
+        "push": {
+            "configured": push_ready,
+            "source": push_source if push_ready else None,
+            "detail": (f"Firebase is configured ({push_source})." if push_ready else
+                       "Not configured. Add the Firebase service account key "
+                       "below."),
         },
         "sms": {
             "configured": sms_ready,
@@ -144,6 +168,7 @@ class PlatformSettingsService:
             "notify_email_enabled": row.notify_email_enabled,
             "notify_sms_enabled": row.notify_sms_enabled,
             "notify_whatsapp_enabled": row.notify_whatsapp_enabled,
+            "notify_push_enabled": row.notify_push_enabled,
             "platform_name": row.platform_name,
             "support_email": row.support_email,
             "native_session_days": row.native_session_days,
@@ -164,6 +189,18 @@ class PlatformSettingsService:
             # know whether to show "change password" or "set password".
             "smtp_password_set": bool(row.smtp_password_encrypted),
             "smtp_password_readable": is_readable(row.smtp_password_encrypted),
+
+            # --- push (Firebase) ---
+            "push_to_residents": row.push_to_residents,
+            "push_to_staff": row.push_to_staff,
+            "rent_reminder_days": row.rent_reminder_days,
+            "fcm_project_id": row.fcm_project_id,
+            # Whether a key is stored, never the key. A settings endpoint that
+            # hands back the secret it was given is a way to read secrets.
+            "fcm_credentials_set": bool(row.fcm_credentials_encrypted),
+            "fcm_credentials_readable": is_readable(row.fcm_credentials_encrypted),
+            "fcm_verified_at": (row.fcm_verified_at.isoformat()
+                                if row.fcm_verified_at else None),
 
             # --- provider selection ---
             "email_provider": row.email_provider or "smtp",
@@ -204,6 +241,36 @@ class PlatformSettingsService:
         # New credentials invalidate the old proof of delivery. A green tick
         # beside a key nobody has ever sent with is worse than no tick.
         row.brevo_verified_at = None
+        self.db.flush()
+
+    def set_fcm_credentials(self, plaintext: str | None,
+                            project_id: str | None = None) -> None:
+        """
+        Store or clear the Firebase service account key.
+
+        Encrypted in, nothing out - the same treatment the SMTP password gets.
+        An empty value clears it, which is how push is turned off completely.
+
+        The in-process credential cache is dropped here rather than left to
+        expire. An operator who has just pasted a corrected key should find out
+        within seconds whether it works, not in an hour.
+        """
+        from app.services.push_service import reset_credentials_cache
+
+        row = self.get()
+        row.fcm_credentials_encrypted = encrypt(plaintext) if plaintext else None
+        if project_id is not None:
+            row.fcm_project_id = project_id or None
+        # New credentials invalidate the old proof of delivery. A green tick
+        # beside a key nobody has ever sent with is worse than no tick.
+        row.fcm_verified_at = None
+        self.db.flush()
+        reset_credentials_cache()
+
+    def mark_push_verified(self) -> None:
+        """Called after Firebase actually accepted a test message."""
+        row = self.get()
+        row.fcm_verified_at = datetime.now(timezone.utc)
         self.db.flush()
 
     def mark_provider_verified(self) -> None:

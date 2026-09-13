@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "289298222469",
+    "project_id": "pguru-5acbf",
+    "storage_bucket": "pguru-5acbf.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:289298222469:android:16c3073ebae400d23c08ec",
+        "android_client_info": {
+          "package_name": "in.pgguru.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCVQQf9Esysqyi8hWPA6HDd5da4LaLyvqs"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

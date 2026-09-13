@@ -20,6 +20,12 @@ class Settings(BaseSettings):
     environment: Literal["development", "staging", "production"] = "development"
     debug: bool = True
 
+    # --- push notifications ---
+    #: The in-process sweep that delivers queued notifications. Turned off for
+    #: tests, and by any deployment that would rather drive
+    #: /master/settings/push-dispatch from an external scheduler.
+    push_dispatcher_enabled: bool = True
+
     # --- database ---
     database_url: str = Field(
         default="postgresql+psycopg://pgguru:pgguru@localhost:5432/pgguru",

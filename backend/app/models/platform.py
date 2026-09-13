@@ -47,6 +47,45 @@ class PlatformSettings(Base, UUIDPrimaryKey, Timestamps):
         Boolean, nullable=False, default=False)
     notify_whatsapp_enabled: Mapped[bool] = mapped_column(
         Boolean, nullable=False, default=False)
+    #: Push to the installed app. Off by default: a deployment with no Firebase
+    #: credentials must not report a channel it cannot use, and an operator
+    #: turning it on is the moment they confirm they have set one up.
+    notify_push_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False)
+
+    # --- push (Firebase Cloud Messaging) ---
+    #: Who each kind of push goes to. Both default on, because the two portals
+    #: want different things from the same table - a resident wants their
+    #: invoice, an owner wants to know a complaint was raised - and an operator
+    #: who wants only one side can say so without a code change.
+    push_to_residents: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True)
+    push_to_staff: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+
+    #: The Firebase project id, e.g. "pguru-5acbf". Stored in the clear: it is
+    #: printed in google-services.json inside every copy of the APK and is not
+    #: a secret by any definition.
+    fcm_project_id: Mapped[str | None] = mapped_column(String(120))
+
+    #: The service account JSON, whole, encrypted (app/core/crypto.py).
+    #:
+    #: Whole rather than field-by-field on purpose. Google reissues these keys
+    #: as a single downloaded file; an operator rotating one pastes the new file
+    #: and is done. Splitting it into five columns would mean five fields to
+    #: transcribe by hand and five chances to get one wrong, for no gain - the
+    #: application never reads any part of it except to build a token.
+    #:
+    #: Write-only, like the SMTP password: `as_dict` reports whether a key is
+    #: stored, never what it is.
+    fcm_credentials_encrypted: Mapped[str | None] = mapped_column(Text)
+    #: Set when a test notification was actually accepted by Firebase. "Saved"
+    #: and "can deliver" are different claims; a wrong project or a revoked key
+    #: both save perfectly and send nothing.
+    fcm_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    #: How many days before a rent due date the reminder goes out. 0 turns
+    #: reminders off entirely, which is why the CHECK allows it.
+    rent_reminder_days: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
 
     # --- outbound mail ---
     #: "smtp" or "brevo". Which transport actually sends.
@@ -120,6 +159,8 @@ class PlatformSettings(Base, UUIDPrimaryKey, Timestamps):
                         name="ck_platform_email_provider"),
         CheckConstraint("native_session_days BETWEEN 1 AND 3650",
                         name="ck_platform_native_session_days"),
+        CheckConstraint("rent_reminder_days BETWEEN 0 AND 30",
+                        name="ck_platform_rent_reminder_days"),
     )
 
 

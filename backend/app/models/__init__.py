@@ -11,6 +11,7 @@ from app.models.billing import (
     GatewayOrder, Invoice, InvoiceItem, Payment, PaymentSettings,
 )
 from app.models.customer import Customer, ResidentDocument, ResidentKyc
+from app.models.device_token import DeviceToken
 from app.models.enums import (
     AuditAction, BedStatus, BillingCycle, BranchStatus, BuildingStatus, CustomerStatus,
     FloorStatus, GenderPolicy, OrganizationStatus, PlanStatus, PrincipalKind, RoomStatus,
@@ -49,7 +50,7 @@ __all__ = [
     "CheckoutNotice", "FoodWeekMenu", "ResidentDocument", "GatewayOrder", "PaymentSettings", "StaffMember",
     "BranchStatus", "Building", "BuildingStatus", "Floor", "FloorStatus", "GenderPolicy",
     "Room", "RoomStatus",
-    "Customer", "CustomerStatus", "Organization",
+    "Customer", "CustomerStatus", "DeviceToken", "Organization",
     "OtpCode",
     "PgEnquiry", "LoginCode", "PgSeeker", "SeekerSession",
     "EnquiryStatus",

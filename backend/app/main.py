@@ -17,6 +17,7 @@ from app.core.config import settings
 from app.core.database import check_database_connection
 from app.core.exceptions import register_exception_handlers
 from app.middleware import RequestContextMiddleware
+from app.services import push_dispatcher
 
 logging.basicConfig(
     level=logging.DEBUG if settings.debug else logging.INFO,
@@ -41,7 +42,14 @@ async def lifespan(_: FastAPI):
         "%s starting in %s mode | CORS: %s",
         settings.project_name, settings.environment, ", ".join(settings.cors_origin_list),
     )
+    # The push queue is drained by a loop in this process rather than by a
+    # worker service. The queue itself is a database table, so a restart
+    # mid-sweep loses nothing - see app/services/push_dispatcher.py.
+    push_dispatcher.start(enabled=settings.push_dispatcher_enabled)
+
     yield
+
+    await push_dispatcher.stop()
     logger.info("Shutting down")
 
 

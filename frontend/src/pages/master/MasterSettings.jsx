@@ -8,6 +8,7 @@ import { useToast } from '@/context/ToastContext'
 import { useApi, useMutation } from '@/lib/useApi'
 import { platformSettingsApi } from '@/services/api/platformSettingsApi'
 import { SmtpCard } from './SmtpCard'
+import { PushCard } from './PushCard'
 
 /**
  * Every field this screen may write, and how to coerce it.
@@ -26,12 +27,16 @@ const WRITABLE = {
   grace_period_days: Number,
   expiry_warning_days: Number,
   native_session_days: Number,
+  rent_reminder_days: Number,
   smtp_port: Number,
 
   auto_suspend_after_grace: Boolean,
   notify_email_enabled: Boolean,
   notify_sms_enabled: Boolean,
   notify_whatsapp_enabled: Boolean,
+  notify_push_enabled: Boolean,
+  push_to_residents: Boolean,
+  push_to_staff: Boolean,
   smtp_use_tls: Boolean,
   smtp_use_ssl: Boolean,
 
@@ -44,6 +49,7 @@ const WRITABLE = {
   smtp_from_name: null,
   brevo_sender_email: null,
   brevo_sender_name: null,
+  fcm_project_id: null,
 }
 
 /** `null` in WRITABLE means "a string the API accepts as empty". */
@@ -61,6 +67,10 @@ function buildPayload(form) {
   out.expiry_warning_days = Number(form.expiry_warning_days) || 0
   out.native_session_days = Number(form.native_session_days) || 3650
   out.smtp_port = Number(form.smtp_port) || 587
+  // 0 is a real value here - it means "no rent reminders" - so the
+  // `|| default` idiom used above would silently discard it.
+  out.rent_reminder_days = Number(form.rent_reminder_days ?? 3)
+  if (!Number.isFinite(out.rent_reminder_days)) out.rent_reminder_days = 3
   return out
 }
 
@@ -76,6 +86,8 @@ const CHANNELS = [
     description: 'Requires a Business API provider' },
   { key: 'notify_sms_enabled', channel: 'sms', label: 'SMS',
     description: 'Requires a DLT-registered sender' },
+  { key: 'notify_push_enabled', channel: 'push', label: 'Push',
+    description: 'Requires a Firebase service account key' },
 ]
 
 /**
@@ -192,6 +204,19 @@ export default function MasterSettings() {
             brevo_api_key_set: data.brevo_api_key_set,
             brevo_api_key_readable: data.brevo_api_key_readable,
             brevo_verified_at: data.brevo_verified_at,
+            channels: data.channels,
+          }))} />
+
+        <PushCard form={form} onChange={set}
+          onSaved={(data) => setForm((f) => ({
+            // Merge, never replace - same reasoning as SmtpCard above. Only
+            // the fields the server alone knows are taken, so an unsaved edit
+            // elsewhere on the form survives saving a key.
+            ...f,
+            fcm_credentials_set: data.fcm_credentials_set,
+            fcm_credentials_readable: data.fcm_credentials_readable,
+            fcm_verified_at: data.fcm_verified_at,
+            fcm_project_id: data.fcm_project_id,
             channels: data.channels,
           }))} />
 

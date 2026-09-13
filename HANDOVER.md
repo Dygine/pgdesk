@@ -492,8 +492,8 @@ Eight more staff accounts (`rahul@sunriselivingpg.com` and colleagues) use
 ```powershell
 adb devices
 adb logcat -c
-adb shell am force-stop in.kredo.pgguru
-adb shell monkey -p in.kredo.pgguru -c android.intent.category.LAUNCHER 1
+adb shell am force-stop in.pgguru.app
+adb shell monkey -p in.pgguru.app -c android.intent.category.LAUNCHER 1
 Start-Sleep -Seconds 20
 adb logcat -d > log.txt
 Select-String -Path log.txt -Pattern "Capacitor|Console|FATAL|not implemented"

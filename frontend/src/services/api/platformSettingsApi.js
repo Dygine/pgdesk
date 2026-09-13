@@ -25,4 +25,23 @@ export const platformSettingsApi = {
   /** Proves delivery, which is a different claim from "saved". */
   sendTestEmail: (to) =>
     api.post('/master/settings/test-email', { to }).then(unwrap),
+
+  /**
+   * The Firebase service account key. Write-only, like the two secrets above.
+   *
+   * Passing null clears it, which is how push is turned off completely -
+   * distinct from leaving the field untouched, which keeps the stored key.
+   */
+  setFcmCredentials: (credentials, project_id) =>
+    api.put('/master/settings/fcm-credentials', { credentials, project_id })
+      .then(unwrap),
+
+  /** Delivers to the caller's own phones, bypassing the queue. */
+  sendTestPush: () => api.post('/master/settings/test-push').then(unwrap),
+
+  /**
+   * Drain the queue now rather than waiting for the next sweep. For the case
+   * where an operator has just fixed a broken key and wants the backlog out.
+   */
+  dispatchPush: () => api.post('/master/settings/push-dispatch').then(unwrap),
 }

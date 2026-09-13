@@ -16,7 +16,7 @@ from app.core.dependencies import (
     CurrentScope, DbSession, client_ip, require_master,
 )
 from app.core.exceptions import (
-    ServiceUnavailableError, UpstreamServiceError,
+    AppError, ServiceUnavailableError, UpstreamServiceError,
 )
 from app.core.responses import ok, paginated
 from app.models import (
@@ -36,6 +36,11 @@ from app.services.email_service import (
 from app.services.platform_settings_service import PlatformSettingsService
 from app.services.organization_service import OrganizationService
 from app.services.subscription_limits import SubscriptionLimitService
+
+from app.schemas.push import FcmCredentialsUpdate
+from app.services.push_service import (
+    PushNotConfigured, PushSendFailed, PushService,
+)
 
 router = APIRouter(prefix="/master", tags=["master"])
 Master = Annotated[CurrentScope, Depends(require_master)]
@@ -470,3 +475,92 @@ def set_brevo_key(body: BrevoKeyUpdate, db: DbSession, scope: Master,
     db.commit()
     return ok(service.as_dict(),
               message="Brevo key saved. Send a test message to confirm it works.")
+
+
+@router.put("/settings/fcm-credentials", summary="Set or clear the Firebase key")
+def set_fcm_credentials(body: FcmCredentialsUpdate, db: DbSession, scope: Master,
+                        request: Request) -> dict:
+    """
+    Write-only, exactly like the SMTP password and the Brevo key.
+
+    The value is the service account JSON downloaded from Firebase, stored
+    whole and encrypted. Whole rather than split into columns because Google
+    reissues these as a single file: an operator rotating a key pastes the new
+    one and is finished, instead of transcribing five fields and getting one
+    wrong.
+
+    Nothing in the API reads it back. The settings response reports whether a
+    key is stored, not what it is.
+    """
+    if body.credentials:
+        # Checked here rather than at send time. A paste that lost its closing
+        # brace saves perfectly and then fails silently in a background sweep
+        # nobody is watching, which is the worst place to discover it.
+        import json
+        try:
+            parsed = json.loads(body.credentials)
+        except json.JSONDecodeError:
+            raise AppError(
+                "That is not valid JSON. Paste the whole downloaded file, "
+                "from the opening brace to the closing one.") from None
+        if parsed.get("type") != "service_account":
+            raise AppError(
+                "That file is not a service account key. Use Project settings "
+                "-> Service accounts -> Generate new private key, not "
+                "google-services.json.")
+
+    service = PlatformSettingsService(db)
+    service.set_fcm_credentials(body.credentials, body.project_id)
+    AuditService(db).record(
+        scope=scope, module="Platform", action=AuditAction.UPDATE,
+        description=("Firebase key cleared" if not body.credentials
+                     else "Firebase key updated"),
+        entity_type="platform_settings", ip_address=client_ip(request))
+    db.commit()
+    return ok(service.as_dict(),
+              message=("Firebase key saved. Send a test notification to confirm "
+                       "it works." if body.credentials
+                       else "Firebase key cleared. Push notifications are off."))
+
+
+@router.post("/settings/test-push", summary="Send a test notification")
+def send_test_push(db: DbSession, scope: Master, request: Request) -> dict:
+    """
+    Delivers to the caller's own phones, bypassing the queue.
+
+    Proves delivery rather than configuration. A wrong project id or a revoked
+    key both save perfectly and send nothing, and those two states look
+    identical on a settings screen that only reports what was saved.
+    """
+    service = PlatformSettingsService(db)
+    try:
+        delivered = PushService(db).send_test(
+            user_id=scope.user.id, organization_id=scope.organization_id)
+    except PushNotConfigured as exc:
+        raise ServiceUnavailableError(str(exc)) from None
+    except PushSendFailed as exc:
+        raise UpstreamServiceError(str(exc)) from None
+
+    service.mark_push_verified()
+    AuditService(db).record(
+        scope=scope, module="Platform", action=AuditAction.UPDATE,
+        description=f"Test push notification sent to {delivered} device(s)",
+        entity_type="platform_settings", ip_address=client_ip(request))
+    db.commit()
+    return ok(service.as_dict(),
+              message=f"Test notification delivered to {delivered} device(s).")
+
+
+@router.post("/settings/push-dispatch", summary="Send any queued notifications now")
+def dispatch_push(db: DbSession, scope: Master) -> dict:
+    """
+    Drains the queue on demand.
+
+    The background sweep does this every few seconds by itself. This exists for
+    two cases the sweep does not cover: an operator who has just fixed a broken
+    key and wants the backlog to go out now rather than waiting, and a
+    deployment that prefers an external scheduler to the in-process loop.
+    """
+    result = PushService(db).dispatch_pending()
+    db.commit()
+    return ok(result, message=f"{result['sent']} notification(s) sent.")

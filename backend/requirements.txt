@@ -18,6 +18,17 @@ python-jose[cryptography]==3.3.0
 argon2-cffi==23.1.0
 passlib==1.7.4
 
+# --- push notifications ---
+# FCM's HTTP v1 API authenticates with a Google service account, not the
+# retired server key, so a signed JWT exchange is required. google-auth is the
+# smallest thing that does it - firebase-admin pulls in the whole Firebase SDK
+# for one token mint.
+google-auth==2.35.0
+
+# --- http client ---
+# Used by the push sender and by the Brevo transport. Was a test-only
+# dependency; it is a runtime one now.
+httpx==0.27.2
+
 # --- tests ---
 pytest==8.3.3
-httpx==0.27.2

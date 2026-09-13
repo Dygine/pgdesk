@@ -1,4 +1,4 @@
-package in.kredo.pgguru;
+package in.pgguru.app;
 
 import static org.junit.Assert.*;
 

@@ -17,7 +17,7 @@ React / Vite  ──▶  dist/  ──▶  Capacitor  ──▶  Android WebView
 
 | | |
 |---|---|
-| Application ID | `in.kredo.pgguru` |
+| Application ID | `in.pgguru.app` |
 | App name | PGuru |
 | minSdk / targetSdk | 24 (Android 7.0) / 36 |
 | Permissions | `INTERNET` only |

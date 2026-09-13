@@ -10,7 +10,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean, CheckConstraint, Date, DateTime, Enum as SAEnum, ForeignKey, Index,
-    Integer, JSON, Numeric, String, Text, UniqueConstraint,
+    Integer, JSON, Numeric, String, Text, UniqueConstraint, text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -288,6 +288,25 @@ class Notification(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
     link: Mapped[str | None] = mapped_column(String(200))
     read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
+    # --- push delivery state ---
+    # This table is the queue. A row with no `pushed_at` has not been delivered
+    # to a phone yet, so a crash, a deploy mid-send or a Firebase outage costs
+    # nothing: the next sweep picks the row up exactly where it was left.
+    #
+    # Storing state here rather than in a separate outbox keeps "what was said"
+    # and "was it delivered" on one row. A second table would have to be kept in
+    # step with this one by every producer, and there are eight of them.
+    pushed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), index=True)
+    #: Counted so a row that can never be delivered stops being retried for
+    #: ever. Without it one malformed notification is swept, fails and is swept
+    #: again on every tick until somebody notices the log.
+    push_attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    #: The last failure, kept verbatim. Firebase errors are specific
+    #: ("UNREGISTERED", "SENDER_ID_MISMATCH") and each means something different
+    #: to whoever is debugging; a boolean would throw that away.
+    push_error: Mapped[str | None] = mapped_column(String(200))
+
     __table_args__ = (
         Index("ix_notifications_user_read", "user_id", "read_at"),
         Index("ix_notifications_resident_read", "resident_id", "read_at"),
@@ -295,6 +314,11 @@ class Notification(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
             "(user_id IS NOT NULL AND resident_id IS NULL) "
             "OR (user_id IS NULL AND resident_id IS NOT NULL)",
             name="ck_notifications_one_recipient"),
+        # Partial: the sweep only ever asks for undelivered rows, and once a
+        # deployment has run for a year the delivered ones are almost all of
+        # them. A full index would be mostly dead weight kept hot for nothing.
+        Index("ix_notifications_push_pending", "created_at",
+              postgresql_where=text("pushed_at IS NULL")),
     )
 
 

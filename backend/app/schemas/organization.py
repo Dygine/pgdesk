@@ -182,6 +182,14 @@ class PlatformSettingsUpdate(BaseModel):
     notify_email_enabled: bool | None = None
     notify_sms_enabled: bool | None = None
     notify_whatsapp_enabled: bool | None = None
+    notify_push_enabled: bool | None = None
+
+    # --- push (the Firebase key has its own endpoint, deliberately) ---
+    push_to_residents: bool | None = None
+    push_to_staff: bool | None = None
+    #: 0 turns rent reminders off. Bounded at 30 to match the CHECK on the
+    #: table, so a bad value is a readable 422 rather than a database error.
+    rent_reminder_days: int | None = Field(default=None, ge=0, le=30)
 
     platform_name: str | None = Field(default=None, min_length=1, max_length=80)
     support_email: EmailStr | None = None

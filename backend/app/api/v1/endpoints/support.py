@@ -21,11 +21,16 @@ from app.schemas.operations import (
     InventoryCreate, QueryCreate, QueryReply, SettingsUpdate, StockAdjustment,
 )
 from app.services.notification_service import NotificationService
+from app.services.push_service import (
+    PushNotConfigured, PushSendFailed, PushService,
+)
 from app.services.report_service import REPORTS, ReportService
 from app.services.search_service import SearchService
 from app.services.support_service import (
     COMPLAINT_CATEGORIES, EXPENSE_CATEGORIES, SupportService,
 )
+
+from app.schemas.push import DeviceTokenRegister, DeviceTokenRevoke
 
 router = APIRouter(tags=["support"])
 Tenant = Annotated[CurrentScope, Depends(require_tenant)]
@@ -536,6 +541,48 @@ def mark_all_read(db: DbSession, principal=Depends(get_current_principal)) -> di
     count = service.mark_all_read(principal.organization_id, **kwargs)
     db.commit()
     return ok({"updated": count}, message=f"{count} marked as read.")
+
+
+# ----------------------------------------------------------- push devices
+@router.post("/notifications/device", summary="Register this phone for push")
+def register_device(body: DeviceTokenRegister, db: DbSession,
+                    principal=Depends(get_current_principal)) -> dict:
+    """
+    Called on every app start, not only when permission is first granted.
+
+    Firebase rotates a token on its own schedule - a reinstall, a restore from
+    backup, a long gap between opens - and a token fetched once and kept for
+    ever silently stops working. The only symptom is that notifications quietly
+    cease, which nobody reports as a bug because nothing visibly broke.
+
+    Owner is taken from the authenticated identity, never from the body. A
+    client cannot register a phone against somebody else's account because
+    there is nowhere in the request to say whose account it is.
+    """
+    service = PushService(db)
+    kwargs = ({"user_id": principal.id} if principal.is_user
+              else {"resident_id": principal.id})
+    service.register(
+        token=body.token, platform=body.platform,
+        organization_id=principal.organization_id, **kwargs)
+    db.commit()
+    return ok(None, message="This device will receive notifications.")
+
+
+@router.post("/notifications/device/revoke", summary="Stop push to this phone")
+def revoke_device(body: DeviceTokenRevoke, db: DbSession,
+                  principal=Depends(get_current_principal)) -> dict:
+    """
+    Called on sign-out.
+
+    Without it, the next person to sign in on this handset would keep receiving
+    the previous one's notifications until Firebase happened to rotate the
+    token - which could be months.
+    """
+    service = PushService(db)
+    service.revoke(body.token, reason="signed out")
+    db.commit()
+    return ok(None)
 
 
 # ------------------------------------------------------------------ reports

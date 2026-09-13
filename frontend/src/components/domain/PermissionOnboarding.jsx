@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Capacitor } from '@capacitor/core'
 import {
-  Bell, MapPin, Camera, Check, ChevronRight, ShieldCheck,
+  Bell, MapPin, Camera, Check, ChevronRight, ShieldCheck, BatteryCharging,
 } from 'lucide-react'
 import { Card, Button, InlineAlert } from '@/components/ui'
 
@@ -30,10 +30,38 @@ const ITEMS = [
     title: 'Notifications',
     why: 'Rent reminders, announcements from your PG, and replies to anything you ask.',
     async request() {
-      const { LocalNotifications } = await import('@capacitor/local-notifications')
-      const res = await LocalNotifications.requestPermissions()
-      return res.display
+      // Push, not local. LocalNotifications only fires alarms this app set
+      // while it was running; it cannot deliver anything the server sends
+      // while the app is closed, which is the entire point of this permission.
+      const { requestPushPermission } = await import('@/lib/push')
+      return await requestPushPermission()
     },
+  },
+  {
+    key: 'battery',
+    icon: BatteryCharging,
+    title: 'Keep notifications working',
+    why: 'Xiaomi, Redmi, Realme, Oppo and Vivo phones stop background apps to '
+       + 'save battery, which silently blocks notifications. This opens the '
+       + 'setting so you can allow PGuru to run.',
+    async request() {
+      // Not a permission in the Android sense - there is no prompt to grant.
+      // The OEM battery manager is a settings screen, so the honest thing is
+      // to send the user there and let them decide.
+      //
+      // This is not optional politeness. On the handsets most residents in
+      // India actually own, FCM is throttled or dropped outright by default,
+      // and a notification feature that works only on a Pixel is a feature
+      // that does not work.
+      try {
+        const { App } = await import('@capacitor/app')
+        await App.openSettings?.()
+        return 'granted'
+      } catch {
+        return 'prompt'
+      }
+    },
+    optional: true,
   },
   {
     key: 'location',

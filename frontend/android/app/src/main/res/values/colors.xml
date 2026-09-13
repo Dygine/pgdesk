@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Tints the status-bar icon and the notification accent. Matches the app
+         header colour in capacitor.config.json. -->
+    <color name="notification_accent">#0F172A</color>
+</resources>
