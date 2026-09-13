@@ -62,7 +62,7 @@ export function BroadcastCard() {
   }
 
   return (
-    <Card className="lg:col-span-2">
+    <Card>
       <CardHeader title="Broadcast to all users"
         subtitle="One message from the platform to every PG owner, staff member and resident" />
       <CardBody className="space-y-4">
