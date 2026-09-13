@@ -25,3 +25,30 @@ class FcmCredentialsUpdate(BaseModel):
 
     credentials: str | None = Field(default=None, max_length=8000)
     project_id: str | None = Field(default=None, max_length=120)
+
+
+class NotificationPreferenceUpdate(BaseModel):
+    """The one switch a person controls for themselves."""
+
+    enabled: bool
+
+
+class BroadcastRequest(BaseModel):
+    """
+    A platform-wide message from the operator to every app user.
+
+    Separate from an Announcement, which belongs to one PG and is written by
+    its owner. This one crosses tenants, so it is master-admin only and is
+    never attributed to a PG.
+    """
+
+    title: str = Field(min_length=3, max_length=200)
+    message: str = Field(min_length=3, max_length=2000)
+    #: "all", "staff" (owners and their users) or "residents".
+    audience: Literal["all", "staff", "residents"] = "all"
+    #: Where tapping it goes. Defaults to the recipient's notification list.
+    link: str | None = Field(default=None, max_length=200)
+    #: Typed back by the sender to confirm. A message to every user of every PG
+    #: cannot be recalled once the sweep has run, and "sent to 4,000 people by
+    #: accident" is not a recoverable mistake.
+    confirm: bool = False

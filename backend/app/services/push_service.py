@@ -47,7 +47,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.core.crypto import decrypt
-from app.models import DeviceToken, Notification, PlatformSettings
+from app.models import Customer, DeviceToken, Notification, PlatformSettings, User
 from app.models.platform import SINGLETON_ID
 
 log = logging.getLogger("pgguru.push")
@@ -253,6 +253,25 @@ class PushService:
         self.db.flush()
         return True
 
+    def recipient_wants_push(self, notification: Notification) -> bool:
+        """
+        Has this person switched notifications off in their own profile?
+
+        Checked at send time rather than at write time. The in-app bell must
+        still show everything - turning push off means "stop buzzing my phone",
+        not "hide things from me", and a resident who silenced notifications
+        still needs to find their invoice when they open the app.
+
+        A recipient row that has since been deleted answers False rather than
+        raising: the cascade will remove the notification too, and a sweep is
+        the wrong place to discover a missing foreign key.
+        """
+        if notification.user_id:
+            person = self.db.get(User, notification.user_id)
+        else:
+            person = self.db.get(Customer, notification.resident_id)
+        return bool(person and person.notifications_enabled)
+
     def live_tokens_for(self, notification: Notification) -> list[DeviceToken]:
         stmt = select(DeviceToken).where(DeviceToken.revoked_at.is_(None))
         if notification.user_id:
@@ -410,6 +429,12 @@ class PushService:
             if not wanted:
                 notification.pushed_at = now
                 notification.push_error = "audience disabled"
+                skipped += 1
+                continue
+
+            if not self.recipient_wants_push(notification):
+                notification.pushed_at = now
+                notification.push_error = "recipient opted out"
                 skipped += 1
                 continue
 

@@ -10,7 +10,7 @@ import {
   PermissionOnboarding, UpdateBanner, shouldAskPermissions,
 } from '@/components/domain'
 import { filterNav } from '@/nav/navConfig'
-import { Avatar, StatusBadge, Button, InlineAlert, Modal, FormField, Input } from '@/components/ui'
+import { Avatar, StatusBadge, Button, InlineAlert, Modal, FormField, Input, Switch } from '@/components/ui'
 import { GlobalSearch } from './GlobalSearch'
 import { useToast } from '@/context/ToastContext'
 import { authApi } from '@/services/api/authApi'
@@ -371,8 +371,31 @@ function ProfileMenu() {
   const navigate = useNavigate()
   const [open, setOpen] = useState(false)
   const [pwOpen, setPwOpen] = useState(false)
+  const [notifyOn, setNotifyOn] = useState(null)
   const ref = useRef(null)
   const me = user || customer
+
+  // Loaded when the menu is opened rather than on every page, so the switch
+  // costs one request the moment someone looks for it instead of one on every
+  // screen they never open it from. `null` means "not known yet", which is why
+  // it is not `false` - rendering an off switch before the answer arrives tells
+  // the person their notifications are off when they may not be.
+  useEffect(() => {
+    if (!open || notifyOn !== null) return
+    notificationApi.getPreference()
+      .then((d) => setNotifyOn(Boolean(d?.enabled)))
+      .catch(() => setNotifyOn(true))
+  }, [open, notifyOn])
+
+  const toggleNotifications = async () => {
+    const next = !notifyOn
+    setNotifyOn(next)                       // optimistic: the switch must feel instant
+    try {
+      await notificationApi.setPreference(next)
+    } catch {
+      setNotifyOn(!next)                    // put it back; nothing was saved
+    }
+  }
 
   // An account created with a temporary password is asked to change it up front.
   useEffect(() => { if (mustChangePassword) setPwOpen(true) }, [mustChangePassword])
@@ -442,6 +465,22 @@ function ProfileMenu() {
               <it.icon size={16} className="text-slate-400" />{it.label}
             </button>
           ))}
+          <div className="border-t border-line my-1" />
+          <div className="px-3.5 py-2 flex items-center justify-between gap-3">
+            <span className="flex items-center gap-2.5 text-sm text-slate-700">
+              <Bell size={16} className="text-slate-400" />
+              Notifications
+            </span>
+            {notifyOn === null
+              ? <span className="text-xs text-slate-400">…</span>
+              : <Switch checked={notifyOn} onChange={toggleNotifications}
+                  ariaLabel="Receive notifications" size="sm" />}
+          </div>
+          <p className="px-3.5 pb-2 text-2xs text-slate-500 leading-snug">
+            {notifyOn === false
+              ? 'Your phone will stay quiet. You can still read everything here.'
+              : 'Alerts on your phone for rent, announcements and replies.'}
+          </p>
           <div className="border-t border-line my-1" />
           <button role="menuitem" onClick={async () => { await logout(); navigate('/login') }}
             className="w-full flex items-center gap-2.5 px-3.5 py-2 text-sm text-rose-600 hover:bg-rose-50 text-left">

@@ -33,6 +33,17 @@ class User(Base, UUIDPrimaryKey, Timestamps):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False, index=True)
     phone: Mapped[str | None] = mapped_column(String(20))
+
+    #: Whether this person wants push notifications at all.
+    #:
+    #: Separate from the phone's own Android permission, which they can also
+    #: revoke. Two switches sound redundant until you have the conversation:
+    #: "turn notifications off" means "stop sending", not "go into Android
+    #: settings and find the toggle", and a person who denies the OS permission
+    #: has told the phone, not us - we would keep queuing messages nobody sees.
+    #: This is the one the product owns.
+    notifications_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true"))
     employee_id: Mapped[str | None] = mapped_column(String(40))
 
     # Never a plaintext password. Argon2id by default - see app/core/security.py.

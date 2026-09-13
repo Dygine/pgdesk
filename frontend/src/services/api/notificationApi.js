@@ -11,4 +11,11 @@ export const notificationApi = {
   // one fails silently - notifications simply stop, with nothing to see.
   registerDevice: (body) => api.post('/notifications/device', body).then(unwrap),
   revokeDevice: (body) => api.post('/notifications/device/revoke', body).then(unwrap),
+
+  // The person's own switch. Same endpoint for every portal - owners, wardens
+  // and residents all reach it through their session, so there is one
+  // implementation instead of one per portal that can drift.
+  getPreference: () => api.get('/notifications/preferences').then(unwrap),
+  setPreference: (enabled) =>
+    api.patch('/notifications/preferences', { enabled }).then(unwrap),
 }

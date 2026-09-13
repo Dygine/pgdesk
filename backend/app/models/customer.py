@@ -22,7 +22,7 @@ from datetime import date, datetime
 
 from sqlalchemy import (
     Boolean, CheckConstraint, Date, DateTime, Enum as SAEnum, ForeignKey, Index, Integer,
-    LargeBinary, Numeric, String, Text, UniqueConstraint,
+    LargeBinary, Numeric, String, Text, UniqueConstraint, text,
 )
 from sqlalchemy.dialects.postgresql import UUID as PgUUID
 from sqlalchemy.orm import Mapped, mapped_column, relationship
@@ -77,6 +77,11 @@ class Customer(Base, UUIDPrimaryKey, TenantMixin, Timestamps):
     is_active: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
 
     alternate_phone: Mapped[str | None] = mapped_column(String(20))
+
+    #: Whether this resident wants push notifications. See the note on
+    #: User.notifications_enabled - this is the product's switch, not Android's.
+    notifications_enabled: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=True, server_default=text("true"))
     date_of_birth: Mapped[date | None] = mapped_column(Date)
     gender: Mapped[str | None] = mapped_column(String(10))
     address: Mapped[str | None] = mapped_column(String(400))

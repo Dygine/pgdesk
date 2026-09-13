@@ -44,4 +44,10 @@ export const platformSettingsApi = {
    * where an operator has just fixed a broken key and wants the backlog out.
    */
   dispatchPush: () => api.post('/master/settings/push-dispatch').then(unwrap),
+
+  /** How many people a broadcast would reach, before anything is written. */
+  broadcastReach: () => api.get('/master/broadcast/reach').then(unwrap),
+
+  /** One message to every app user, across all PGs. Cannot be recalled. */
+  broadcast: (body) => api.post('/master/broadcast', body).then(unwrap),
 }

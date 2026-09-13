@@ -9,6 +9,7 @@ import { useApi, useMutation } from '@/lib/useApi'
 import { platformSettingsApi } from '@/services/api/platformSettingsApi'
 import { SmtpCard } from './SmtpCard'
 import { PushCard } from './PushCard'
+import { BroadcastCard } from './BroadcastCard'
 
 /**
  * Every field this screen may write, and how to coerce it.
@@ -219,6 +220,8 @@ export default function MasterSettings() {
             fcm_project_id: data.fcm_project_id,
             channels: data.channels,
           }))} />
+
+        <BroadcastCard />
 
         <Card>
           <CardHeader title="Expiry warnings"

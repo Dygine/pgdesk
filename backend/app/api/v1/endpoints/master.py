@@ -20,6 +20,7 @@ from app.core.exceptions import (
 )
 from app.core.responses import ok, paginated
 from app.models import (
+    DeviceToken,
     Bed, Branch, Building, Customer, Organization, Room, Subscription,
     SubscriptionPlan, User,
 )
@@ -27,7 +28,7 @@ from app.schemas.organization import (
     ChangePlan, ExtendSubscription, LimitOverrides, OrganizationCreate,
     OrganizationUpdate, PlanUpdate, BrevoKeyUpdate, PlatformSettingsUpdate, SmtpPasswordUpdate, TestEmailRequest, StatusChange,
 )
-from app.models.enums import AuditAction
+from app.models.enums import NotificationType, AuditAction
 from app.services.audit import AuditService
 from app.services.dashboard_service import MasterDashboardService
 from app.services.email_service import (
@@ -37,7 +38,8 @@ from app.services.platform_settings_service import PlatformSettingsService
 from app.services.organization_service import OrganizationService
 from app.services.subscription_limits import SubscriptionLimitService
 
-from app.schemas.push import FcmCredentialsUpdate
+from app.schemas.push import BroadcastRequest, FcmCredentialsUpdate
+from app.services.notification_service import NotificationService
 from app.services.push_service import (
     PushNotConfigured, PushSendFailed, PushService,
 )
@@ -564,3 +566,94 @@ def dispatch_push(db: DbSession, scope: Master) -> dict:
     result = PushService(db).dispatch_pending()
     db.commit()
     return ok(result, message=f"{result['sent']} notification(s) sent.")
+
+
+@router.post("/broadcast", summary="Send a notification to every app user")
+def broadcast(body: BroadcastRequest, db: DbSession, scope: Master,
+              request: Request) -> dict:
+    """
+    One message from the platform operator to everyone, across all PGs.
+
+    Why this is not an Announcement
+    -------------------------------
+    An Announcement belongs to one organisation and is written by its owner.
+    This crosses tenants, which is a thing only the operator may do, and the
+    recipients must not see it attributed to their PG - "your PG says the app
+    will be down on Sunday" is a lie that generates calls to the wrong people.
+
+    How it delivers
+    ---------------
+    It writes ordinary `Notification` rows, one per recipient, and stops. The
+    same sweep that handles invoices and announcements picks them up, which
+    means the per-person opt-out, the audience toggles and the retry behaviour
+    all apply here for free rather than being reimplemented.
+
+    Each row carries the recipient's own `organization_id`, not the operator's
+    (who has none). So tenant isolation is intact: a resident reading their
+    notifications sees this one because it is addressed to them, through the
+    same query as every other notification.
+    """
+    if not body.confirm:
+        raise AppError(
+            "This sends to every user of every PG and cannot be recalled. "
+            "Tick the confirmation to send.")
+
+    notify = NotificationService(db)
+    sent_staff = sent_residents = 0
+
+    if body.audience in ("all", "staff"):
+        # Active users only. An invited-but-never-accepted account has no phone
+        # and no reason to be counted in a number the operator will read as
+        # "people reached".
+        for user in db.scalars(select(User).where(
+                User.is_active.is_(True),
+                User.is_master_admin.is_(False),
+                User.organization_id.isnot(None))).all():
+            notify.to_user(user, NotificationType.SYSTEM, body.title, body.message,
+                           entity_type="broadcast",
+                           link=body.link or "/notifications")
+            sent_staff += 1
+
+    if body.audience in ("all", "residents"):
+        for resident in db.scalars(select(Customer).where(
+                Customer.is_active.is_(True))).all():
+            notify.to_resident(resident, NotificationType.SYSTEM,
+                               body.title, body.message,
+                               entity_type="broadcast",
+                               link=body.link or "/me/notifications")
+            sent_residents += 1
+
+    total = sent_staff + sent_residents
+    AuditService(db).record(
+        scope=scope, module="Platform", action=AuditAction.CREATE,
+        description=(f"Broadcast to {body.audience}: \"{body.title}\" "
+                     f"({total} recipients)"),
+        entity_type="broadcast", ip_address=client_ip(request))
+    db.commit()
+    return ok(
+        {"recipients": total, "staff": sent_staff, "residents": sent_residents},
+        message=(f"Queued for {total} "
+                 f"{'person' if total == 1 else 'people'}. "
+                 "Delivery starts within a few seconds."))
+
+
+@router.get("/broadcast/reach", summary="How many people a broadcast would reach")
+def broadcast_reach(db: DbSession, scope: Master) -> dict:
+    """
+    Shown beside the send button, before anything is written.
+
+    An operator about to message several thousand strangers should see the
+    number first. "Send to everyone" with no count is how a typo reaches
+    4,000 phones.
+    """
+    staff = db.scalar(select(func.count(User.id)).where(
+        User.is_active.is_(True), User.is_master_admin.is_(False),
+        User.organization_id.isnot(None))) or 0
+    residents = db.scalar(select(func.count(Customer.id)).where(
+        Customer.is_active.is_(True))) or 0
+    # Phones actually registered. The gap between this and the totals is the
+    # honest answer to "how many will really see it on their phone".
+    devices = db.scalar(select(func.count(DeviceToken.id)).where(
+        DeviceToken.revoked_at.is_(None))) or 0
+    return ok({"staff": staff, "residents": residents,
+               "total": staff + residents, "devices": devices})

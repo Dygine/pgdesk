@@ -30,7 +30,9 @@ from app.services.support_service import (
     COMPLAINT_CATEGORIES, EXPENSE_CATEGORIES, SupportService,
 )
 
-from app.schemas.push import DeviceTokenRegister, DeviceTokenRevoke
+from app.schemas.push import (
+    DeviceTokenRegister, DeviceTokenRevoke, NotificationPreferenceUpdate,
+)
 
 router = APIRouter(tags=["support"])
 Tenant = Annotated[CurrentScope, Depends(require_tenant)]
@@ -583,6 +585,41 @@ def revoke_device(body: DeviceTokenRevoke, db: DbSession,
     service.revoke(body.token, reason="signed out")
     db.commit()
     return ok(None)
+
+
+@router.get("/notifications/preferences", summary="My notification setting")
+def get_notification_preference(db: DbSession,
+                                principal=Depends(get_current_principal)) -> dict:
+    """
+    One switch, same endpoint for every portal.
+
+    Owners, wardens and residents all reach this through
+    `get_current_principal`, so there is one implementation rather than one per
+    portal that can drift apart.
+    """
+    person = principal.obj
+    return ok({"enabled": bool(getattr(person, "notifications_enabled", True))})
+
+
+@router.patch("/notifications/preferences", summary="Turn my notifications on or off")
+def set_notification_preference(body: NotificationPreferenceUpdate, db: DbSession,
+                                principal=Depends(get_current_principal)) -> dict:
+    """
+    Turning this off stops push to this person's phones. It does NOT stop the
+    notification being recorded - the bell inside the app still shows
+    everything, because "do not buzz my phone" and "hide my invoices from me"
+    are different requests and only one of them was made.
+
+    Scoped to the caller by identity. There is no way to write somebody else's
+    preference because there is nowhere in the request to name them.
+    """
+    person = principal.obj
+    person.notifications_enabled = body.enabled
+    db.commit()
+    return ok({"enabled": body.enabled},
+              message=("Notifications on. You will be alerted on your phone."
+                       if body.enabled else
+                       "Notifications off. You can still read them in the app."))
 
 
 # ------------------------------------------------------------------ reports
