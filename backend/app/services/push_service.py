@@ -103,27 +103,13 @@ class _Credentials:
             if self._token and now < self._expires_at - timedelta(seconds=60):
                 return self._token
 
-            # Imported separately, because they fail for different reasons and
-            # a single message covering both sent a real debugging session
-            # after the wrong package for an hour. `google-auth` provides the
-            # credentials; the transport it needs is a *separate* optional
-            # dependency, and the one that is actually missing on a clean
-            # deploy is `requests`.
             try:
                 from google.oauth2 import service_account as google_sa
-            except ImportError as exc:  # pragma: no cover
-                raise PushNotConfigured(
-                    "google-auth is not installed. Add google-auth to "
-                    "requirements.txt and redeploy.") from exc
-
-            try:
                 from google.auth.transport.requests import Request as GoogleRequest
-            except ImportError as exc:  # pragma: no cover
+            except ImportError as exc:  # pragma: no cover - dependency missing
                 raise PushNotConfigured(
-                    "The 'requests' package is missing. google-auth needs it "
-                    "for its HTTP transport and does not install it "
-                    "automatically. Add requests to requirements.txt and "
-                    "redeploy.") from exc
+                    "google-auth is not installed. Add it to requirements.txt "
+                    "and redeploy.") from exc
 
             try:
                 creds = google_sa.Credentials.from_service_account_info(
