@@ -16,10 +16,11 @@ from app.core.dependencies import (
     CurrentScope, DbSession, client_ip, require_master,
 )
 from app.core.exceptions import (
-    AppError, ServiceUnavailableError, UpstreamServiceError,
+    AppError, NotFoundError, ServiceUnavailableError, UpstreamServiceError,
 )
 from app.core.responses import ok, paginated
 from app.models import (
+    Notification,
     DeviceToken,
     Bed, Branch, Building, Customer, Organization, Room, Subscription,
     SubscriptionPlan, User,
@@ -598,6 +599,11 @@ def broadcast(body: BroadcastRequest, db: DbSession, scope: Master,
             "This sends to every user of every PG and cannot be recalled. "
             "Tick the confirmation to send.")
 
+    # One id shared by every row this broadcast writes. Without it the rows are
+    # indistinguishable from each other and from the last broadcast, and "how
+    # many people read it" has no query.
+    broadcast_id = uuid.uuid4()
+
     notify = NotificationService(db)
     sent_staff = sent_residents = 0
 
@@ -610,7 +616,7 @@ def broadcast(body: BroadcastRequest, db: DbSession, scope: Master,
                 User.is_master_admin.is_(False),
                 User.organization_id.isnot(None))).all():
             notify.to_user(user, NotificationType.SYSTEM, body.title, body.message,
-                           entity_type="broadcast",
+                           entity_type="broadcast", entity_id=broadcast_id,
                            link=body.link or "/notifications")
             sent_staff += 1
 
@@ -619,7 +625,7 @@ def broadcast(body: BroadcastRequest, db: DbSession, scope: Master,
                 Customer.is_active.is_(True))).all():
             notify.to_resident(resident, NotificationType.SYSTEM,
                                body.title, body.message,
-                               entity_type="broadcast",
+                               entity_type="broadcast", entity_id=broadcast_id,
                                link=body.link or "/me/notifications")
             sent_residents += 1
 
@@ -631,7 +637,8 @@ def broadcast(body: BroadcastRequest, db: DbSession, scope: Master,
         entity_type="broadcast", ip_address=client_ip(request))
     db.commit()
     return ok(
-        {"recipients": total, "staff": sent_staff, "residents": sent_residents},
+        {"broadcast_id": str(broadcast_id), "recipients": total,
+         "staff": sent_staff, "residents": sent_residents},
         message=(f"Queued for {total} "
                  f"{'person' if total == 1 else 'people'}. "
                  "Delivery starts within a few seconds."))
@@ -655,5 +662,105 @@ def broadcast_reach(db: DbSession, scope: Master) -> dict:
     # honest answer to "how many will really see it on their phone".
     devices = db.scalar(select(func.count(DeviceToken.id)).where(
         DeviceToken.revoked_at.is_(None))) or 0
+
+    # Opted in. Counted separately from the total because the two numbers
+    # answer different questions, and showing only the total told an operator
+    # "61 people" when one phone was going to buzz.
+    opted_in = ((db.scalar(select(func.count(User.id)).where(
+                    User.is_active.is_(True), User.is_master_admin.is_(False),
+                    User.organization_id.isnot(None),
+                    User.notifications_enabled.is_(True))) or 0)
+                + (db.scalar(select(func.count(Customer.id)).where(
+                    Customer.is_active.is_(True),
+                    Customer.notifications_enabled.is_(True))) or 0))
+
+    # People with at least one live phone. Not the device count: two phones on
+    # one account is one person who will be alerted, not two.
+    reachable = db.scalar(
+        select(func.count(func.distinct(func.coalesce(
+            DeviceToken.user_id, DeviceToken.resident_id))))
+        .where(DeviceToken.revoked_at.is_(None))) or 0
+
     return ok({"staff": staff, "residents": residents,
-               "total": staff + residents, "devices": devices})
+               "total": staff + residents, "devices": devices,
+               "opted_in": opted_in, "reachable": reachable})
+
+
+@router.get("/broadcast/{broadcast_id}/stats", summary="How a broadcast is doing")
+def broadcast_stats(broadcast_id: uuid.UUID, db: DbSession, scope: Master) -> dict:
+    """
+    Live delivery and read counts for one broadcast.
+
+    Polled by the screen after sending, because delivery is not instant - the
+    sweep runs every ten seconds and a few thousand rows take a few passes.
+    Watching the number climb is the difference between "did that work?" and
+    knowing it did.
+
+    Four numbers, four different meanings, deliberately not collapsed into one:
+
+      sent       rows written - everyone who will see it in the app
+      delivered  handed to Firebase successfully
+      failed     Firebase refused, or the person has no phone registered
+      read       opened it
+
+    `failed` counts opt-outs and people with no app too. That is honest: from
+    the operator's side "did not reach their phone" is one outcome, whatever
+    the reason, and the reason is on the row if anybody needs it.
+    """
+    base = Notification.entity_id == broadcast_id
+
+    sent = db.scalar(select(func.count(Notification.id)).where(base)) or 0
+    if sent == 0:
+        raise NotFoundError("No broadcast with that id.")
+
+    delivered = db.scalar(select(func.count(Notification.id)).where(
+        base, Notification.pushed_at.isnot(None),
+        Notification.push_error.is_(None))) or 0
+    failed = db.scalar(select(func.count(Notification.id)).where(
+        base, Notification.push_error.isnot(None))) or 0
+    pending = db.scalar(select(func.count(Notification.id)).where(
+        base, Notification.pushed_at.is_(None))) or 0
+    read = db.scalar(select(func.count(Notification.id)).where(
+        base, Notification.read_at.isnot(None))) or 0
+
+    row = db.scalars(select(Notification).where(base).limit(1)).first()
+    return ok({
+        "broadcast_id": str(broadcast_id),
+        "title": row.title if row else None,
+        "sent_at": row.created_at.isoformat() if row else None,
+        "sent": sent, "delivered": delivered, "failed": failed,
+        "pending": pending, "read": read,
+        # Finished when nothing is left in the queue. The screen stops polling
+        # on this rather than on a timer, so a slow batch is not reported as
+        # done while rows are still going out.
+        "complete": pending == 0,
+    })
+
+
+@router.get("/broadcasts", summary="Recent broadcasts")
+def recent_broadcasts(db: DbSession, scope: Master, limit: int = 10) -> dict:
+    """
+    The last few broadcasts with their counts.
+
+    Reconstructed from the notification rows rather than kept in a table of
+    their own. A broadcast is not an entity anybody edits or deletes - it is
+    something that happened - and a second table would only be a copy of these
+    rows that can disagree with them.
+    """
+    ids = db.execute(
+        select(Notification.entity_id,
+               func.min(Notification.created_at).label("at"),
+               func.min(Notification.title).label("title"),
+               func.count(Notification.id).label("sent"),
+               func.count(Notification.read_at).label("read"),
+               func.count(Notification.pushed_at).label("pushed"))
+        .where(Notification.entity_type == "broadcast",
+               Notification.entity_id.isnot(None))
+        .group_by(Notification.entity_id)
+        .order_by(func.min(Notification.created_at).desc())
+        .limit(min(limit, 50))).all()
+
+    return ok([{"broadcast_id": str(r.entity_id), "title": r.title,
+                "sent_at": r.at.isoformat() if r.at else None,
+                "sent": r.sent, "read": r.read, "pushed": r.pushed}
+               for r in ids])

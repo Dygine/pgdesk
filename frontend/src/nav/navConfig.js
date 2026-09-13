@@ -154,3 +154,36 @@ export function filterNav(groups, can) {
     .map((g) => ({ ...g, items: g.items.filter((i) => !i.perm || can(i.perm)) }))
     .filter((g) => g.items.length)
 }
+
+
+/**
+ * The icon for a route, taken from the nav itself.
+ *
+ * The obvious alternative is a second map of path -> icon beside the nav. It
+ * would be wrong within a month: someone adds a module to the nav, forgets the
+ * other list, and the page header shows a different symbol from the sidebar
+ * entry the user just clicked. One source, no drift.
+ *
+ * Longest match wins, so /app/residents/:id resolves to the residents icon
+ * rather than to whichever shorter route happened to be declared first.
+ */
+const ALL_NAV = [...ORG_NAV, ...MASTER_NAV, ...CUSTOMER_NAV]
+
+export function iconForPath(pathname) {
+  if (!pathname) return null
+  let best = null
+  let bestLength = -1
+  for (const group of ALL_NAV) {
+    for (const item of group.items || []) {
+      if (!item.to || !item.icon) continue
+      const exact = pathname === item.to
+      // Trailing slash matters: '/app/rooms' must not match '/app/roomshare'.
+      const child = pathname.startsWith(item.to + '/')
+      if ((exact || child) && item.to.length > bestLength) {
+        best = item.icon
+        bestLength = item.to.length
+      }
+    }
+  }
+  return best
+}

@@ -50,4 +50,10 @@ export const platformSettingsApi = {
 
   /** One message to every app user, across all PGs. Cannot be recalled. */
   broadcast: (body) => api.post('/master/broadcast', body).then(unwrap),
+
+  /** Live delivery and read counts for one broadcast. Polled after sending. */
+  broadcastStats: (id) => api.get(`/master/broadcast/${id}/stats`).then(unwrap),
+
+  /** The last few broadcasts, reconstructed from their notification rows. */
+  recentBroadcasts: () => api.get('/master/broadcasts').then(unwrap),
 }

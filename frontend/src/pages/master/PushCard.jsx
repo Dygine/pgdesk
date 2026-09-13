@@ -65,7 +65,7 @@ export function PushCard({ form, onChange, onSaved }) {
   }
 
   return (
-    <Card className="lg:col-span-2">
+    <Card>
       <CardHeader
         title="Push notifications"
         subtitle="Delivered to the installed app, including while it is closed"

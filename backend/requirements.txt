@@ -25,6 +25,12 @@ passlib==1.7.4
 # for one token mint.
 google-auth==2.35.0
 
+# google-auth ships the credential types but NOT a transport. Its
+# `google.auth.transport.requests` module imports this at call time, and
+# `requests` is an optional extra nobody installs by default - so the failure
+# appears only on a clean deploy, never on a laptop that already had it.
+requests==2.32.3
+
 # --- http client ---
 # Used by the push sender and by the Brevo transport. Was a test-only
 # dependency; it is a runtime one now.

@@ -1,8 +1,9 @@
-import { Link } from 'react-router-dom'
+import { Link, useLocation } from 'react-router-dom'
 import { Bed, Wind, ShowerHead, User, Lock, Wrench, Clock } from 'lucide-react'
 import { Avatar, StatusBadge } from '@/components/ui'
 import { inr, dateFmt, relative } from '@/lib/format'
 import { useAuth } from '@/context/AuthContext'
+import { iconForPath } from '@/nav/navConfig'
 import { AccessDenied } from '@/components/ui'
 
 const cx = (...a) => a.filter(Boolean).join(' ')
@@ -148,13 +149,33 @@ export function ActivityTimeline({ items, empty }) {
 }
 
 /* ------------------------------------------------------------ PageHeader */
-export function PageHeader({ title, subtitle, actions, breadcrumb, children, className }) {
+/**
+ * The page title, with the same icon the sidebar uses for this route.
+ *
+ * Resolved from the route rather than passed in by each of the seventy pages:
+ * a prop on every page is seventy chances to pass the wrong one, and seventy
+ * edits the next time an icon changes. `icon` is still accepted for the pages
+ * that are not in the nav at all (a detail screen, a wizard step), and
+ * `icon={false}` turns it off.
+ */
+export function PageHeader({ title, subtitle, actions, breadcrumb, children, className, icon }) {
+  const { pathname } = useLocation()
+  const Icon = icon === false ? null : (icon || iconForPath(pathname))
   return (
     <div className={cx('mb-5', className)}>
       {breadcrumb && <div className="mb-1.5 text-xs text-slate-500 flex items-center gap-1.5 flex-wrap">{breadcrumb}</div>}
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
         <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-[-0.01em]">{title}</h1>
+          <h1 className="text-xl sm:text-2xl font-semibold text-slate-900 tracking-[-0.01em] flex items-center gap-2.5">
+            {Icon && (
+              <span className="inline-flex items-center justify-center shrink-0 h-9 w-9 rounded-lg bg-brand-50 text-brand-600">
+                {/* Decorative: the title beside it already says what this is,
+                    so a screen reader announcing the icon would just repeat it. */}
+                <Icon size={19} aria-hidden="true" />
+              </span>
+            )}
+            <span className="min-w-0 truncate">{title}</span>
+          </h1>
           {subtitle && <p className="text-sm text-slate-500 mt-1 leading-relaxed">{subtitle}</p>}
         </div>
         {actions && <div className="flex gap-2 shrink-0 flex-wrap">{actions}</div>}
