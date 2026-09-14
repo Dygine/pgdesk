@@ -233,6 +233,35 @@ class DygineClient:
     def invoice_pdf_url(self, invoice_id: str) -> str:
         return f"{self.base_url}/v1/invoices/{invoice_id}/pdf"
 
+    def invoice_pdf(self, invoice_id: str) -> bytes:
+        """
+        Fetch the PDF itself, authenticated.
+
+        The URL above needs HTTP Basic auth, which a browser following a link
+        cannot supply - it just gets a 401 and shows the owner a JSON error.
+        So PGGuru fetches it server-side with the platform credentials and
+        streams it to an owner who is already signed in here.
+
+        The owner never sees a Dygine URL, and the platform key never leaves
+        the server.
+        """
+        if not self.enabled:
+            raise DygineNotConfigured("Dygine Pay is not enabled.")
+        try:
+            with httpx.Client(timeout=TIMEOUT) as client:
+                res = client.get(f"{self.base_url}/v1/invoices/{invoice_id}/pdf",
+                                 headers={"Authorization": self._auth_header()})
+        except httpx.RequestError as exc:
+            log.warning("invoice pdf unreachable: %s", exc)
+            raise DygineError("Could not reach the payments service.") from None
+
+        if res.status_code == 404:
+            raise DygineError("That invoice was not found.", status=404)
+        if res.status_code >= 400:
+            raise DygineError("The invoice could not be downloaded.",
+                              status=res.status_code)
+        return res.content
+
     # ------------------------------------------------------------- probe --
     def verify(self) -> dict:
         """

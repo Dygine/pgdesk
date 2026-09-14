@@ -18,7 +18,7 @@ from datetime import date
 
 from typing import Annotated
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Body, Depends, HTTPException, Request, Response, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
@@ -153,12 +153,48 @@ def history(db: DbSession, scope: Tenant, limit: int = 50,
         "net_rupees": paise_to_rupees(c.net_paise),
         "status": c.status,
         "invoice_number": c.dygine_invoice_number,
-        "invoice_url": (svc.dygine.invoice_pdf_url(c.dygine_invoice_id)
+        # Our own proxy route, not Dygine's. A link straight to Dygine needs
+        # Basic auth the browser does not have.
+        "invoice_url": (f"/api/v1/billing/platform/invoices/"
+                        f"{c.dygine_invoice_id}/pdf"
                         if c.dygine_invoice_id else None),
         "failure_reason": c.failure_reason,
         "created_at": c.created_at.isoformat(),
         "paid_at": c.paid_at.isoformat() if c.paid_at else None,
     } for c in charges])
+
+
+@router.get("/invoices/{invoice_id}/pdf", summary="Download an invoice")
+def invoice_pdf(invoice_id: str, db: DbSession, scope: Tenant,
+                _: None = Depends(require("settings.manage"))):
+    """
+    Stream an invoice PDF to the owner.
+
+    Proxied rather than linked. Dygine's own PDF URL needs HTTP Basic auth,
+    which a browser following a link cannot supply, so an owner clicking it
+    gets a JSON 401. Here they are already authenticated to PGGuru, and PGGuru
+    holds the platform credentials.
+
+    Scoped to the caller's own organisation: an invoice id is a uuid, but a
+    uuid is not an authorisation. Without this check any owner who learned
+    another PG's invoice id could download their bill.
+    """
+    charge = db.scalars(select(PlatformCharge).where(
+        PlatformCharge.dygine_invoice_id == invoice_id,
+        PlatformCharge.organization_id == scope.organization_id)).first()
+    if charge is None:
+        raise HTTPException(status.HTTP_404_NOT_FOUND, "Invoice not found")
+
+    svc = _service(db)
+    try:
+        pdf = svc.dygine.invoice_pdf(invoice_id)
+    except DygineError as exc:
+        raise _dygine_error(exc) from None
+
+    filename = (charge.dygine_invoice_number or "invoice").replace("/", "-")
+    return Response(content=pdf, media_type="application/pdf",
+                    headers={"Content-Disposition":
+                             f'inline; filename="{filename}.pdf"'})
 
 
 @router.get("/wallet/transactions", summary="Wallet ledger")

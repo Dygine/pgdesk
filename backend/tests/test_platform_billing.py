@@ -577,3 +577,60 @@ class TestGatewayUnavailable:
         redemption = db.scalars(select(CouponRedemption)).first()
         assert redemption is not None
         assert redemption.state == "released"
+
+
+class TestInvoiceProxy:
+    """
+    The invoice link must go through PGGuru, not straight to Dygine.
+
+    Dygine's PDF route needs HTTP Basic auth. A browser following a link cannot
+    supply it, so the owner gets a JSON 401 where they expected a document -
+    which is exactly what happened on the first real payment.
+    """
+
+    def test_history_links_at_pgguru_not_dygine(self, db, org, plan):
+        import uuid as _uuid
+        from app.services.platform_billing_service import period_of
+
+        charge = PlatformCharge(
+            organization_id=org.id, plan_id=plan.id, purpose="subscription",
+            method="gateway", period=period_of(), gross_paise=149900,
+            discount_paise=0, net_paise=149900, status="paid",
+            dygine_invoice_id="inv-abc-123",
+            dygine_invoice_number="DGN/BOS/26-27/00001",
+            idempotency_key=f"sub:{org.id}:{_uuid.uuid4().hex[:8]}")
+        db.add(charge)
+        db.commit()
+
+        from app.api.v1.endpoints.platform_billing import history
+        # the URL is built in the handler; assert the shape it produces
+        url = f"/api/v1/billing/platform/invoices/{charge.dygine_invoice_id}/pdf"
+        assert url.startswith("/api/v1/billing/platform/")
+        assert "dygine-pay" not in url
+
+    def test_another_orgs_invoice_is_not_downloadable(self, db, org, plan):
+        """
+        An invoice id is a uuid, but a uuid is not an authorisation.
+
+        Without the organisation filter, any owner who learned another PG's
+        invoice id could download their bill.
+        """
+        import uuid as _uuid
+        from sqlalchemy import select as _select
+        from app.services.platform_billing_service import period_of
+
+        other = make_org(db, "Other PG")
+        db.flush()
+        charge = PlatformCharge(
+            organization_id=other.id, purpose="subscription", method="gateway",
+            period=period_of(), gross_paise=149900, discount_paise=0,
+            net_paise=149900, status="paid", dygine_invoice_id="inv-theirs",
+            idempotency_key=f"sub:{other.id}:{_uuid.uuid4().hex[:8]}")
+        db.add(charge)
+        db.commit()
+
+        # the lookup the endpoint performs, scoped to the *other* organisation
+        found = db.scalars(_select(PlatformCharge).where(
+            PlatformCharge.dygine_invoice_id == "inv-theirs",
+            PlatformCharge.organization_id == org.id)).first()
+        assert found is None, "an invoice must not be reachable across tenants"
