@@ -22,6 +22,16 @@ export const platformSettingsApi = {
   setBrevoKey: (api_key) =>
     api.put('/master/settings/brevo-key', { api_key }).then(unwrap),
 
+  /**
+   * The Dygine Pay credentials. Write-only, like the two above.
+   *
+   * Omitting a field leaves what is stored alone; an empty string clears it.
+   * Saving either clears the verified flag, because a wrong secret saves
+   * perfectly and only a live call proves otherwise.
+   */
+  setDygineSecrets: (body) =>
+    api.put('/master/settings/dygine-secrets', body).then(unwrap),
+
   /** Proves delivery, which is a different claim from "saved". */
   sendTestEmail: (to) =>
     api.post('/master/settings/test-email', { to }).then(unwrap),

@@ -10,6 +10,7 @@ import { platformSettingsApi } from '@/services/api/platformSettingsApi'
 import { SmtpCard } from './SmtpCard'
 import { PushCard } from './PushCard'
 import { BroadcastCard } from './BroadcastCard'
+import { DygineCard } from './DygineCard'
 
 /**
  * Every field this screen may write, and how to coerce it.
@@ -219,6 +220,23 @@ export default function MasterSettings() {
             fcm_verified_at: data.fcm_verified_at,
             fcm_project_id: data.fcm_project_id,
             channels: data.channels,
+          }))} />
+
+        {/*
+          Subscription billing. Sits after the notification cards because it is
+          configured once at setup and then left alone, unlike mail which gets
+          revisited.
+        */}
+        <DygineCard form={form} onChange={set} dirty={dirty}
+          onSaved={(data) => setForm((f) => ({
+            // Merge, not replace - same reasoning as SmtpCard. Saving a secret
+            // returns the whole settings object, and assigning it wholesale
+            // would discard any unsaved edit the operator had in progress.
+            ...f,
+            dygine_key_secret_set: data.dygine_key_secret_set ?? f.dygine_key_secret_set,
+            dygine_key_secret_readable: data.dygine_key_secret_readable ?? f.dygine_key_secret_readable,
+            dygine_webhook_secret_set: data.dygine_webhook_secret_set ?? f.dygine_webhook_secret_set,
+            dygine_verified_at: data.dygine_verified_at ?? null,
           }))} />
 
         <BroadcastCard />
