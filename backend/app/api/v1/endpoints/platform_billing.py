@@ -5,7 +5,7 @@ Separate from `/invoices` and `/payments`, which are the resident-facing rent
 system. The two never mix: this router is about the owner paying the platform,
 and no resident, staff member or seeker can reach any of it.
 
-Access is `org.settings.manage`, not a new permission. An organisation that has
+Access is `settings.manage`, not a new permission. An organisation that has
 already decided who may change its settings has decided who may spend its money;
 inventing a second permission would mean every existing PG has nobody able to
 pay until someone reassigns roles.
@@ -78,7 +78,7 @@ def _dygine_error(exc: DygineError) -> HTTPException:
 # ------------------------------------------------------------- overview --
 @router.get("/summary", summary="Wallet, plan and what is due")
 def summary(db: DbSession, scope: Tenant,
-            _: None = Depends(require("org.settings.manage"))) -> dict:
+            _: None = Depends(require("settings.manage"))) -> dict:
     """
     Everything the billing screen needs in one call.
 
@@ -134,7 +134,7 @@ def summary(db: DbSession, scope: Tenant,
 
 @router.get("/history", summary="Past charges and invoices")
 def history(db: DbSession, scope: Tenant, limit: int = 50,
-            _: None = Depends(require("org.settings.manage"))) -> dict:
+            _: None = Depends(require("settings.manage"))) -> dict:
     svc = _service(db)
     charges = db.scalars(
         select(PlatformCharge)
@@ -162,7 +162,7 @@ def history(db: DbSession, scope: Tenant, limit: int = 50,
 
 @router.get("/wallet/transactions", summary="Wallet ledger")
 def wallet_transactions(db: DbSession, scope: Tenant,
-                        _: None = Depends(require("org.settings.manage"))) -> dict:
+                        _: None = Depends(require("settings.manage"))) -> dict:
     svc = _service(db)
     prof = svc.profile(scope.organization_id)
     try:
@@ -174,7 +174,7 @@ def wallet_transactions(db: DbSession, scope: Tenant,
 # -------------------------------------------------------------- coupons --
 @router.post("/coupons/preview", summary="Check a coupon before paying")
 def preview_coupon(body: CouponPreview, db: DbSession, scope: Tenant,
-                   _: None = Depends(require("org.settings.manage"))) -> dict:
+                   _: None = Depends(require("settings.manage"))) -> dict:
     """
     Price the charge with this coupon. Reserves nothing.
 
@@ -194,7 +194,7 @@ def preview_coupon(body: CouponPreview, db: DbSession, scope: Tenant,
 # ------------------------------------------------------------- payments --
 @router.post("/topup", summary="Add money to the wallet")
 def topup(body: TopupRequest, db: DbSession, scope: Tenant,
-          _: None = Depends(require("org.settings.manage"))) -> dict:
+          _: None = Depends(require("settings.manage"))) -> dict:
     svc = _service(db)
     try:
         charge = svc.start_topup_checkout(
@@ -212,7 +212,7 @@ def topup(body: TopupRequest, db: DbSession, scope: Tenant,
 @router.post("/subscription/checkout", summary="Pay the subscription by card or UPI")
 def subscription_checkout(body: CheckoutRequest, db: DbSession,
                           scope: Tenant,
-                          _: None = Depends(require("org.settings.manage"))) -> dict:
+                          _: None = Depends(require("settings.manage"))) -> dict:
     svc = _service(db)
     try:
         charge = svc.start_subscription_checkout(
@@ -233,7 +233,7 @@ def subscription_checkout(body: CheckoutRequest, db: DbSession,
 
 @router.post("/subscription/pay-from-wallet", summary="Pay the subscription from the wallet")
 def pay_from_wallet(body: CheckoutRequest, db: DbSession, scope: Tenant,
-                    _: None = Depends(require("org.settings.manage"))) -> dict:
+                    _: None = Depends(require("settings.manage"))) -> dict:
     """
     Settle the renewal from wallet balance. No redirect, no webhook.
 
@@ -261,7 +261,7 @@ def pay_from_wallet(body: CheckoutRequest, db: DbSession, scope: Tenant,
 
 @router.post("/auto-debit", summary="Turn automatic renewal on or off")
 def set_auto_debit(body: AutoDebitRequest, db: DbSession, scope: Tenant,
-                   _: None = Depends(require("org.settings.manage"))) -> dict:
+                   _: None = Depends(require("settings.manage"))) -> dict:
     svc = _service(db)
     prof = svc.profile(scope.organization_id)
     prof.auto_debit_enabled = body.enabled

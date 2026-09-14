@@ -211,3 +211,34 @@ def test_dygine_settings_survive_a_patch(client, actors):
     assert again["dygine_base_url"] == "https://dygine-pay.onrender.com"
     assert again["dygine_key_id"] == "dgn_test_example123456"
     assert again["wallet_low_balance_warning_days"] == 5
+
+
+def test_pasted_credentials_are_stripped(client, actors, db):
+    """
+    A copy-paste that picks up a trailing newline must still work.
+
+    This is not hypothetical politeness. The stored secret cannot be read back,
+    so a stray space produces "Invalid API credentials" with no way to see that
+    the value is nearly right - which is a genuinely difficult afternoon.
+    """
+    from app.core.crypto import decrypt
+    from app.models import PlatformSettings
+    from app.models.platform import SINGLETON_ID
+    import uuid as _uuid
+
+    client.patch(f"{API}/master/settings", headers=auth(actors["master"]),
+                 json={"dygine_key_id": "  dgn_test_abc123  ",
+                       "dygine_base_url": " https://pay.example.com/ "})
+    client.put(f"{API}/master/settings/dygine-secrets",
+               headers=auth(actors["master"]),
+               json={"key_secret": "  supersecret\n",
+                     "webhook_secret": "\twhsecret  "})
+
+    db.expire_all()
+    row = db.get(PlatformSettings, _uuid.UUID(SINGLETON_ID))
+    assert row.dygine_key_id == "dgn_test_abc123"
+    # The trailing slash goes too: the client appends paths like /v1/plans, and
+    # a double slash is a 404 on some routers.
+    assert row.dygine_base_url == "https://pay.example.com"
+    assert decrypt(row.dygine_key_secret_encrypted) == "supersecret"
+    assert decrypt(row.dygine_webhook_secret_encrypted) == "whsecret"

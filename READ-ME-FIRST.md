@@ -1,70 +1,79 @@
-# Fix: the toggle still would not stay on — and the layout
+# Fix: "My subscription" was invisible — and the whitespace fix, rolled in
 
-## Why my last fix did not work
+## Why the menu item was missing
 
-There are **three** places a settings field has to be declared, and all three
-discard silently when they disagree. I fixed two and missed the first one.
+I guarded the whole owner-facing feature on a permission that **does not exist**.
+
+The catalogue has `settings.manage`. I wrote `org.settings.manage` — plausible,
+consistent-looking, and completely made up. Because no role can hold it:
+
+- the sidebar filtered the item out
+- the route guard blocked the page
+- every API endpoint would have 403'd the owner
+- `to_permission_holders(...)` notified nobody
+
+Four layers failing at once, none of them producing an error that named the
+cause. The feature was unreachable and looked simply absent.
+
+This corrects all thirteen occurrences across six files.
+
+## Also in here: the whitespace patch
+
+If you have not applied `dygine-credentials-fix.zip` yet, don't — it is included
+here. Credentials are stripped on save and again at point of use, and gateway
+errors are readable instead of dumping an HTML error page into a toast.
+
+## Two tests
+
+`test_every_permission_used_in_an_endpoint_exists` parses every `require(...)`
+and `to_permission_holders(...)` in the app and checks the strings against the
+catalogue. It is careful about two things, because a test that cries wolf on
+existing code gets deleted rather than fixed:
+
+- it parses the AST, so the illustrative `payments.approve` in a `dependencies.py`
+  docstring is not mistaken for a guard
+- `require(a, b)` means *a or b*, so it fails only when **every** alternative is
+  unknown — your existing `require("users.delete", "users.deactivate")` is fine,
+  the second one exists
+
+Verified: with `org.settings.manage` put back it fails and names the file and the
+string; with the fix it passes. 103 tests pass overall.
+
+`test_pasted_credentials_are_stripped` covers the trailing-newline case.
+
+## Eight files
 
 ```
-1. frontend  WRITABLE map in MasterSettings.jsx   <- still broken until now
-2. backend   PlatformSettingsUpdate schema         <- fixed last round
-3. backend   WRITABLE set in the service           <- fixed originally
+backend/app/api/v1/endpoints/platform_billing.py    permission
+backend/app/api/v1/endpoints/master_coupons.py      permission
+backend/app/services/platform_billing_service.py    permission
+backend/app/services/platform_settings_service.py   strip on save
+backend/app/services/dygine_client.py               strip on use, better errors
+backend/tests/test_permission_catalog.py            the new check
+backend/tests/test_platform_settings.py             whitespace test
+frontend/src/nav/navConfig.js                       permission
+frontend/src/routes/index.jsx                       permission
+frontend/src/pages/org/PlatformBilling.jsx          permission
 ```
 
-`buildPayload()` loops over that frontend map and sends only what it lists. The
-Dygine fields were not in it, so the browser never sent them at all. The request
-succeeded, the response came back without them, the form re-seeded from that
-response, and the toggle reverted — with no error at any layer.
-
-So my previous patch was correct but insufficient. Gate 1 was still dropping
-them before the request left the browser.
-
-## Layout
-
-The card was sitting in one half of a two-column grid. It carries a URL, a key
-id, two secrets, two buttons, warnings and a code block — at half width the
-fields wrapped and the "do not swap these two secrets" warning became unreadable,
-which is the one thing on that card that most needs reading.
-
-Now: full width, with the URL and key id paired across two columns, the two
-secrets paired directly under their warning, and everything else full width.
-
-## Two files
-
-```
-frontend/src/pages/master/MasterSettings.jsx   the four missing fields + full width
-frontend/src/pages/master/DygineCard.jsx       accepts className, body restructured
-```
-
-Copy both over the ones in your repo, then from the repo root:
+Copy over your repo, then from the repo root:
 
 ```powershell
 git add .
-git commit -m "fix: dygine fields were never sent by the browser"
+git commit -m "fix: platform billing was guarded on a permission that does not exist"
 git push origin main
 ```
 
-Frontend only. No backend change, no migration.
+No migration.
 
 ## After it deploys
 
-Master admin → Settings → Dygine Pay:
+Sign in as the PG owner. **My subscription** appears in the sidebar under
+Admin & setup, above Settings.
 
-1. URL: `https://dygine-pay.onrender.com`
-2. Key id: `dgn_test_BAEavLU1y84sxjYR`
-3. Leave both secret fields empty — they are already stored
-4. Turn the toggle on
-5. **Save changes** at the top of the page
-6. **Reload** — the toggle must still be on. If it is not, tell me before going further.
-7. **Test connection**
+Open it. You should see the wallet balance at zero, the Starter plan, days
+remaining, and what the next charge would be. That is the first end-to-end proof
+that PGGuru is talking to Dygine as an owner rather than as you.
 
-## Still outstanding on the Dygine side
-
-PGGuru has no webhook URL yet — Dygine admin → Products & keys shows "No webhook
-URL — this tool gets no events". Set it to:
-
-```
-https://pgdesk-api.onrender.com/api/v1/webhooks/dygine
-```
-
-Without it, payments will succeed and subscriptions will never extend.
+If the item is still missing, the owner's role does not hold `settings.manage` —
+check Roles & permissions. A system Owner role holds `*` and will always see it.

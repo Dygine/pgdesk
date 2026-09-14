@@ -121,7 +121,7 @@ export default function PlatformBilling() {
   const walletCovers = wallet && net != null && wallet.balance_paise >= net
 
   return (
-    <PermissionGuard permission="org.settings.manage">
+    <PermissionGuard permission="settings.manage">
       <PageHeader
         title="Subscription & wallet"
         subtitle="What you pay for PGuru. Separate from the rent your residents pay you."

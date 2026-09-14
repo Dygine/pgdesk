@@ -753,7 +753,7 @@ class PlatformBillingService:
         """
         try:
             self.notify.to_permission_holders(
-                organization_id, "org.settings.manage",
+                organization_id, "settings.manage",
                 NotificationType.SUBSCRIPTION, title, message)
         except Exception:                        # noqa: BLE001
             # A notification failure must never roll back a payment.

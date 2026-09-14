@@ -76,3 +76,61 @@ def test_can_accepts_a_list_as_or():
 def test_unknown_permissions_are_reported():
     assert unknown_permissions(["rooms.view", "rooms.teleport"]) == ["rooms.teleport"]
     assert unknown_permissions(["*", "rooms.*"]) == []
+
+
+def test_every_permission_used_in_an_endpoint_exists():
+    """
+    A `require("...")` string that is not in the catalogue can never be held by
+    anyone, so the endpoint 403s every caller - including the owner - and the
+    matching nav item silently disappears from the sidebar.
+
+    That is exactly what happened with the platform billing screen: guarded on
+    `org.settings.manage`, which looks plausible and does not exist. The feature
+    was unreachable in every layer at once, with no error anywhere naming why.
+
+    Two things this check is careful about, because a test that cries wolf on
+    existing code gets deleted rather than fixed:
+
+    - Docstrings are stripped first. `dependencies.py` documents `require()`
+      with an illustrative `payments.approve`, which is prose, not a guard.
+    - `require(a, b)` means *a or b*, so it only fails when **every**
+      alternative is unknown. `require("users.delete", "users.deactivate")` is
+      fine - the second one exists, so the endpoint is reachable.
+    """
+    import ast
+    import pathlib
+
+    from app.permissions.catalog import ALL_PERMISSIONS
+
+    known = set(ALL_PERMISSIONS) | {"*"}
+    root = pathlib.Path(__file__).resolve().parent.parent / "app"
+    broken: dict[str, str] = {}
+
+    for path in root.rglob("*.py"):
+        try:
+            tree = ast.parse(path.read_text(encoding="utf-8"))
+        except SyntaxError:                      # pragma: no cover
+            continue
+
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            name = getattr(node.func, "id", None) or getattr(node.func, "attr", None)
+
+            if name == "require":
+                codes = [a.value for a in node.args
+                         if isinstance(a, ast.Constant) and isinstance(a.value, str)]
+                # OR semantics: broken only if not one of them is real.
+                if codes and not any(c in known for c in codes):
+                    broken[f"{path.name}: require({codes})"] = "none exist"
+
+            elif name == "to_permission_holders" and len(node.args) >= 2:
+                arg = node.args[1]
+                if isinstance(arg, ast.Constant) and isinstance(arg.value, str):
+                    if arg.value not in known:
+                        broken[f"{path.name}: to_permission_holders({arg.value!r})"] = (
+                            "does not exist, so nobody is ever notified")
+
+    assert not broken, (
+        "permission strings that can never be granted - the endpoint 403s "
+        f"everyone and the nav item vanishes: {broken}")

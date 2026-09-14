@@ -158,8 +158,15 @@ class PlatformSettingsService:
     def update(self, data: dict) -> PlatformSettings:
         row = self.get()
         for key, value in data.items():
-            if key in WRITABLE and value is not None:
-                setattr(row, key, value)
+            if key not in WRITABLE or value is None:
+                continue
+            # Same reasoning as the secrets: a pasted key id or URL with a
+            # stray space fails authentication with a message that points
+            # nowhere near the real cause.
+            if key in ("dygine_key_id", "dygine_base_url") and isinstance(value, str):
+                value = value.strip().rstrip("/") if key == "dygine_base_url" \
+                    else value.strip()
+            setattr(row, key, value)
         self.db.flush()
         return row
 
@@ -173,9 +180,17 @@ class PlatformSettingsService:
         who deliberately blanks one must be able to.
         """
         row = self.get()
+        # Strip before encrypting. These values are pasted by hand from a
+        # terminal or a one-shot banner, and a copy that picks up a trailing
+        # space or newline is stored verbatim - after which every call fails
+        # with "Invalid API credentials" and the stored value cannot be read
+        # back to see why. Nothing legitimate here has leading or trailing
+        # whitespace.
         if key_secret is not None:
+            key_secret = key_secret.strip()
             row.dygine_key_secret_encrypted = encrypt(key_secret) if key_secret else None
         if webhook_secret is not None:
+            webhook_secret = webhook_secret.strip()
             row.dygine_webhook_secret_encrypted = (
                 encrypt(webhook_secret) if webhook_secret else None)
         # Changing a credential invalidates any previous proof that it worked.

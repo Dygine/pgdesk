@@ -227,7 +227,7 @@ def assign_coupon(coupon_id: uuid.UUID, body: AssignRequest, db: DbSession,
             until = (f" Valid until {coupon.valid_until.strftime('%d %b %Y')}."
                      if coupon.valid_until else "")
             notifier.to_permission_holders(
-                org_id, "org.settings.manage", NotificationType.SUBSCRIPTION,
+                org_id, "settings.manage", NotificationType.SUBSCRIPTION,
                 f"{value} off your next renewal",
                 f"Use code {coupon.code} when you pay.{until}")
             assignment.notified_at = datetime.now(timezone.utc)

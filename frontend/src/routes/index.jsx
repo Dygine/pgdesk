@@ -289,7 +289,7 @@ export const router = createBrowserRouter([
       { path: 'checkout', element: guard('customers.checkout', <Checkout />) },
       { path: 'invoices', element: guard('invoices.view', <Invoices />) },
       { path: 'payments', element: guard('payments.view', <Payments />) },
-      { path: 'subscription', element: guard('org.settings.manage', <PlatformBilling />) },
+      { path: 'subscription', element: guard('settings.manage', <PlatformBilling />) },
       { path: 'expenses', element: guard('expenses.view', <Expenses />) },
       { path: 'accounts', element: guard('reports.view', <Accounts />) },
       { path: 'complaints', element: guard('complaints.view', <Complaints />) },

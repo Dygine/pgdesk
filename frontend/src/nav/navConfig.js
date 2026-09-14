@@ -72,7 +72,7 @@ export const ORG_NAV = [
       { label: 'Users & logins', to: '/app/users', icon: KeyRound, perm: 'users.view' },
       { label: 'Roles & permissions', to: '/app/roles', icon: ShieldCheck, perm: 'roles.view' },
       { label: 'Audit log', to: '/app/audit', icon: ScrollText, perm: 'audit.view' },
-      { label: 'My subscription', to: '/app/subscription', icon: Wallet, perm: 'org.settings.manage' },
+      { label: 'My subscription', to: '/app/subscription', icon: Wallet, perm: 'settings.manage' },
       { label: 'Settings', to: '/app/settings', icon: Settings, perm: 'settings.view' },
     ],
   },

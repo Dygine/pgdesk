@@ -80,8 +80,9 @@ class DygineClient:
     @property
     def base_url(self) -> str:
         row = self.settings()
-        return ((row.dygine_base_url if row and row.dygine_base_url
-                 else DEFAULT_BASE_URL)).rstrip("/")
+        raw = (row.dygine_base_url if row and row.dygine_base_url
+               else DEFAULT_BASE_URL)
+        return raw.strip().rstrip("/")
 
     def webhook_secret(self) -> str | None:
         row = self.settings()
@@ -98,7 +99,10 @@ class DygineClient:
             raise DygineNotConfigured(
                 "The Dygine key secret could not be read. It may have been "
                 "saved with a different encryption key - re-enter it.")
-        token = base64.b64encode(f"{row.dygine_key_id}:{secret}".encode()).decode()
+        # Stripped again here, not only on save, so a value stored before this
+        # was fixed starts working without anyone having to re-enter it.
+        token = base64.b64encode(
+            f"{row.dygine_key_id.strip()}:{secret.strip()}".encode()).decode()
         return f"Basic {token}"
 
     # ---------------------------------------------------------- plumbing --
@@ -132,6 +136,26 @@ class DygineClient:
             message = err.get("message") or res.text[:300]
             log.warning("dygine %s %s -> %s %s", method, path,
                         res.status_code, message)
+
+            # Say what to do about it. "Invalid API credentials" is Dygine's
+            # message and it is accurate, but on its own it does not tell an
+            # operator which of the two values to look at - and the stored
+            # secret cannot be read back to compare.
+            if res.status_code == 401:
+                message = (
+                    "Dygine rejected these credentials. Check the key id is "
+                    "exactly what Dygine admin shows, and re-enter the key "
+                    "secret - it is the part AFTER the colon on the line shown "
+                    "when the key was issued, not the whole line.")
+
+            # A non-JSON body means we did not reach the application at all -
+            # usually a sleeping free instance answering with its own error
+            # page. Pasting that HTML into a toast helps nobody.
+            if not err and res.headers.get("content-type", "").startswith("text/"):
+                message = ("The payments service is not responding. If it is on "
+                           "a free plan it may be asleep - open its /health URL "
+                           "once and try again.")
+
             raise DygineError(message, status=res.status_code,
                               code=err.get("code", ""),
                               detail=err.get("detail", {}))
