@@ -22,6 +22,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, Request, status
 from pydantic import BaseModel, Field
 from sqlalchemy import select
 
+from app.core.responses import ok
 from app.core.dependencies import CurrentScope, DbSession, require, require_tenant
 from app.models import Coupon, PlatformCharge, SubscriptionPlan
 from app.services.coupon_service import CouponError, CouponService
@@ -129,7 +130,7 @@ def summary(db: DbSession, scope: Tenant,
         "valid_until": c.valid_until.isoformat() if c.valid_until else None,
     } for c in coupons]
 
-    return payload
+    return ok(payload)
 
 
 @router.get("/history", summary="Past charges and invoices")
@@ -142,7 +143,7 @@ def history(db: DbSession, scope: Tenant, limit: int = 50,
         .order_by(PlatformCharge.created_at.desc())
         .limit(min(limit, 200))).all()
 
-    return {"data": [{
+    return ok([{
         "id": str(c.id),
         "purpose": c.purpose,
         "method": c.method,
@@ -157,7 +158,7 @@ def history(db: DbSession, scope: Tenant, limit: int = 50,
         "failure_reason": c.failure_reason,
         "created_at": c.created_at.isoformat(),
         "paid_at": c.paid_at.isoformat() if c.paid_at else None,
-    } for c in charges]}
+    } for c in charges])
 
 
 @router.get("/wallet/transactions", summary="Wallet ledger")
@@ -166,7 +167,7 @@ def wallet_transactions(db: DbSession, scope: Tenant,
     svc = _service(db)
     prof = svc.profile(scope.organization_id)
     try:
-        return svc.dygine.wallet_detail(prof.dygine_external_id)
+        return ok(svc.dygine.wallet_detail(prof.dygine_external_id))
     except DygineError as exc:
         raise _dygine_error(exc) from None
 
@@ -188,7 +189,7 @@ def preview_coupon(body: CouponPreview, db: DbSession, scope: Tenant,
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
     except ValueError as exc:
         raise HTTPException(status.HTTP_400_BAD_REQUEST, str(exc)) from None
-    return plan_info.as_dict()
+    return ok(plan_info.as_dict())
 
 
 # ------------------------------------------------------------- payments --
@@ -205,8 +206,8 @@ def topup(body: TopupRequest, db: DbSession, scope: Tenant,
         raise _dygine_error(exc) from None
 
     db.commit()
-    return {"charge_id": str(charge.id), "checkout_url": charge.checkout_url,
-            "amount_rupees": paise_to_rupees(charge.net_paise)}
+    return ok({"charge_id": str(charge.id), "checkout_url": charge.checkout_url,
+            "amount_rupees": paise_to_rupees(charge.net_paise)})
 
 
 @router.post("/subscription/checkout", summary="Pay the subscription by card or UPI")
@@ -226,9 +227,9 @@ def subscription_checkout(body: CheckoutRequest, db: DbSession,
         raise _dygine_error(exc) from None
 
     db.commit()
-    return {"charge_id": str(charge.id), "checkout_url": charge.checkout_url,
+    return ok({"charge_id": str(charge.id), "checkout_url": charge.checkout_url,
             "amount_rupees": paise_to_rupees(charge.net_paise),
-            "discount_rupees": paise_to_rupees(charge.discount_paise)}
+            "discount_rupees": paise_to_rupees(charge.discount_paise)})
 
 
 @router.post("/subscription/pay-from-wallet", summary="Pay the subscription from the wallet")
@@ -254,9 +255,9 @@ def pay_from_wallet(body: CheckoutRequest, db: DbSession, scope: Tenant,
 
     db.commit()
     sub, _plan = svc.current_plan(scope.organization_id)
-    return {"charge_id": str(charge.id), "status": charge.status,
+    return ok({"charge_id": str(charge.id), "status": charge.status,
             "paid_rupees": paise_to_rupees(charge.net_paise),
-            "current_period_end": sub.end_date.isoformat() if sub else None}
+            "current_period_end": sub.end_date.isoformat() if sub else None})
 
 
 @router.post("/auto-debit", summary="Turn automatic renewal on or off")
@@ -266,4 +267,4 @@ def set_auto_debit(body: AutoDebitRequest, db: DbSession, scope: Tenant,
     prof = svc.profile(scope.organization_id)
     prof.auto_debit_enabled = body.enabled
     db.commit()
-    return {"auto_debit_enabled": prof.auto_debit_enabled}
+    return ok({"auto_debit_enabled": prof.auto_debit_enabled})

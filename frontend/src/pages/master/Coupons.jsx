@@ -208,7 +208,7 @@ export default function Coupons() {
                   </div>
                 ) },
             ]}
-            rows={coupons.data?.data || []}
+            rows={coupons.data || []}
             empty={<EmptyState title="No coupons yet"
               description="Create one to give a PG owner a discount on their renewal." />}
           />

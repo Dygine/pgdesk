@@ -1,66 +1,62 @@
-# Fix: "My subscription" was invisible — and the whitespace fix, rolled in
+# Fix: the subscription page rendered entirely from its fallbacks
 
-## Why the menu item was missing
+## What you saw
 
-I guarded the whole owner-facing feature on a permission that **does not exist**.
+Wallet ₹0, plan "—", renews "—", next charge "—", and "Online payment is not
+set up on this platform yet" — all at once, on an account whose plan is Starter
+and whose gateway had just verified green.
 
-The catalogue has `settings.manage`. I wrote `org.settings.manage` — plausible,
-consistent-looking, and completely made up. Because no role can hold it:
+Four wrong readings, one cause: **the whole response arrived as `null`.**
 
-- the sidebar filtered the item out
-- the route guard blocked the page
-- every API endpoint would have 403'd the owner
-- `to_permission_holders(...)` notified nobody
+## Why
 
-Four layers failing at once, none of them producing an error that named the
-cause. The feature was unreachable and looked simply absent.
+The frontend's `unwrap()` is `response?.data ?? null`. Every endpoint in this
+app returns `ok(payload)`, which wraps as `{"success": true, "data": …}`.
 
-This corrects all thirteen occurrences across six files.
+Mine returned bare dicts. So `unwrap()` looked for `.data`, found nothing, and
+handed the page null — with a 200 status, no console error and no failed
+request. The screen then rendered from its own fallbacks, which is exactly what
+"empty" looks like.
 
-## Also in here: the whitespace patch
+A 500 would have been easier to debug than this.
 
-If you have not applied `dygine-credentials-fix.zip` yet, don't — it is included
-here. Credentials are stripped on save and again at point of use, and gateway
-errors are readable instead of dumping an HTML error page into a toast.
+## The test
 
-## Two tests
+`test_response_envelope.py` parses every endpoint in `app/api` and asserts the
+return goes through `ok()` or `paginated()`. Checked by parsing rather than
+calling, so it covers routes no test exercises yet.
 
-`test_every_permission_used_in_an_endpoint_exists` parses every `require(...)`
-and `to_permission_holders(...)` in the app and checks the strings against the
-catalogue. It is careful about two things, because a test that cries wolf on
-existing code gets deleted rather than fixed:
+It took two attempts to make it honest. The first version flagged two of your
+existing files wrongly:
 
-- it parses the AST, so the illustrative `payments.approve` in a `dependencies.py`
-  docstring is not mistaken for a guard
-- `require(a, b)` means *a or b*, so it fails only when **every** alternative is
-  unknown — your existing `require("users.delete", "users.deactivate")` is fine,
-  the second one exists
+- `health.py` returns bare JSON deliberately — Render reads it, not the app, and
+  a probe that has to dig into `.data` to find "ok" is a worse probe. Now
+  explicitly exempt.
+- `list_notifications` does `payload = paginated(...)`, adds `unread_count`, then
+  returns the variable. Correctly enveloped; my check only looked at the return
+  expression. It now traces local assignment.
 
-Verified: with `org.settings.manage` put back it fails and names the file and the
-string; with the fix it passes. 103 tests pass overall.
+Verified: with a bare return put back it fails and names the function and line.
 
-`test_pasted_credentials_are_stripped` covers the trailing-newline case.
-
-## Eight files
+## Files
 
 ```
-backend/app/api/v1/endpoints/platform_billing.py    permission
-backend/app/api/v1/endpoints/master_coupons.py      permission
-backend/app/services/platform_billing_service.py    permission
-backend/app/services/platform_settings_service.py   strip on save
-backend/app/services/dygine_client.py               strip on use, better errors
-backend/tests/test_permission_catalog.py            the new check
-backend/tests/test_platform_settings.py             whitespace test
-frontend/src/nav/navConfig.js                       permission
-frontend/src/routes/index.jsx                       permission
-frontend/src/pages/org/PlatformBilling.jsx          permission
+backend/app/api/v1/endpoints/platform_billing.py   8 returns wrapped
+backend/app/api/v1/endpoints/master_coupons.py     11 returns wrapped
+backend/tests/test_response_envelope.py            the new check
+frontend/src/pages/org/PlatformBilling.jsx         reads the flattened list
+frontend/src/pages/master/Coupons.jsx              reads the flattened list
 ```
+
+List endpoints now return `ok([...])` to match `master.py`, rather than the
+double-nested `ok({"data": [...]})` they had — so the two pages read
+`history.data` instead of `history.data?.data`.
 
 Copy over your repo, then from the repo root:
 
 ```powershell
 git add .
-git commit -m "fix: platform billing was guarded on a permission that does not exist"
+git commit -m "fix: endpoints returned no response envelope"
 git push origin main
 ```
 
@@ -68,12 +64,14 @@ No migration.
 
 ## After it deploys
 
-Sign in as the PG owner. **My subscription** appears in the sidebar under
-Admin & setup, above Settings.
+Reload **My subscription** as the PG owner. You should see:
 
-Open it. You should see the wallet balance at zero, the Starter plan, days
-remaining, and what the next charge would be. That is the first end-to-end proof
-that PGGuru is talking to Dygine as an owner rather than as you.
+- Wallet balance ₹0 (correct — nothing topped up yet)
+- Current plan **Starter**, ₹— / monthly
+- Renews **23 Oct 2026**, 39 days left
+- Next charge, and a **Pay by card or UPI** button that is enabled
+- The "not set up" banner gone
 
-If the item is still missing, the owner's role does not hold `settings.manage` —
-check Roles & permissions. A system Owner role holds `*` and will always see it.
+If the banner is still there but the plan now shows, that is a different thing:
+`gateway_available` is read straight from the saved settings, so it would mean
+the enabled toggle is off in master admin.

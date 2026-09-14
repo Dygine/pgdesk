@@ -17,6 +17,7 @@ from fastapi import APIRouter, Body, Depends, HTTPException, status
 from pydantic import BaseModel, Field, field_validator
 from sqlalchemy import func, select
 
+from app.core.responses import ok
 from app.core.dependencies import CurrentScope, DbSession, require_master
 from app.models import (
     Coupon, CouponAssignment, CouponRedemption, Organization, OrgBillingProfile,
@@ -101,7 +102,7 @@ def _coupon_payload(db, coupon: Coupon, svc: CouponService) -> dict:
 def list_coupons(db: DbSession, scope: Master) -> dict:
     svc = CouponService(db)
     coupons = db.scalars(select(Coupon).order_by(Coupon.created_at.desc())).all()
-    return {"data": [_coupon_payload(db, c, svc) for c in coupons]}
+    return ok([_coupon_payload(db, c, svc) for c in coupons])
 
 
 @router.post("/coupons", status_code=status.HTTP_201_CREATED,
@@ -148,7 +149,7 @@ def create_coupon(body: CouponCreate, db: DbSession,
         created_by_id=getattr(scope, "user_id", None))
     db.add(coupon)
     db.commit()
-    return _coupon_payload(db, coupon, CouponService(db))
+    return ok(_coupon_payload(db, coupon, CouponService(db)))
 
 
 @router.patch("/coupons/{coupon_id}", summary="Edit a coupon")
@@ -167,7 +168,7 @@ def update_coupon(coupon_id: uuid.UUID, body: CouponUpdate, db: DbSession,
         if value is not None:
             setattr(coupon, field, value)
     db.commit()
-    return _coupon_payload(db, coupon, CouponService(db))
+    return ok(_coupon_payload(db, coupon, CouponService(db)))
 
 
 @router.delete("/coupons/{coupon_id}", summary="Delete an unused coupon")
@@ -190,7 +191,7 @@ def delete_coupon(coupon_id: uuid.UUID, db: DbSession,
 
     db.delete(coupon)
     db.commit()
-    return {"deleted": True}
+    return ok({"deleted": True})
 
 
 @router.post("/coupons/{coupon_id}/assign", summary="Grant a coupon to specific PGs")
@@ -233,8 +234,8 @@ def assign_coupon(coupon_id: uuid.UUID, body: AssignRequest, db: DbSession,
             assignment.notified_at = datetime.now(timezone.utc)
 
     db.commit()
-    return {"assigned": added,
-            "total": len(coupon.assignments) + added}
+    return ok({"assigned": added,
+            "total": len(coupon.assignments) + added})
 
 
 @router.delete("/coupons/{coupon_id}/assign/{organization_id}",
@@ -248,7 +249,7 @@ def unassign_coupon(coupon_id: uuid.UUID, organization_id: uuid.UUID,
         raise HTTPException(status.HTTP_404_NOT_FOUND, "Not assigned")
     db.delete(assignment)
     db.commit()
-    return {"removed": True}
+    return ok({"removed": True})
 
 
 @router.get("/coupons/{coupon_id}/redemptions", summary="Who used this coupon")
@@ -258,7 +259,7 @@ def coupon_redemptions(coupon_id: uuid.UUID, db: DbSession,
         CouponRedemption.coupon_id == coupon_id)
         .order_by(CouponRedemption.created_at.desc()).limit(200)).all()
     orgs = {o.id: o.name for o in db.scalars(select(Organization))}
-    return {"data": [{
+    return ok([{
         "organization": orgs.get(r.organization_id, "—"),
         "organization_id": str(r.organization_id),
         "period": r.period.isoformat() if r.period else None,
@@ -267,7 +268,7 @@ def coupon_redemptions(coupon_id: uuid.UUID, db: DbSession,
         "discount_rupees": paise_to_rupees(r.discount_paise),
         "net_rupees": paise_to_rupees(r.net_paise),
         "created_at": r.created_at.isoformat(),
-    } for r in rows]}
+    } for r in rows])
 
 
 # -------------------------------------------------------------- revenue --
@@ -301,7 +302,7 @@ def revenue(db: DbSession, scope: Master, days: int = 90) -> dict:
     orgs = {str(o.id): o.name for o in db.scalars(select(Organization))}
     top = sorted(by_org.items(), key=lambda kv: kv[1], reverse=True)[:10]
 
-    return {
+    return ok({
         "window_days": days,
         "subscription_rupees": paise_to_rupees(subscription_paise),
         "topup_rupees": paise_to_rupees(topup_paise),
@@ -314,7 +315,7 @@ def revenue(db: DbSession, scope: Master, days: int = 90) -> dict:
         "top_organizations": [
             {"organization": orgs.get(oid, "—"), "organization_id": oid,
              "paid_rupees": paise_to_rupees(amount)} for oid, amount in top],
-    }
+    })
 
 
 @router.get("/billing/charges", summary="Every platform charge")
@@ -325,7 +326,7 @@ def all_charges(db: DbSession, scope: Master, limit: int = 100,
         q = q.where(PlatformCharge.status == status_filter)
     charges = db.scalars(q.limit(min(limit, 500))).all()
     orgs = {o.id: o.name for o in db.scalars(select(Organization))}
-    return {"data": [{
+    return ok([{
         "id": str(c.id),
         "organization": orgs.get(c.organization_id, "—"),
         "purpose": c.purpose, "method": c.method, "status": c.status,
@@ -335,7 +336,7 @@ def all_charges(db: DbSession, scope: Master, limit: int = 100,
         "invoice_number": c.dygine_invoice_number,
         "failure_reason": c.failure_reason,
         "created_at": c.created_at.isoformat(),
-    } for c in charges]}
+    } for c in charges])
 
 
 @router.post("/billing/reconcile", summary="Settle charges left in limbo")
@@ -348,7 +349,7 @@ def reconcile(db: DbSession, scope: Master) -> dict:
     """
     result = PlatformBillingService(db).reconcile_open()
     db.commit()
-    return result
+    return ok(result)
 
 
 @router.post("/billing/verify-dygine", summary="Check the Dygine credentials work")
@@ -357,6 +358,6 @@ def verify_dygine(db: DbSession, scope: Master) -> dict:
     try:
         result = DygineClient(db).verify()
         db.commit()
-        return result
+        return ok(result)
     except DygineError as exc:
         raise HTTPException(status.HTTP_502_BAD_GATEWAY, str(exc)) from None

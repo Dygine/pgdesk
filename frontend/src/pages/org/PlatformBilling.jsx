@@ -314,7 +314,7 @@ export default function PlatformBilling() {
                   </a>
                 ) : null },
             ]}
-            rows={history.data?.data || []}
+            rows={history.data || []}
             empty={<EmptyState title="Nothing yet"
               description="Your subscription payments will appear here." />}
           />
