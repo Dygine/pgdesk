@@ -150,6 +150,22 @@ class BrevoKeyUpdate(BaseModel):
     api_key: str = Field(max_length=400)
 
 
+class DygineSecretsUpdate(BaseModel):
+    """
+    Write-only, like the SMTP password and the Brevo key.
+
+    Two different secrets that are routinely confused. `key_secret` authenticates
+    PGGuru *to* Dygine on outbound calls. `webhook_secret` verifies events
+    arriving *from* Dygine. Swapping them means every API call is rejected and
+    every webhook fails its signature check.
+
+    An omitted field leaves what is stored untouched; an empty string clears it.
+    """
+
+    key_secret: str | None = Field(default=None, max_length=400)
+    webhook_secret: str | None = Field(default=None, max_length=400)
+
+
 class SmtpPasswordUpdate(BaseModel):
     """
     Write-only. There is no matching read anywhere in the API.

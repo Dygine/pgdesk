@@ -26,6 +26,7 @@ from app.models import (
     SubscriptionPlan, User,
 )
 from app.schemas.organization import (
+    DygineSecretsUpdate,
     ChangePlan, ExtendSubscription, LimitOverrides, OrganizationCreate,
     OrganizationUpdate, PlanUpdate, BrevoKeyUpdate, PlatformSettingsUpdate, SmtpPasswordUpdate, TestEmailRequest, StatusChange,
 )
@@ -478,6 +479,34 @@ def set_brevo_key(body: BrevoKeyUpdate, db: DbSession, scope: Master,
     db.commit()
     return ok(service.as_dict(),
               message="Brevo key saved. Send a test message to confirm it works.")
+
+
+@router.put("/settings/dygine-secrets", summary="Set or clear the Dygine Pay secrets")
+def set_dygine_secrets(body: DygineSecretsUpdate, db: DbSession, scope: Master,
+                       request: Request) -> dict:
+    """
+    Store the credentials PGGuru uses to reach Dygine Pay.
+
+    Write-only for the same reason as every other secret here: the settings
+    response reports whether one is stored, never what it is.
+
+    Saving either value clears `dygine_verified_at`. "Saved" and "works" are
+    different claims, and a wrong secret saves perfectly - so the screen should
+    stop showing a tick until a fresh test call has actually succeeded.
+    """
+    service = PlatformSettingsService(db)
+    service.set_dygine_secrets(key_secret=body.key_secret,
+                               webhook_secret=body.webhook_secret)
+    changed = [name for name, value in (("key secret", body.key_secret),
+                                        ("webhook secret", body.webhook_secret))
+               if value is not None]
+    AuditService(db).record(
+        scope=scope, module="Platform", action=AuditAction.UPDATE,
+        description=f"Dygine Pay {' and '.join(changed) or 'secrets'} updated",
+        entity_type="platform_settings", ip_address=client_ip(request))
+    db.commit()
+    return ok(service.as_dict(),
+              message="Saved. Run the connection test to confirm it works.")
 
 
 @router.put("/settings/fcm-credentials", summary="Set or clear the Firebase key")
