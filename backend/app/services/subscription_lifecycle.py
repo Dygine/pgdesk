@@ -50,10 +50,21 @@ class SweepResult:
     warned: list[str] = field(default_factory=list)
     expired: list[str] = field(default_factory=list)
     suspended: list[str] = field(default_factory=list)
+    #: Renewals taken from the wallet before any of the above ran.
+    auto_debited: list[str] = field(default_factory=list)
+    #: Wallets that could not cover the renewal.
+    insufficient: list[str] = field(default_factory=list)
+    #: Owners warned that their balance will not stretch to the next renewal.
+    low_balance_warned: list[str] = field(default_factory=list)
+    coupons_released: int = 0
 
     def as_dict(self) -> dict:
         return {"warned": self.warned, "expired": self.expired,
-                "suspended": self.suspended}
+                "suspended": self.suspended,
+                "auto_debited": self.auto_debited,
+                "insufficient": self.insufficient,
+                "low_balance_warned": self.low_balance_warned,
+                "coupons_released": self.coupons_released}
 
 
 class SubscriptionLifecycleService:
@@ -61,6 +72,34 @@ class SubscriptionLifecycleService:
         self.db = db
         self.audit = AuditService(db)
         self.notify = NotificationService(db)
+
+    def _collect_due_renewals(self, result: SweepResult) -> SweepResult:
+        """
+        Auto-debit wallets, warn on low balances, release stale coupon holds.
+
+        Wrapped so that a payments outage degrades rather than breaks: if Dygine
+        is unreachable the lifecycle sweep still runs and still expires and
+        suspends as it always did. A billing integration that can take the whole
+        daily job down with it is worse than one that occasionally misses a
+        renewal.
+        """
+        try:
+            from app.services.coupon_service import CouponService
+            from app.services.platform_billing_service import PlatformBillingService
+
+            billing = PlatformBillingService(self.db)
+            if billing.dygine.enabled:
+                debited = billing.run_auto_debit()
+                result.auto_debited = debited["charged"]
+                result.insufficient = debited["insufficient"]
+                result.low_balance_warned = billing.warn_low_balance()
+
+            result.coupons_released = CouponService(self.db).sweep_expired()
+            self.db.commit()
+        except Exception:                        # noqa: BLE001
+            self.db.rollback()
+            log.exception("renewal collection failed; continuing with the sweep")
+        return result
 
     def _settings(self) -> PlatformSettings | None:
         try:
@@ -99,6 +138,16 @@ class SubscriptionLifecycleService:
         auto_suspend = settings.auto_suspend_after_grace if settings else True
 
         result = SweepResult()
+
+        # Collect the money first, then judge who has not paid.
+        #
+        # Order matters. An organisation whose wallet covers today's renewal
+        # should be renewed, not expired and then renewed - anything watching
+        # the status would see it lapse for no reason, and the owner would get
+        # an "about to be suspended" notice for a bill their balance had
+        # already covered.
+        if not dry_run:
+            result = self._collect_due_renewals(result)
 
         rows = self.db.scalars(
             select(Subscription).where(Subscription.is_current.is_(True))).all()

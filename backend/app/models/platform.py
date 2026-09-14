@@ -139,6 +139,35 @@ class PlatformSettings(Base, UUIDPrimaryKey, Timestamps):
     native_session_days: Mapped[int] = mapped_column(
         Integer, nullable=False, default=3650)
 
+    # --- Dygine Pay (how PG owners pay the platform) ---
+    #: The platform's account with its own payments hub. One key pair for the
+    #: whole deployment, held here in master admin - never per organisation. A
+    #: PG owner is a *customer* of Dygine, not an integrator with it, and giving
+    #: each one a key would let any owner create charges against the platform.
+    #:
+    #: The secret takes the same write-only path as the SMTP password: encrypted
+    #: on the way in, and the settings endpoint reports whether one is stored,
+    #: never what it is.
+    dygine_enabled: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    dygine_base_url: Mapped[str | None] = mapped_column(String(200))
+    dygine_key_id: Mapped[str | None] = mapped_column(String(80))
+    dygine_key_secret_encrypted: Mapped[str | None] = mapped_column(Text)
+    #: Verifies webhooks arriving *from* Dygine. A different value from the key
+    #: secret; confusing the two means every event fails verification.
+    dygine_webhook_secret_encrypted: Mapped[str | None] = mapped_column(Text)
+    #: Set when a call to Dygine actually succeeded. "Saved" and "works" are
+    #: different claims, and a wrong secret saves perfectly.
+    dygine_verified_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    #: Days before renewal to warn an owner their wallet will not cover it.
+    #: A silent failure on renewal day is a support ticket; a warning a week
+    #: earlier is a top-up.
+    wallet_low_balance_warning_days: Mapped[int] = mapped_column(
+        Integer, nullable=False, default=7)
+    #: Suggested top-up amounts on the owner's billing screen, in rupees.
+    wallet_topup_presets: Mapped[list] = mapped_column(
+        JSON, nullable=False, default=lambda: [1000, 5000, 10000, 25000])
+
     # --- platform identity ---
     platform_name: Mapped[str] = mapped_column(
         String(80), nullable=False, default="PGuru")
@@ -161,6 +190,8 @@ class PlatformSettings(Base, UUIDPrimaryKey, Timestamps):
                         name="ck_platform_native_session_days"),
         CheckConstraint("rent_reminder_days BETWEEN 0 AND 30",
                         name="ck_platform_rent_reminder_days"),
+        CheckConstraint("wallet_low_balance_warning_days BETWEEN 0 AND 60",
+                        name="ck_platform_wallet_warning_days"),
     )
 
 

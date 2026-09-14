@@ -9,7 +9,8 @@ from fastapi import APIRouter
 
 from app.api.v1.endpoints import (
     public, seeker,
-    accounts, auth, billing, dashboard, master, me, meta, operations, property, rbac,
+    accounts, auth, billing, dashboard, dygine_webhooks, master, master_coupons,
+    me, meta, operations, platform_billing, property, rbac,
     residents, site, staff, support,
 )
 
@@ -35,3 +36,11 @@ api_router.include_router(support.router)       # complaints, queries, expenses,
 api_router.include_router(staff.router)        # /staff  the workforce list, salaries
 api_router.include_router(accounts.router)     # /accounts/pnl
 api_router.include_router(me.router)            # /me/*  the resident portal
+
+# --- platform billing: PG owners paying PGuru, settled through Dygine Pay ---
+# Separate from billing.router above, which is residents paying their landlord
+# through that landlord's own Razorpay keys. The two never share a code path.
+api_router.include_router(platform_billing.router)   # /billing/platform/*  (owner)
+api_router.include_router(master_coupons.router)     # /master/coupons, /master/revenue
+api_router.include_router(dygine_webhooks.router)    # /webhooks/dygine  (unauthenticated,
+                                                     # HMAC-verified)

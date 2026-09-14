@@ -22,6 +22,10 @@ from app.models.login_code import LoginCode
 from app.models.otp import OtpCode, OtpPurpose
 from app.models.organization import Organization
 from app.models.platform import SINGLETON_ID, LoginAttempt, PlatformSettings
+from app.models.platform_billing import (
+    Coupon, CouponAssignment, CouponRedemption, DygineEvent, OrgBillingProfile,
+    PlatformCharge,
+)
 from app.models.operations import (
     Attendance, FoodMenu, FoodWeekMenu, GateLog, GatePass, LaundryRequest, LaundrySlot,
     MealAttendance, Visitor,
@@ -57,6 +61,8 @@ __all__ = [
     "OtpPurpose", "OrganizationStatus",
     "LoginAttempt", "PasswordResetToken", "Permission", "PlanStatus",
     "PlatformSettings",
+    "Coupon", "CouponAssignment", "CouponRedemption", "DygineEvent",
+    "OrgBillingProfile", "PlatformCharge",
     "PrincipalKind", "RefreshToken", "SINGLETON_ID",
     "Role", "Subscription", "SubscriptionPlan", "SubscriptionStatus", "TenantMixin",
     "Timestamps", "UUIDPrimaryKey", "User", "UserStatus",

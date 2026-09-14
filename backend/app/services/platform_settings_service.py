@@ -43,6 +43,11 @@ WRITABLE = {
     # eventually see it echoed by a serializer that treats every column alike.
     "smtp_host", "smtp_port", "smtp_username", "smtp_from_email",
     "smtp_from_name", "smtp_use_tls", "smtp_use_ssl",
+    # Dygine Pay. The key secret and webhook secret are NOT here - same reason
+    # as the SMTP password: they take a path that encrypts on the way in and
+    # offers no way back out.
+    "dygine_enabled", "dygine_base_url", "dygine_key_id",
+    "wallet_low_balance_warning_days", "wallet_topup_presets",
     # The Brevo API key is not here for the same reason the SMTP password is
     # not: it takes a separate path that encrypts on the way in and offers no
     # way out. A serializer that treats every column alike would eventually
@@ -158,6 +163,25 @@ class PlatformSettingsService:
         self.db.flush()
         return row
 
+    def set_dygine_secrets(self, *, key_secret: str | None = None,
+                           webhook_secret: str | None = None) -> None:
+        """
+        Store the Dygine credentials, encrypted, with no read path.
+
+        An empty string clears a value; None leaves it alone. That distinction
+        matters - a form that omits a field must not wipe it, and an operator
+        who deliberately blanks one must be able to.
+        """
+        row = self.get()
+        if key_secret is not None:
+            row.dygine_key_secret_encrypted = encrypt(key_secret) if key_secret else None
+        if webhook_secret is not None:
+            row.dygine_webhook_secret_encrypted = (
+                encrypt(webhook_secret) if webhook_secret else None)
+        # Changing a credential invalidates any previous proof that it worked.
+        row.dygine_verified_at = None
+        self.db.flush()
+
     def as_dict(self) -> dict:
         row = self.get()
         return {
@@ -201,6 +225,20 @@ class PlatformSettingsService:
             "fcm_credentials_readable": is_readable(row.fcm_credentials_encrypted),
             "fcm_verified_at": (row.fcm_verified_at.isoformat()
                                 if row.fcm_verified_at else None),
+
+            # --- Dygine Pay ---
+            # Same rule as every other secret here: whether one is stored, never
+            # what it is.
+            "dygine_enabled": row.dygine_enabled,
+            "dygine_base_url": row.dygine_base_url,
+            "dygine_key_id": row.dygine_key_id,
+            "dygine_key_secret_set": bool(row.dygine_key_secret_encrypted),
+            "dygine_key_secret_readable": is_readable(row.dygine_key_secret_encrypted),
+            "dygine_webhook_secret_set": bool(row.dygine_webhook_secret_encrypted),
+            "dygine_verified_at": (row.dygine_verified_at.isoformat()
+                                   if row.dygine_verified_at else None),
+            "wallet_low_balance_warning_days": row.wallet_low_balance_warning_days,
+            "wallet_topup_presets": row.wallet_topup_presets or [],
 
             # --- provider selection ---
             "email_provider": row.email_provider or "smtp",
