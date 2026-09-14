@@ -173,3 +173,41 @@ def test_a_settings_change_is_audited(db, client, actors):
     entry = db.query(AuditLog).filter(AuditLog.module == "Platform").first()
     assert entry is not None
     assert "default_trial_days" in entry.description
+
+
+def test_every_writable_field_is_declared_on_the_patch_schema():
+    """
+    A field the service will write must also be declared on the PATCH schema.
+
+    This exists because of a bug that was invisible in testing and baffling in
+    production. The Dygine fields were added to WRITABLE but not to
+    PlatformSettingsUpdate. Pydantic drops undeclared fields silently, so the
+    request returned 200 with the keys already stripped, and the settings screen
+    appeared to save and then reverted on reload. No error anywhere.
+
+    Asserting the two agree catches the class, not just the one instance.
+    """
+    from app.schemas.organization import PlatformSettingsUpdate
+    from app.services.platform_settings_service import WRITABLE
+
+    missing = WRITABLE - set(PlatformSettingsUpdate.model_fields)
+    assert not missing, (
+        "writable but not declared on the PATCH schema, so silently discarded: "
+        f"{sorted(missing)}")
+
+
+def test_dygine_settings_survive_a_patch(client, actors):
+    """The specific regression: the enabled toggle used to flip back off."""
+    patch = client.patch(f"{API}/master/settings", headers=auth(actors["master"]),
+                         json={"dygine_enabled": True,
+                               "dygine_base_url": "https://dygine-pay.onrender.com",
+                               "dygine_key_id": "dgn_test_example123456",
+                               "wallet_low_balance_warning_days": 5})
+    assert patch.status_code == 200, patch.text
+
+    again = client.get(f"{API}/master/settings",
+                       headers=auth(actors["master"])).json()["data"]
+    assert again["dygine_enabled"] is True
+    assert again["dygine_base_url"] == "https://dygine-pay.onrender.com"
+    assert again["dygine_key_id"] == "dgn_test_example123456"
+    assert again["wallet_low_balance_warning_days"] == 5

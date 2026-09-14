@@ -231,3 +231,17 @@ class PlatformSettingsUpdate(BaseModel):
     #: "until the app is removed" in practice; an operator who decides that is
     #: too long for staff phones can shorten it without a code change.
     native_session_days: int | None = Field(default=None, ge=1, le=3650)
+
+    # --- Dygine Pay (the two secrets have their own endpoint, deliberately) ---
+    #
+    # These must be listed here as well as in the service's WRITABLE set. The
+    # service set is the second gate; this schema is the first, and pydantic
+    # drops any field it does not declare - silently, with a 200 response. A
+    # field missing here saves nothing and reports no error, which is a
+    # genuinely confusing failure: the form appears to work and then reverts.
+    dygine_enabled: bool | None = None
+    dygine_base_url: str | None = Field(default=None, max_length=200)
+    dygine_key_id: str | None = Field(default=None, max_length=80)
+    #: 0 turns the low-balance warning off. Bounded to match the CHECK.
+    wallet_low_balance_warning_days: int | None = Field(default=None, ge=0, le=60)
+    wallet_topup_presets: list[int] | None = None
