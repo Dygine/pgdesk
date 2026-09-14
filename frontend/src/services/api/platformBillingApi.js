@@ -32,6 +32,16 @@ export const platformBillingApi = {
   payFromWallet: (body) =>
     api.post('/billing/platform/subscription/pay-from-wallet', body).then(unwrap),
 
+  /**
+   * The PDF itself, as a blob.
+   *
+   * Uses the raw client rather than `unwrap` because the response is a
+   * document, not the JSON envelope. Going through the client is what carries
+   * the auth token - an anchor tag cannot, and lands on the SPA's 404.
+   */
+  invoicePdf: (invoiceId) =>
+    api.blob(`/billing/platform/invoices/${invoiceId}/pdf`),
+
   setAutoDebit: (enabled) =>
     api.post('/billing/platform/auto-debit', { enabled }).then(unwrap),
 }

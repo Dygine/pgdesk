@@ -24,7 +24,7 @@ from app.models.organization import Organization
 from app.models.platform import SINGLETON_ID, LoginAttempt, PlatformSettings
 from app.models.platform_billing import (
     Coupon, CouponAssignment, CouponRedemption, DygineEvent, OrgBillingProfile,
-    PlatformCharge,
+    PlatformCharge, PlatformTicket, PlatformTicketMessage,
 )
 from app.models.operations import (
     Attendance, FoodMenu, FoodWeekMenu, GateLog, GatePass, LaundryRequest, LaundrySlot,

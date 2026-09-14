@@ -282,8 +282,46 @@ async function request(path, { method = 'GET', body, params, auth = true, retry 
   throw toError(payload, res.status)
 }
 
+/**
+ * Fetch a binary document — an invoice PDF — rather than JSON.
+ *
+ * Separate from `request` because that parses the response as the JSON
+ * envelope, which a PDF is not. It still carries the access token and still
+ * retries once after a refresh, because a document behind an expired token
+ * should not silently fail for someone who is legitimately signed in.
+ *
+ * An anchor tag cannot do any of this: it sends the browser off with no
+ * Authorization header, which lands on the SPA's own 404 page.
+ */
+async function requestBlob(path, { params, retry = true } = {}) {
+  const headers = baseHeaders()
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`
+
+  let res
+  try {
+    res = await fetch(buildUrl(path, params), { headers, credentials: 'include' })
+  } catch { throw new NetworkError() }
+
+  if (res.ok) return res.blob()
+
+  if (res.status === 401 && retry) {
+    const outcome = await refreshSession()
+    if (outcome === SESSION.OK) return requestBlob(path, { params, retry: false })
+    if (outcome === SESSION.UNREACHABLE) throw new NetworkError()
+    tokenStore.clear()
+    onSessionExpired()
+  }
+
+  // The body is a document on success and JSON on failure, so the error path
+  // has to parse rather than assume.
+  let payload = null
+  try { payload = await res.json() } catch { /* not JSON */ }
+  throw toError(payload, res.status)
+}
+
 export const api = {
   get: (path, params, opts) => request(path, { ...opts, params }),
+  blob: (path, params) => requestBlob(path, { params }),
   post: (path, body, opts) => request(path, { ...opts, method: 'POST', body }),
   patch: (path, body, opts) => request(path, { ...opts, method: 'PATCH', body }),
   put: (path, body, opts) => request(path, { ...opts, method: 'PUT', body }),

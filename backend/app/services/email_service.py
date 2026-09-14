@@ -182,7 +182,8 @@ class EmailService:
         self.db = db
 
     def send(self, *, to: str, subject: str, body: str,
-             html: str | None = None) -> None:
+             html: str | None = None,
+             attachments: list[tuple[str, bytes, str]] | None = None) -> None:
         """
         Deliver one message, or raise.
 
@@ -199,7 +200,8 @@ class EmailService:
                 "environment.")
 
         if config.kind == "brevo":
-            self._send_brevo(config, to=to, subject=subject, body=body, html=html)
+            self._send_brevo(config, to=to, subject=subject, body=body, html=html,
+                             attachments=attachments)
             return
 
         message = EmailMessage()
@@ -209,6 +211,15 @@ class EmailService:
         message.set_content(body)
         if html:
             message.add_alternative(html, subtype="html")
+
+        # Attachments are added after the alternative part, so the HTML body
+        # stays the thing the client renders and the file hangs off it. Adding
+        # them before would make some clients show the attachment as the body.
+        for filename, content, mime in (attachments or []):
+            maintype, _, subtype = mime.partition("/")
+            message.add_attachment(content, maintype=maintype or "application",
+                                   subtype=subtype or "octet-stream",
+                                   filename=filename)
 
         try:
             if config.use_ssl:
@@ -242,7 +253,8 @@ class EmailService:
 
     @staticmethod
     def _send_brevo(config: BrevoConfig, *, to: str, subject: str,
-                    body: str, html: str | None) -> None:
+                    body: str, html: str | None,
+                    attachments: list[tuple[str, bytes, str]] | None = None) -> None:
         """
         POST the message to Brevo's transactional endpoint.
 
@@ -259,6 +271,13 @@ class EmailService:
         }
         if html:
             payload["htmlContent"] = html
+        if attachments:
+            # Brevo takes attachments as base64 in the JSON body.
+            import base64 as _b64
+            payload["attachment"] = [
+                {"name": filename,
+                 "content": _b64.b64encode(content).decode()}
+                for filename, content, _mime in attachments]
 
         request = urlrequest.Request(
             BREVO_ENDPOINT,

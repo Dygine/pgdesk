@@ -12,8 +12,9 @@ import { subscriptionApi } from '@/services/api/subscriptionApi'
 import { useToast } from '@/context/ToastContext'
 import { PageHeader } from '@/components/domain'
 import {
-  Card, Button, DataTable, StatusBadge, EmptyState, StatCard, Modal,
-  FormField, Input, Select, Textarea, InlineAlert, Skeleton, ConfirmDialog,
+  Card, CardHeader, CardBody, Button, DataTable, StatusBadge, EmptyState,
+  StatCard, Modal, FormField, Input, Select, InlineAlert, Skeleton,
+  ConfirmDialog,
 } from '@/components/ui'
 import { inr, dateFmt } from '@/lib/format'
 
@@ -138,27 +139,28 @@ export default function Coupons() {
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-5 mb-6">
         <StatCard label="Subscriptions" value={inr(r?.subscription_rupees ?? 0)}
-          icon={IndianRupee} hint="last 90 days" />
+          icon={IndianRupee} sub="last 90 days" />
         <StatCard label="Top-ups" value={inr(r?.topup_rupees ?? 0)}
-          icon={TrendingUp} hint="last 90 days" />
+          icon={TrendingUp} sub="last 90 days" />
         <StatCard label="Collected" value={inr(r?.collected_rupees ?? 0)}
-          icon={IndianRupee} hint={`${r?.paying_organizations ?? 0} paying PGs`} />
+          icon={IndianRupee} sub={`${r?.paying_organizations ?? 0} paying PGs`} />
         <StatCard label="Discount given" value={inr(r?.discount_given_rupees ?? 0)}
-          icon={Ticket} hint="via coupons" />
+          icon={Ticket} sub="via coupons" />
         {/*
           Float is money taken but not yet consumed. A liability, not revenue:
           the owner can still spend it, and within the refund window can ask for
           it back. Showing it beside revenue stops it being mistaken for profit.
         */}
         <StatCard label="Wallet float" value={inr(r?.wallet_float_rupees ?? 0)}
-          icon={IndianRupee} hint="held, not yet earned" />
+          icon={IndianRupee} sub="held, not yet earned" />
       </div>
 
-      <Card title="Coupons">
-        {coupons.loading ? <Skeleton rows={3} /> : (
+      <Card>
+        <CardHeader title="Coupons" subtitle="Discounts you grant to PG owners" />
+        {coupons.loading ? <Skeleton className="h-40" /> : (
           <DataTable
             columns={[
-              { key: 'code', label: 'Code',
+              { key: 'code', header: 'Code',
                 render: (c) => (
                   <div>
                     <span className="font-mono font-medium">{c.code}</span>
@@ -172,14 +174,14 @@ export default function Coupons() {
                     )}
                   </div>
                 ) },
-              { key: 'value_display', label: 'Discount' },
-              { key: 'cycles', label: 'Cycles', align: 'center',
+              { key: 'value_display', header: 'Discount' },
+              { key: 'cycles', header: 'Cycles', align: 'center',
                 render: (c) => c.applies_to_cycles == null
                   ? <span title="Applies to every renewal — a permanent price cut">
                       every
                     </span>
                   : c.applies_to_cycles },
-              { key: 'used', label: 'Used', align: 'center',
+              { key: 'used', header: 'Used', align: 'center',
                 render: (c) => (
                   <span>
                     {c.usage.confirmed}
@@ -189,13 +191,13 @@ export default function Coupons() {
                     )}
                   </span>
                 ) },
-              { key: 'given', label: 'Given away', align: 'right',
+              { key: 'given', header: 'Given away', align: 'right',
                 render: (c) => inr(c.usage.total_discount_paise / 100) },
-              { key: 'valid_until', label: 'Expires',
+              { key: 'valid_until', header: 'Expires',
                 render: (c) => c.valid_until ? dateFmt(c.valid_until) : 'never' },
-              { key: 'status', label: 'Status',
+              { key: 'status', header: 'Status',
                 render: (c) => <StatusBadge status={c.status} /> },
-              { key: 'actions', label: '', align: 'right',
+              { key: 'actions', header: '', align: 'right',
                 render: (c) => (
                   <div className="flex gap-1 justify-end">
                     <Button size="sm" variant="ghost"
@@ -210,17 +212,18 @@ export default function Coupons() {
             ]}
             rows={coupons.data || []}
             empty={<EmptyState title="No coupons yet"
-              description="Create one to give a PG owner a discount on their renewal." />}
+              message="Create one to give a PG owner a discount on their renewal." />}
           />
         )}
       </Card>
 
       {r?.top_organizations?.length > 0 && (
-        <Card title="Top paying PGs" className="mt-4">
+        <Card className="mt-4">
+          <CardHeader title="Top paying PGs" subtitle="Last 90 days" />
           <DataTable
             columns={[
-              { key: 'organization', label: 'PG' },
-              { key: 'paid_rupees', label: 'Paid (90 days)', align: 'right',
+              { key: 'organization', header: 'PG' },
+              { key: 'paid_rupees', header: 'Paid (90 days)', align: 'right',
                 render: (o) => inr(o.paid_rupees) },
             ]}
             rows={r.top_organizations}
@@ -229,7 +232,7 @@ export default function Coupons() {
       )}
 
       {/* ------------------------------------------------------ create --- */}
-      <Modal open={open} onClose={() => setOpen(false)} title="New coupon" wide>
+      <Modal open={open} onClose={() => setOpen(false)} title="New coupon" size="lg">
         <div className="grid gap-3 sm:grid-cols-2">
           <FormField label="Code" hint="Uppercased automatically">
             <Input value={f.code}
@@ -292,13 +295,13 @@ export default function Coupons() {
         </div>
 
         {f.kind === 'percent' && !f.max_discount && !f.max_redemptions && (
-          <InlineAlert variant="warning" className="mt-4">
+          <InlineAlert tone="warning" className="mt-4">
             No discount cap and no redemption limit. Every PG that finds this
             code gets {f.value || '?'}% off, with nothing bounding the total.
           </InlineAlert>
         )}
         {f.cycles === '' && (
-          <InlineAlert variant="warning" className="mt-3">
+          <InlineAlert tone="warning" className="mt-3">
             With no cycle limit this discount applies to every renewal for as
             long as the PG stays subscribed. That is a price change, not a promotion.
           </InlineAlert>
@@ -351,7 +354,7 @@ export default function Coupons() {
         title={`Delete ${deleting?.code || ''}?`}
         message="A coupon that has already been redeemed cannot be deleted — pause it instead."
         confirmLabel="Delete"
-        destructive
+        tone="danger"
       />
     </>
   )

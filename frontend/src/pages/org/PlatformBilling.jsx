@@ -1,15 +1,14 @@
 import { useState } from 'react'
 import {
-  Wallet, CreditCard, Ticket, RefreshCw, CheckCircle2, AlertTriangle,
-  ExternalLink, Zap, Receipt,
+  Wallet, CreditCard, Ticket, RefreshCw, ExternalLink, Zap, Receipt,
 } from 'lucide-react'
 import { useApi } from '@/lib/useApi'
 import { platformBillingApi } from '@/services/api/platformBillingApi'
 import { useToast } from '@/context/ToastContext'
 import { PageHeader, PermissionGuard } from '@/components/domain'
 import {
-  Card, Button, DataTable, StatusBadge, EmptyState, StatCard, Modal,
-  FormField, Input, InlineAlert, Skeleton, IconButton,
+  Card, CardHeader, CardBody, Button, DataTable, StatusBadge, EmptyState,
+  StatCard, Modal, FormField, Input, InlineAlert, Skeleton,
 } from '@/components/ui'
 import { inr, dateFmt } from '@/lib/format'
 
@@ -17,9 +16,9 @@ import { inr, dateFmt } from '@/lib/format'
  * What this PG pays PGuru.
  *
  * Deliberately not the same screen as Invoices or Payments, which are residents
- * paying this PG. Putting the two on one page would invite exactly the
- * confusion the whole architecture exists to avoid - one is money coming in
- * through the owner's own gateway, this is money going out to the platform.
+ * paying this PG. Putting them together would invite exactly the confusion the
+ * architecture exists to avoid: one is money arriving through the owner's own
+ * gateway, this is money leaving to the platform.
  */
 export default function PlatformBilling() {
   const { success, error } = useToast()
@@ -49,17 +48,9 @@ export default function PlatformBilling() {
     } catch (e) {
       setApplied(null)
       error(e.message || 'That coupon could not be applied')
-    } finally {
-      setBusy(false)
-    }
+    } finally { setBusy(false) }
   }
 
-  /**
-   * Both payment routes send the owner somewhere or settle immediately, so the
-   * button stays disabled until we know which happened. A double-submitted
-   * renewal is guarded server-side by the idempotency key, but the UI should
-   * not invite it.
-   */
   async function payByCard() {
     setBusy(true)
     try {
@@ -82,14 +73,11 @@ export default function PlatformBilling() {
         coupon_code: applied ? coupon.trim() : null,
       })
       success(`Paid. Your subscription runs to ${dateFmt(res.current_period_end)}.`)
-      setCoupon(''); setApplied(null)
-      reload()
+      setCoupon(''); setApplied(null); reload()
     } catch (e) {
       // 409 is a normal outcome, not a fault: the balance is short.
       error(e.message || 'Could not pay from the wallet')
-    } finally {
-      setBusy(false)
-    }
+    } finally { setBusy(false) }
   }
 
   async function startTopup() {
@@ -106,16 +94,41 @@ export default function PlatformBilling() {
   async function toggleAutoDebit() {
     try {
       await platformBillingApi.setAutoDebit(!s.auto_debit_enabled)
-      success(s.auto_debit_enabled
-        ? 'Automatic renewal turned off'
-        : 'Automatic renewal turned on')
+      success(s.auto_debit_enabled ? 'Automatic renewal off' : 'Automatic renewal on')
       reload()
+    } catch (e) { error(e.message || 'Could not change that setting') }
+  }
+
+  /**
+   * Invoices are fetched, not linked.
+   *
+   * The PDF lives behind an authenticated API route. An anchor tag sends the
+   * browser to the SPA's own 404 page instead, which is exactly what happened
+   * the first time. Fetching through the API client carries the token, and the
+   * blob URL is revoked once the tab has it.
+   */
+  async function openInvoice(invoiceId) {
+    try {
+      const blob = await platformBillingApi.invoicePdf(invoiceId)
+      const url = URL.createObjectURL(blob)
+      window.open(url, '_blank', 'noopener')
+      setTimeout(() => URL.revokeObjectURL(url), 60000)
     } catch (e) {
-      error(e.message || 'Could not change that setting')
+      error(e.message || 'Could not open that invoice')
     }
   }
 
-  if (summary.loading) return <Skeleton rows={6} />
+  if (summary.loading) {
+    return (
+      <div className="space-y-4">
+        <Skeleton className="h-8 w-56" />
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+          {[0, 1, 2, 3].map((i) => <Skeleton key={i} className="h-24" />)}
+        </div>
+        <Skeleton className="h-64" />
+      </div>
+    )
+  }
 
   const net = applied ? applied.net_paise : due?.net_paise
   const walletCovers = wallet && net != null && wallet.balance_paise >= net
@@ -125,220 +138,191 @@ export default function PlatformBilling() {
       <PageHeader
         title="Subscription & wallet"
         subtitle="What you pay for PGuru. Separate from the rent your residents pay you."
-        actions={
-          <Button variant="ghost" onClick={reload} icon={RefreshCw}>Refresh</Button>
-        }
+        actions={<Button variant="ghost" onClick={reload} icon={RefreshCw}>Refresh</Button>}
       />
 
       {!s?.gateway_available && (
-        <InlineAlert variant="warning" className="mb-4">
+        <InlineAlert tone="warning" className="mb-4">
           Online payment is not set up on this platform yet. Contact support to
           renew your subscription.
         </InlineAlert>
       )}
 
-      {/*
-        A cached balance must never be presented as current. Someone who
-        believes they have money they do not is about to have a renewal fail.
-      */}
+      {/* A cached balance must never be presented as current: someone who
+          believes they have money they do not is about to have a renewal fail. */}
       {wallet && !wallet.live && (
-        <InlineAlert variant="warning" className="mb-4">
+        <InlineAlert tone="warning" className="mb-4">
           Showing your last known balance
           {wallet.as_of ? ` from ${dateFmt(wallet.as_of)}` : ''} — the payments
           service could not be reached just now.
         </InlineAlert>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-6">
-        <StatCard
-          label="Wallet balance"
-          value={inr(wallet?.balance_rupees ?? 0)}
-          icon={Wallet}
-          hint={wallet?.live ? 'up to date' : 'last known'}
-        />
-        <StatCard
-          label="Current plan"
-          value={sub?.plan_name || '—'}
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4 mb-4">
+        <StatCard label="Wallet balance" value={inr(wallet?.balance_rupees ?? 0)}
+          icon={Wallet} sub={wallet?.live ? 'up to date' : 'last known'} />
+        <StatCard label="Current plan" value={sub?.plan_name || '—'}
           icon={CreditCard}
-          hint={sub ? `${inr(sub.price_rupees)} / ${sub.billing_cycle.toLowerCase()}` : ''}
-        />
-        <StatCard
-          label="Renews"
-          value={sub ? dateFmt(sub.current_period_end) : '—'}
+          sub={sub ? `${inr(sub.price_rupees)} / ${String(sub.billing_cycle).toLowerCase()}` : ''} />
+        <StatCard label="Renews" value={sub ? dateFmt(sub.current_period_end) : '—'}
           icon={Receipt}
-          hint={sub ? `${sub.days_remaining} day${sub.days_remaining === 1 ? '' : 's'} left` : ''}
-        />
-        <StatCard
-          label="Next charge"
-          value={net != null ? inr(net / 100) : '—'}
-          icon={Zap}
-          hint={walletCovers ? 'covered by wallet' : 'top up or pay by card'}
-        />
+          sub={sub ? `${sub.days_remaining} day${sub.days_remaining === 1 ? '' : 's'} left` : ''} />
+        <StatCard label="Next charge" value={net != null ? inr(net / 100) : '—'}
+          icon={Zap} sub={walletCovers ? 'covered by wallet' : 'top up or pay by card'} />
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <Card title="Pay your subscription">
-          {!sub ? (
-            <EmptyState title="No plan yet"
-              description="Contact support to choose a subscription plan." />
-          ) : (
-            <>
-              <div className="space-y-2 text-sm">
-                <Row label={sub.plan_name} value={inr(due?.gross_paise / 100 || 0)} />
-                {applied?.discount_paise > 0 && (
-                  <Row
-                    label={`Coupon ${applied.coupon_code}`}
-                    value={`− ${inr(applied.discount_paise / 100)}`}
-                    tone="positive"
-                  />
+        <Card>
+          <CardHeader title="Pay your subscription"
+            subtitle={sub ? `${sub.plan_name} · renews ${dateFmt(sub.current_period_end)}` : undefined} />
+          <CardBody>
+            {!sub ? (
+              <EmptyState title="No plan yet"
+                message="Contact support to choose a subscription plan." />
+            ) : (
+              <>
+                <div className="space-y-1.5 text-sm">
+                  <Row label={sub.plan_name} value={inr((due?.gross_paise ?? 0) / 100)} />
+                  {applied?.discount_paise > 0 && (
+                    <Row label={`Coupon ${applied.coupon_code}`}
+                      value={`− ${inr(applied.discount_paise / 100)}`} tone="positive" />
+                  )}
+                  <div className="border-t border-line pt-2 mt-2">
+                    <Row label="Total" value={inr((net ?? 0) / 100)} strong />
+                  </div>
+                </div>
+
+                <div className="mt-4 flex gap-2 items-end">
+                  <div className="flex-1">
+                    <FormField label="Coupon code">
+                      <Input value={coupon} placeholder="SAVE20"
+                        onChange={(e) => { setCoupon(e.target.value); setApplied(null) }} />
+                    </FormField>
+                  </div>
+                  <Button variant="secondary" onClick={applyCoupon}
+                    disabled={busy || !coupon.trim()} icon={Ticket}>Apply</Button>
+                </div>
+
+                {s?.available_coupons?.length > 0 && (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Available to you:{' '}
+                    {s.available_coupons.map((c) => (
+                      <button key={c.code} type="button" className="underline mr-2"
+                        onClick={() => { setCoupon(c.code); setApplied(null) }}>
+                        {c.code}
+                      </button>
+                    ))}
+                  </p>
                 )}
-                <div className="border-t pt-2 mt-2">
-                  <Row label="Total" value={inr((net ?? 0) / 100)} strong />
+
+                <div className="mt-5 flex flex-wrap gap-2">
+                  <Button variant="primary" onClick={payByWallet} icon={Wallet}
+                    disabled={busy || !walletCovers || !s?.gateway_available}>
+                    Pay from wallet
+                  </Button>
+                  <Button variant="secondary" onClick={payByCard} icon={CreditCard}
+                    disabled={busy || !s?.gateway_available}>
+                    Pay by card or UPI
+                  </Button>
                 </div>
-              </div>
 
-              <div className="mt-4 flex gap-2 items-end">
-                <FormField label="Coupon code" className="flex-1">
-                  <Input
-                    value={coupon}
-                    onChange={(e) => { setCoupon(e.target.value); setApplied(null) }}
-                    placeholder="SAVE20"
-                  />
-                </FormField>
-                <Button variant="secondary" onClick={applyCoupon}
-                  disabled={busy || !coupon.trim()} icon={Ticket}>
-                  Apply
-                </Button>
-              </div>
-
-              {s?.available_coupons?.length > 0 && (
-                <div className="mt-3 text-xs text-muted">
-                  Available to you:{' '}
-                  {s.available_coupons.map((c) => (
-                    <button
-                      key={c.code}
-                      type="button"
-                      className="underline mr-2"
-                      onClick={() => { setCoupon(c.code); setApplied(null) }}
-                    >
-                      {c.code}
-                    </button>
-                  ))}
-                </div>
-              )}
-
-              <div className="mt-5 flex flex-wrap gap-2">
-                <Button
-                  onClick={payByWallet}
-                  disabled={busy || !walletCovers || !s?.gateway_available}
-                  icon={Wallet}
-                >
-                  Pay from wallet
-                </Button>
-                <Button
-                  variant="secondary"
-                  onClick={payByCard}
-                  disabled={busy || !s?.gateway_available}
-                  icon={CreditCard}
-                >
-                  Pay by card or UPI
-                </Button>
-              </div>
-
-              {!walletCovers && wallet && (
-                <p className="mt-3 text-xs text-muted">
-                  Your wallet is {inr(Math.max(0, (net ?? 0) - wallet.balance_paise) / 100)}{' '}
-                  short of this charge.
-                </p>
-              )}
-            </>
-          )}
+                {!walletCovers && wallet && (
+                  <p className="mt-3 text-xs text-slate-500">
+                    Your wallet is {inr(Math.max(0, (net ?? 0) - wallet.balance_paise) / 100)} short
+                    of this charge.
+                  </p>
+                )}
+              </>
+            )}
+          </CardBody>
         </Card>
 
-        <Card title="Wallet">
-          <p className="text-sm text-muted mb-4">
-            Prepaid balance for PGuru subscriptions. It can only be spent here —
-            it cannot be withdrawn as cash or transferred to anyone else.
-          </p>
+        <Card>
+          <CardHeader title="Wallet"
+            subtitle="Prepaid balance, spendable only on PGuru" />
+          <CardBody>
+            <p className="text-sm text-slate-600">
+              It cannot be withdrawn as cash or transferred to anyone else.
+            </p>
 
-          <Button onClick={() => setTopupOpen(true)}
-            disabled={!s?.gateway_available} icon={Wallet}>
-            Top up
-          </Button>
+            <Button variant="primary" className="mt-4" icon={Wallet}
+              onClick={() => setTopupOpen(true)} disabled={!s?.gateway_available}>
+              Top up
+            </Button>
 
-          <div className="mt-5 pt-4 border-t">
-            <label className="flex items-start gap-3 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={!!s?.auto_debit_enabled}
-                onChange={toggleAutoDebit}
-                className="mt-1"
-              />
-              <span className="text-sm">
-                <span className="font-medium">Renew automatically from my wallet</span>
-                <span className="block text-muted text-xs mt-0.5">
-                  On renewal day we take the charge from your balance, so your
-                  service never lapses because nobody pressed a button. You are
-                  warned in advance if the balance will not cover it.
+            <div className="mt-5 pt-4 border-t border-line">
+              <label className="flex items-start gap-3 cursor-pointer">
+                <input type="checkbox" className="mt-1"
+                  checked={!!s?.auto_debit_enabled} onChange={toggleAutoDebit} />
+                <span className="text-sm">
+                  <span className="font-medium text-slate-900">
+                    Renew automatically from my wallet
+                  </span>
+                  <span className="block text-slate-500 text-xs mt-0.5">
+                    On renewal day we take the charge from your balance, so your
+                    service never lapses because nobody pressed a button. You are
+                    warned in advance if the balance will not cover it.
+                  </span>
                 </span>
-              </span>
-            </label>
-          </div>
+              </label>
+            </div>
+          </CardBody>
         </Card>
       </div>
 
-      <Card title="History" className="mt-4">
-        {history.loading ? <Skeleton rows={3} /> : (
+      <Card className="mt-4">
+        <CardHeader title="History" subtitle="Your payments to PGuru, with invoices" />
+        {history.loading ? (
+          <CardBody><Skeleton className="h-32" /></CardBody>
+        ) : (
           <DataTable
             columns={[
-              { key: 'created_at', label: 'Date',
+              { key: 'created_at', header: 'Date',
                 render: (r) => dateFmt(r.created_at) },
-              { key: 'purpose', label: 'For',
-                render: (r) => r.purpose === 'wallet_topup'
-                  ? 'Wallet top-up'
-                  : `Subscription${r.period ? ` — ${dateFmt(r.period)}` : ''}` },
-              { key: 'method', label: 'Paid by',
-                render: (r) => r.method === 'wallet' ? 'Wallet' : 'Card / UPI' },
-              { key: 'discount_rupees', label: 'Discount', align: 'right',
-                render: (r) => r.discount_rupees > 0
-                  ? `− ${inr(r.discount_rupees)}` : '—' },
-              { key: 'net_rupees', label: 'Amount', align: 'right',
+              { key: 'purpose', header: 'For', render: (r) =>
+                  r.purpose === 'wallet_topup' ? 'Wallet top-up'
+                    : `Subscription${r.period ? ` · ${dateFmt(r.period)}` : ''}` },
+              { key: 'method', header: 'Paid by',
+                render: (r) => (r.method === 'wallet' ? 'Wallet' : 'Card / UPI') },
+              { key: 'discount_rupees', header: 'Discount', align: 'right',
+                render: (r) => (r.discount_rupees > 0
+                  ? `− ${inr(r.discount_rupees)}` : '—') },
+              { key: 'net_rupees', header: 'Amount', align: 'right',
                 render: (r) => inr(r.net_rupees) },
-              { key: 'status', label: 'Status',
+              { key: 'status', header: 'Status',
                 render: (r) => <StatusBadge status={r.status} /> },
-              { key: 'invoice', label: '', align: 'right',
-                render: (r) => r.invoice_url ? (
-                  <a href={r.invoice_url} target="_blank" rel="noreferrer"
-                     className="inline-flex items-center gap-1 text-xs underline">
+              { key: 'invoice', header: 'Invoice', align: 'right', sortable: false,
+                render: (r) => (r.invoice_id ? (
+                  <button type="button" onClick={() => openInvoice(r.invoice_id)}
+                    className="inline-flex items-center gap-1 text-xs underline">
                     {r.invoice_number} <ExternalLink size={12} />
-                  </a>
-                ) : null },
+                  </button>
+                ) : <span className="text-slate-400">—</span>) },
             ]}
             rows={history.data || []}
             empty={<EmptyState title="Nothing yet"
-              description="Your subscription payments will appear here." />}
+              message="Your subscription payments will appear here." />}
           />
         )}
       </Card>
 
-      <Modal open={topupOpen} onClose={() => setTopupOpen(false)} title="Top up wallet">
-        <FormField label="Amount (₹)">
-          <Input type="number" min="100" value={amount}
-            onChange={(e) => setAmount(e.target.value)} placeholder="5000" />
+      <Modal open={topupOpen} onClose={() => setTopupOpen(false)}
+        title="Top up wallet"
+        subtitle="Paid through the same checkout as a subscription">
+        <FormField label="Amount (₹)" hint="Smallest top-up is ₹100.">
+          <Input type="number" min="100" value={amount} placeholder="5000"
+            onChange={(e) => setAmount(e.target.value)} />
         </FormField>
         <div className="flex gap-2 mt-3 flex-wrap">
           {[1000, 5000, 10000, 25000].map((v) => (
             <Button key={v} variant="ghost" size="sm"
-              onClick={() => setAmount(String(v))}>
-              {inr(v)}
-            </Button>
+              onClick={() => setAmount(String(v))}>{inr(v)}</Button>
           ))}
         </div>
         <div className="mt-5 flex gap-2 justify-end">
           <Button variant="ghost" onClick={() => setTopupOpen(false)}>Cancel</Button>
-          <Button onClick={startTopup} disabled={busy || Number(amount) < 100}>
-            Continue to payment
-          </Button>
+          <Button variant="primary" onClick={startTopup}
+            disabled={busy || Number(amount) < 100}>Continue to payment</Button>
         </div>
       </Modal>
     </PermissionGuard>
@@ -347,11 +331,13 @@ export default function PlatformBilling() {
 
 function Row({ label, value, strong, tone }) {
   return (
-    <div className="flex justify-between">
-      <span className={strong ? 'font-medium' : 'text-muted'}>{label}</span>
+    <div className="flex justify-between gap-3">
+      <span className={strong ? 'font-medium text-slate-900' : 'text-slate-500'}>
+        {label}
+      </span>
       <span className={[
-        'tabular-nums',
-        strong ? 'font-semibold' : '',
+        'tabular-nums whitespace-nowrap',
+        strong ? 'font-semibold text-slate-900' : 'text-slate-700',
         tone === 'positive' ? 'text-emerald-600' : '',
       ].join(' ')}>{value}</span>
     </div>

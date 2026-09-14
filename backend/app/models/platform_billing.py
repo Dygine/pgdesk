@@ -296,6 +296,11 @@ class PlatformCharge(Base, UUIDPrimaryKey, Timestamps):
     #: Set when this charge extended the subscription, so a redelivered webhook
     #: cannot extend it a second time.
     applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    #: Set when the invoice email went out. The guard that stops a customer
+    #: receiving the same invoice every time the job runs.
+    invoice_emailed_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True))
+    invoice_email_error: Mapped[str | None] = mapped_column(String(400))
 
     __table_args__ = (
         CheckConstraint("net_paise >= 0 AND gross_paise >= 0 AND discount_paise >= 0",
@@ -333,4 +338,92 @@ class DygineEvent(Base, UUIDPrimaryKey, Timestamps):
 
     __table_args__ = (
         Index("ix_dygine_events_type_created", "event_type", "created_at"),
+    )
+
+
+# ---------------------------------------------------------------- support --
+class PlatformTicket(Base, UUIDPrimaryKey, Timestamps):
+    """
+    A PG owner asking the platform for help.
+
+    Deliberately not `SupportQuery`, which is a resident asking their PG owner.
+    Those two look similar and are opposite directions: one is tenant data the
+    PG owns, this one crosses the tenant boundary and is read by the platform
+    operator. Sharing a table would mean every master-admin query needed an
+    "and not really a tenant record" filter, and one missed filter would leak a
+    PG's private support thread into another PG's inbox.
+    """
+
+    __tablename__ = "platform_tickets"
+
+    reference: Mapped[str] = mapped_column(String(20), nullable=False, unique=True)
+    organization_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    raised_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    subject: Mapped[str] = mapped_column(String(200), nullable=False)
+    #: "payment" | "bug" | "feature" | "question" | "other"
+    category: Mapped[str] = mapped_column(String(20), nullable=False,
+                                          default="question", index=True)
+    #: "low" | "normal" | "high" | "urgent"
+    priority: Mapped[str] = mapped_column(String(10), nullable=False,
+                                          default="normal", index=True)
+    #: "open" | "in_progress" | "waiting" | "resolved" | "closed"
+    status: Mapped[str] = mapped_column(String(15), nullable=False,
+                                        default="open", index=True)
+
+    #: Set when the owner raises it from a billing screen, so support can see
+    #: the charge without asking them to describe it.
+    charge_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("platform_charges.id", ondelete="SET NULL"))
+
+    resolved_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    resolved_by_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    #: Whose turn it is. Drives the unread badge on both sides without needing
+    #: per-user read receipts.
+    last_reply_by: Mapped[str] = mapped_column(String(10), nullable=False,
+                                               default="owner")
+    last_reply_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+    messages: Mapped[list["PlatformTicketMessage"]] = relationship(
+        back_populates="ticket", cascade="all, delete-orphan",
+        order_by="PlatformTicketMessage.created_at", lazy="selectin")
+
+    __table_args__ = (
+        CheckConstraint("status IN ('open','in_progress','waiting','resolved','closed')",
+                        name="ck_ticket_status"),
+        CheckConstraint("priority IN ('low','normal','high','urgent')",
+                        name="ck_ticket_priority"),
+        CheckConstraint("last_reply_by IN ('owner','platform')",
+                        name="ck_ticket_last_reply_by"),
+        Index("ix_ticket_org_status", "organization_id", "status"),
+        Index("ix_ticket_status_created", "status", "created_at"),
+    )
+
+
+class PlatformTicketMessage(Base, UUIDPrimaryKey, Timestamps):
+    """One message in a ticket thread, from either side."""
+
+    __tablename__ = "platform_ticket_messages"
+
+    ticket_id: Mapped[uuid.UUID] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("platform_tickets.id", ondelete="CASCADE"),
+        nullable=False, index=True)
+    #: "owner" | "platform"
+    author_side: Mapped[str] = mapped_column(String(10), nullable=False)
+    author_id: Mapped[uuid.UUID | None] = mapped_column(
+        PgUUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    author_name: Mapped[str] = mapped_column(String(120), nullable=False, default="")
+    body: Mapped[str] = mapped_column(Text, nullable=False)
+    #: A note the operator writes to themselves. Never shown to the owner.
+    internal: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+
+    ticket: Mapped[PlatformTicket] = relationship(back_populates="messages")
+
+    __table_args__ = (
+        CheckConstraint("author_side IN ('owner','platform')",
+                        name="ck_ticket_message_side"),
     )

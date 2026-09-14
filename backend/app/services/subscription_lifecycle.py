@@ -57,6 +57,7 @@ class SweepResult:
     #: Owners warned that their balance will not stretch to the next renewal.
     low_balance_warned: list[str] = field(default_factory=list)
     coupons_released: int = 0
+    invoice_emails: dict = field(default_factory=dict)
 
     def as_dict(self) -> dict:
         return {"warned": self.warned, "expired": self.expired,
@@ -64,7 +65,8 @@ class SweepResult:
                 "auto_debited": self.auto_debited,
                 "insufficient": self.insufficient,
                 "low_balance_warned": self.low_balance_warned,
-                "coupons_released": self.coupons_released}
+                "coupons_released": self.coupons_released,
+                "invoice_emails": self.invoice_emails}
 
 
 class SubscriptionLifecycleService:
@@ -96,6 +98,13 @@ class SubscriptionLifecycleService:
 
             result.coupons_released = CouponService(self.db).sweep_expired()
             self.db.commit()
+
+            # Invoice emails go out here rather than at capture: the customer
+            # is still watching a spinner at that moment, and an SMTP
+            # conversation on the critical path of taking money turns a slow
+            # mail server into a failed payment.
+            from app.services.platform_billing_service import InvoiceMailer
+            result.invoice_emails = InvoiceMailer(self.db).send_all()
         except Exception:                        # noqa: BLE001
             self.db.rollback()
             log.exception("renewal collection failed; continuing with the sweep")

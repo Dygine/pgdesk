@@ -634,3 +634,144 @@ class TestInvoiceProxy:
             PlatformCharge.dygine_invoice_id == "inv-theirs",
             PlatformCharge.organization_id == org.id)).first()
         assert found is None, "an invoice must not be reachable across tenants"
+
+
+class TestSupportTickets:
+    """Owner raises, operator answers, and neither sees the other's private side."""
+
+    def _svc(self, db):
+        from app.services.platform_support_service import PlatformSupportService
+        return PlatformSupportService(db)
+
+    def test_raising_creates_a_thread(self, db, org):
+        ticket = self._svc(db).raise_ticket(
+            organization_id=org.id, user=None,
+            subject="Payment failed but money left my account",
+            body="Reference dgn_pay_abc", category="payment", priority="high")
+        db.commit()
+        assert ticket.reference.startswith("TKT-")
+        assert ticket.status == "open"
+        assert ticket.last_reply_by == "owner"
+        assert len(ticket.messages) == 1
+
+    def test_internal_notes_never_reach_the_owner(self, db, org):
+        from app.services.platform_support_service import payload
+        svc = self._svc(db)
+        ticket = svc.raise_ticket(organization_id=org.id, user=None,
+                                  subject="Question", body="How do coupons work?")
+        svc.reply_as_platform(ticket, user=None,
+                              body="Check if they are on the Pro plan first",
+                              internal=True)
+        db.commit()
+
+        owner_view = payload(db, ticket)
+        assert all(not m["internal"] for m in owner_view["messages"])
+        assert len(owner_view["messages"]) == 1
+
+        operator_view = payload(db, ticket, include_internal=True)
+        assert len(operator_view["messages"]) == 2
+
+    def test_an_internal_note_does_not_change_whose_turn_it_is(self, db, org):
+        svc = self._svc(db)
+        ticket = svc.raise_ticket(organization_id=org.id, user=None,
+                                  subject="Q", body="body")
+        svc.reply_as_platform(ticket, user=None, body="note", internal=True)
+        db.commit()
+        # Still the platform's turn: nobody has answered the customer.
+        assert ticket.last_reply_by == "owner"
+
+    def test_an_owner_reply_reopens_a_resolved_ticket(self, db, org):
+        svc = self._svc(db)
+        ticket = svc.raise_ticket(organization_id=org.id, user=None,
+                                  subject="Q", body="body")
+        svc.set_status(ticket, "resolved")
+        db.commit()
+
+        svc.reply_as_owner(ticket, user=None, body="Still broken")
+        db.commit()
+        # Making them raise a new ticket would lose the history at exactly the
+        # moment it is most useful.
+        assert ticket.status == "open"
+
+    def test_queue_is_oldest_waiting_first(self, db, org):
+        import time
+        svc = self._svc(db)
+        first = svc.raise_ticket(organization_id=org.id, user=None,
+                                 subject="Older", body="x")
+        db.commit()
+        time.sleep(0.01)
+        second = svc.raise_ticket(organization_id=org.id, user=None,
+                                  subject="Newer", body="y")
+        db.commit()
+
+        queue = svc.queue()
+        subjects = [t.subject for t in queue]
+        # Newest-first would starve whoever has waited longest.
+        assert subjects.index("Older") < subjects.index("Newer")
+
+    def test_counts_report_what_needs_the_operator(self, db, org):
+        svc = self._svc(db)
+        a = svc.raise_ticket(organization_id=org.id, user=None, subject="A", body="x")
+        b = svc.raise_ticket(organization_id=org.id, user=None, subject="B", body="y")
+        svc.reply_as_platform(b, user=None, body="answered")
+        db.commit()
+
+        counts = svc.counts()
+        assert counts["open"] == 2
+        # Only A is still waiting on the operator.
+        assert counts["awaiting_reply"] == 1
+
+
+class TestInvoiceMailer:
+    def test_nothing_is_sent_before_the_delay(self, db, org, plan):
+        import uuid as _uuid
+        from datetime import datetime, timezone
+        from app.services.platform_billing_service import InvoiceMailer, period_of
+
+        charge = PlatformCharge(
+            organization_id=org.id, plan_id=plan.id, purpose="subscription",
+            method="gateway", period=period_of(), gross_paise=149900,
+            discount_paise=0, net_paise=149900, status="paid",
+            paid_at=datetime.now(timezone.utc),          # just now
+            dygine_invoice_id="inv-1",
+            idempotency_key=f"sub:{org.id}:{_uuid.uuid4().hex[:8]}")
+        db.add(charge)
+        db.commit()
+
+        # The customer is still watching the payment page; an email now is noise.
+        assert InvoiceMailer(db).pending() == []
+
+    def test_it_is_picked_up_after_the_delay(self, db, org, plan):
+        import uuid as _uuid
+        from datetime import datetime, timedelta, timezone
+        from app.services.platform_billing_service import InvoiceMailer, period_of
+
+        charge = PlatformCharge(
+            organization_id=org.id, plan_id=plan.id, purpose="subscription",
+            method="gateway", period=period_of(), gross_paise=149900,
+            discount_paise=0, net_paise=149900, status="paid",
+            paid_at=datetime.now(timezone.utc) - timedelta(minutes=15),
+            dygine_invoice_id="inv-1",
+            idempotency_key=f"sub:{org.id}:{_uuid.uuid4().hex[:8]}")
+        db.add(charge)
+        db.commit()
+
+        pending = InvoiceMailer(db).pending()
+        assert len(pending) == 1
+
+    def test_an_already_emailed_charge_is_not_resent(self, db, org, plan):
+        import uuid as _uuid
+        from datetime import datetime, timedelta, timezone
+        from app.services.platform_billing_service import InvoiceMailer, period_of
+
+        charge = PlatformCharge(
+            organization_id=org.id, plan_id=plan.id, purpose="subscription",
+            method="gateway", period=period_of(), gross_paise=149900,
+            discount_paise=0, net_paise=149900, status="paid",
+            paid_at=datetime.now(timezone.utc) - timedelta(minutes=30),
+            dygine_invoice_id="inv-1",
+            invoice_emailed_at=datetime.now(timezone.utc),
+            idempotency_key=f"sub:{org.id}:{_uuid.uuid4().hex[:8]}")
+        db.add(charge)
+        db.commit()
+        assert InvoiceMailer(db).pending() == []

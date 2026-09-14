@@ -794,3 +794,110 @@ def _state_code(state: str | None) -> str | None:
     if not state:
         return None
     return STATE_CODES.get(state.strip().lower())
+
+
+class InvoiceMailer:
+    """
+    Emails the invoice PDF to the owner, a short while after payment.
+
+    Why not immediately: the payment page is still open and the customer is
+    watching a spinner. An email landing in that second is noise. More
+    practically, the invoice is issued inside the capture transaction and the
+    PDF is fetched over the network - doing that inline would put an outbound
+    HTTP call and an SMTP conversation on the critical path of taking money,
+    where a slow mail server becomes a failed payment.
+
+    So it runs from the scheduled job, and `invoice_emailed_at` guards against
+    sending twice.
+    """
+
+    #: Minutes to wait after payment before the email goes out.
+    DELAY_MINUTES = 10
+
+    def __init__(self, db: Session):
+        self.db = db
+        self.billing = PlatformBillingService(db)
+
+    def pending(self, now: datetime | None = None) -> list[PlatformCharge]:
+        now = now or _now()
+        cutoff = now - timedelta(minutes=self.DELAY_MINUTES)
+        return list(self.db.scalars(select(PlatformCharge).where(
+            PlatformCharge.status == "paid",
+            PlatformCharge.invoice_emailed_at.is_(None),
+            PlatformCharge.dygine_invoice_id.isnot(None),
+            PlatformCharge.paid_at.isnot(None),
+            PlatformCharge.paid_at <= cutoff)))
+
+    def send_all(self) -> dict:
+        """One pass. Safe to run repeatedly; each charge is emailed once."""
+        sent, failed = 0, 0
+        for charge in self.pending():
+            try:
+                if self.send_one(charge):
+                    sent += 1
+            except Exception as exc:             # noqa: BLE001
+                failed += 1
+                charge.invoice_email_error = str(exc)[:400]
+                log.warning("invoice email failed for charge %s: %s",
+                            charge.id, exc)
+            self.db.commit()
+        if sent or failed:
+            log.info("invoice emails sent=%s failed=%s", sent, failed)
+        return {"sent": sent, "failed": failed}
+
+    def send_one(self, charge: PlatformCharge) -> bool:
+        from app.services.email_service import EmailNotConfigured, EmailService
+
+        org = self.db.get(Organization, charge.organization_id)
+        if org is None or not org.owner_email:
+            # Nothing to send to. Mark it done rather than retrying forever.
+            charge.invoice_emailed_at = _now()
+            charge.invoice_email_error = "No owner email on file"
+            return False
+
+        try:
+            pdf = self.billing.dygine.invoice_pdf(charge.dygine_invoice_id)
+        except DygineError as exc:
+            # Leave it unsent; the next pass retries. A payments service that
+            # is briefly asleep should not cost the customer their invoice.
+            raise RuntimeError(f"Could not fetch the invoice PDF: {exc}") from None
+
+        platform = _platform_name(self.db)
+        number = charge.dygine_invoice_number or "your invoice"
+        amount = f"\u20b9{paise_to_rupees(charge.net_paise):,.2f}"
+        period = (charge.period.strftime("%B %Y") if charge.period else "")
+
+        subject = f"{platform} invoice {number}"
+        body = (
+            f"Hello {org.owner_name or org.name},\n\n"
+            f"Thank you for your payment of {amount}"
+            + (f" for {period}" if period else "") + ".\n\n"
+            f"Your invoice {number} is attached as a PDF.\n\n"
+            f"You can see all your invoices any time under "
+            f"My subscription in {platform}.\n\n"
+            f"— {platform}\n")
+        html = (
+            f"<p>Hello {org.owner_name or org.name},</p>"
+            f"<p>Thank you for your payment of <strong>{amount}</strong>"
+            + (f" for {period}" if period else "") + ".</p>"
+            f"<p>Your invoice <strong>{number}</strong> is attached as a PDF.</p>"
+            f"<p>You can see all your invoices any time under "
+            f"<em>My subscription</em> in {platform}.</p>"
+            f"<p>— {platform}</p>")
+
+        filename = number.replace("/", "-") + ".pdf"
+        try:
+            EmailService(self.db).send(
+                to=org.owner_email, subject=subject, body=body, html=html,
+                attachments=[(filename, pdf, "application/pdf")])
+        except EmailNotConfigured:
+            # No mail provider on this deployment. Not an error worth retrying
+            # every ten minutes forever - record it and move on.
+            charge.invoice_emailed_at = _now()
+            charge.invoice_email_error = "No mail provider configured"
+            return False
+
+        charge.invoice_emailed_at = _now()
+        charge.invoice_email_error = None
+        log.info("invoice %s emailed to %s", number, org.owner_email)
+        return True

@@ -27,6 +27,7 @@ import CreateOrgWizard from '@/pages/master/CreateOrgWizard'
 import OrganizationDetail from '@/pages/master/OrganizationDetail'
 import Subscriptions from '@/pages/master/Subscriptions'
 import Coupons from '@/pages/master/Coupons'
+import Tickets from '@/pages/master/Tickets'
 import Usage from '@/pages/master/Usage'
 import MasterAudit from '@/pages/master/MasterAudit'
 import MasterSettings from '@/pages/master/MasterSettings'
@@ -46,6 +47,7 @@ import Transfer from '@/pages/org/Transfer'
 import Checkout from '@/pages/org/Checkout'
 import Invoices from '@/pages/org/Invoices'
 import PlatformBilling from '@/pages/org/PlatformBilling'
+import DeveloperSupport from '@/pages/org/DeveloperSupport'
 import Payments from '@/pages/org/Payments'
 import Expenses from '@/pages/org/Expenses'
 import Accounts from '@/pages/org/Accounts'
@@ -264,6 +266,7 @@ export const router = createBrowserRouter([
       { path: 'organizations/:id', element: guard('master.organizations', <OrganizationDetail />) },
       { path: 'subscriptions', element: guard('master.subscriptions', <Subscriptions />) },
       { path: 'coupons', element: guard('master.subscriptions', <Coupons />) },
+      { path: 'tickets', element: guard('master.organizations', <Tickets />) },
       { path: 'usage', element: guard('master.usage', <Usage />) },
       { path: 'audit', element: guard('master.audit', <MasterAudit />) },
       { path: 'website', element: guard('master.settings', <MasterWebsite />) },
@@ -290,6 +293,7 @@ export const router = createBrowserRouter([
       { path: 'invoices', element: guard('invoices.view', <Invoices />) },
       { path: 'payments', element: guard('payments.view', <Payments />) },
       { path: 'subscription', element: guard('settings.manage', <PlatformBilling />) },
+      { path: 'developer-support', element: guard('settings.manage', <DeveloperSupport />) },
       { path: 'expenses', element: guard('expenses.view', <Expenses />) },
       { path: 'accounts', element: guard('reports.view', <Accounts />) },
       { path: 'complaints', element: guard('complaints.view', <Complaints />) },

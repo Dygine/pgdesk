@@ -5,7 +5,7 @@ import {
   WashingMachine, CalendarCheck, QrCode, UserCheck, TicketCheck, Megaphone, MessagesSquare,
   Package, Boxes, BarChart3, ScrollText, Settings, ShieldCheck, UsersRound, Building,
   CreditCard, Gauge, Home, Bell, User, Map, Inbox, Scale, KeyRound, DoorClosed,
-  Ticket,
+  Ticket, LifeBuoy,
 } from 'lucide-react'
 
 /**
@@ -73,6 +73,7 @@ export const ORG_NAV = [
       { label: 'Roles & permissions', to: '/app/roles', icon: ShieldCheck, perm: 'roles.view' },
       { label: 'Audit log', to: '/app/audit', icon: ScrollText, perm: 'audit.view' },
       { label: 'My subscription', to: '/app/subscription', icon: Wallet, perm: 'settings.manage' },
+      { label: 'Developer support', to: '/app/developer-support', icon: LifeBuoy, perm: 'settings.manage' },
       { label: 'Settings', to: '/app/settings', icon: Settings, perm: 'settings.view' },
     ],
   },
@@ -86,6 +87,7 @@ export const MASTER_NAV = [
       { label: 'Organisations', to: '/master/organizations', icon: Building, perm: 'master.organizations' },
       { label: 'Subscriptions', to: '/master/subscriptions', icon: CreditCard, perm: 'master.subscriptions' },
       { label: 'Coupons & revenue', to: '/master/coupons', icon: Ticket, perm: 'master.subscriptions' },
+      { label: 'Support tickets', to: '/master/tickets', icon: LifeBuoy, perm: 'master.organizations' },
       { label: 'Usage monitoring', to: '/master/usage', icon: Gauge, perm: 'master.usage' },
     ],
   },

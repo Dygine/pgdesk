@@ -153,11 +153,10 @@ def history(db: DbSession, scope: Tenant, limit: int = 50,
         "net_rupees": paise_to_rupees(c.net_paise),
         "status": c.status,
         "invoice_number": c.dygine_invoice_number,
-        # Our own proxy route, not Dygine's. A link straight to Dygine needs
-        # Basic auth the browser does not have.
-        "invoice_url": (f"/api/v1/billing/platform/invoices/"
-                        f"{c.dygine_invoice_id}/pdf"
-                        if c.dygine_invoice_id else None),
+        # The id, not a URL. The page fetches the PDF through the API client
+        # so the auth token goes with it; a bare link would send the browser to
+        # the SPA's own 404 page, which is exactly what happened first time.
+        "invoice_id": c.dygine_invoice_id,
         "failure_reason": c.failure_reason,
         "created_at": c.created_at.isoformat(),
         "paid_at": c.paid_at.isoformat() if c.paid_at else None,

@@ -3,7 +3,7 @@ import {
   Wallet, KeyRound, CircleCheck, CircleAlert, ShieldCheck, Copy,
 } from 'lucide-react'
 import {
-  Card, CardHeader, FormField, Input, Button, Toggle, InlineAlert,
+  Card, CardHeader, CardBody, FormField, Input, Button, Toggle, InlineAlert,
 } from '@/components/ui'
 import { useToast } from '@/context/ToastContext'
 import { platformSettingsApi } from '@/services/api/platformSettingsApi'
@@ -72,10 +72,9 @@ export function DygineCard({ form, onChange, dirty, onSaved, className }) {
   return (
     <Card className={className}>
       <CardHeader
-        icon={Wallet}
         title="Dygine Pay"
-        description="How PG owners pay you for their subscription. Separate from the Razorpay keys each PG uses to collect rent."
-        right={
+        subtitle="How PG owners pay you. Separate from the Razorpay keys each PG uses to collect rent."
+        action={
           configured ? (
             verified ? (
               <span className="inline-flex items-center gap-1 text-xs text-emerald-600">
@@ -90,7 +89,7 @@ export function DygineCard({ form, onChange, dirty, onSaved, className }) {
         }
       />
 
-      <div className="p-5 space-y-4">
+      <CardBody className="space-y-4">
         <Toggle
           checked={!!form.dygine_enabled}
           onChange={onChange('dygine_enabled')}
@@ -165,14 +164,14 @@ export function DygineCard({ form, onChange, dirty, onSaved, className }) {
         </div>
 
         {form.dygine_key_secret_set && !form.dygine_key_secret_readable && (
-          <InlineAlert variant="danger">
+          <InlineAlert tone="danger">
             The stored key secret cannot be decrypted — it was saved with a
             different encryption key. Re-enter it.
           </InlineAlert>
         )}
 
         {configured && !form.dygine_webhook_secret_set && (
-          <InlineAlert variant="warning">
+          <InlineAlert tone="warning">
             No webhook secret. Payments will still be taken, but this app will
             never hear that they succeeded, so subscriptions will not extend on
             their own. Set one here and the same value on the webhook in Dygine
@@ -197,7 +196,7 @@ export function DygineCard({ form, onChange, dirty, onSaved, className }) {
             value={form.wallet_low_balance_warning_days ?? 7}
             onChange={onChange('wallet_low_balance_warning_days')} />
         </FormField>
-      </div>
+      </CardBody>
     </Card>
   )
 }
