@@ -52,6 +52,17 @@ const WRITABLE = {
   brevo_sender_email: null,
   brevo_sender_name: null,
   fcm_project_id: null,
+
+  // Dygine Pay. A field missing from this map is never sent at all, so the
+  // control appears to work, the save returns 200, and the value reverts on
+  // reload with no error anywhere. There are three places a settings field has
+  // to be declared - here, the PATCH schema, and the service's own WRITABLE set
+  // - and all three fail silently when they disagree. The two secrets are
+  // deliberately absent: they take their own endpoint.
+  dygine_enabled: Boolean,
+  dygine_base_url: null,
+  dygine_key_id: null,
+  wallet_low_balance_warning_days: Number,
 }
 
 /** `null` in WRITABLE means "a string the API accepts as empty". */
@@ -73,6 +84,13 @@ function buildPayload(form) {
   // `|| default` idiom used above would silently discard it.
   out.rent_reminder_days = Number(form.rent_reminder_days ?? 3)
   if (!Number.isFinite(out.rent_reminder_days)) out.rent_reminder_days = 3
+  // 0 is a real value here too - it turns the low-balance warning off - so the
+  // `|| default` idiom above would silently discard it.
+  out.wallet_low_balance_warning_days =
+    Number(form.wallet_low_balance_warning_days ?? 7)
+  if (!Number.isFinite(out.wallet_low_balance_warning_days)) {
+    out.wallet_low_balance_warning_days = 7
+  }
   return out
 }
 
@@ -223,11 +241,13 @@ export default function MasterSettings() {
           }))} />
 
         {/*
-          Subscription billing. Sits after the notification cards because it is
-          configured once at setup and then left alone, unlike mail which gets
-          revisited.
+          Full width. This card carries a URL, a key id, two secrets, two
+          buttons and a warning block; squeezed into one half of a two-column
+          grid the fields wrap and the guidance about not swapping the secrets
+          becomes unreadable - which is the one thing on it that most needs to
+          be read.
         */}
-        <DygineCard form={form} onChange={set} dirty={dirty}
+        <DygineCard className="lg:col-span-2" form={form} onChange={set} dirty={dirty}
           onSaved={(data) => setForm((f) => ({
             // Merge, not replace - same reasoning as SmtpCard. Saving a secret
             // returns the whole settings object, and assigning it wholesale

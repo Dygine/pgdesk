@@ -24,7 +24,7 @@ import { platformRevenueApi } from '@/services/api/platformBillingApi'
  * "Saved" and "works" are shown as separate facts, for the same reason the mail
  * card does it: a wrong secret saves perfectly and fails on every call.
  */
-export function DygineCard({ form, onChange, dirty, onSaved }) {
+export function DygineCard({ form, onChange, dirty, onSaved, className }) {
   const { success, error } = useToast()
   const [keySecret, setKeySecret] = useState('')
   const [webhookSecret, setWebhookSecret] = useState('')
@@ -70,7 +70,7 @@ export function DygineCard({ form, onChange, dirty, onSaved }) {
     '<your API origin>'
 
   return (
-    <Card>
+    <Card className={className}>
       <CardHeader
         icon={Wallet}
         title="Dygine Pay"
@@ -90,26 +90,29 @@ export function DygineCard({ form, onChange, dirty, onSaved }) {
         }
       />
 
-      <div className="space-y-4">
+      <div className="p-5 space-y-4">
         <Toggle
           checked={!!form.dygine_enabled}
           onChange={onChange('dygine_enabled')}
           label="Accept subscription payments"
-          description="Off until you have entered a key pair and the test passes. While off, owners see a message rather than a broken payment button."
+          description="Off until you have entered a key pair and the test passes. While off, owners see a message rather than a broken payment button. This switch, the URL and the key id are saved by Save changes at the top of the page — the two secrets have their own button below."
         />
 
-        <FormField label="Dygine Pay URL"
-          hint="Where your payments hub runs, e.g. https://dygine-pay.onrender.com">
-          <Input value={form.dygine_base_url || ''}
-            onChange={onChange('dygine_base_url')}
-            placeholder="https://pay.dygine.com" />
-        </FormField>
+        {/* Paired: two short, related values that are read together. */}
+        <div className="grid sm:grid-cols-2 gap-4">
+          <FormField label="Dygine Pay URL"
+            hint="Where your payments hub runs, e.g. https://dygine-pay.onrender.com">
+            <Input value={form.dygine_base_url || ''}
+              onChange={onChange('dygine_base_url')}
+              placeholder="https://pay.dygine.com" />
+          </FormField>
 
-        <FormField label="Key id" hint="Starts with dgn_test_ or dgn_live_">
-          <Input value={form.dygine_key_id || ''}
-            onChange={onChange('dygine_key_id')}
-            placeholder="dgn_test_xxxxxxxxxxxxxxxx" />
-        </FormField>
+          <FormField label="Key id" hint="Starts with dgn_test_ or dgn_live_">
+            <Input value={form.dygine_key_id || ''}
+              onChange={onChange('dygine_key_id')}
+              placeholder="dgn_test_xxxxxxxxxxxxxxxx" />
+          </FormField>
+        </div>
 
         <div className="pt-2 border-t">
           <p className="text-xs text-muted mb-3 flex items-start gap-1.5">
@@ -123,6 +126,7 @@ export function DygineCard({ form, onChange, dirty, onSaved }) {
             </span>
           </p>
 
+          <div className="grid sm:grid-cols-2 gap-4">
           <FormField
             label="Key secret"
             hint={form.dygine_key_secret_set
@@ -146,6 +150,7 @@ export function DygineCard({ form, onChange, dirty, onSaved }) {
               placeholder={form.dygine_webhook_secret_set ? '••••••••••••' : ''}
               autoComplete="new-password" />
           </FormField>
+          </div>
 
           <div className="flex gap-2 mt-3">
             <Button onClick={saveSecrets}
