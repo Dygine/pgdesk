@@ -1,8 +1,26 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
+    <!--
+        allowBackup is false on purpose.
+
+        The session this app holds is long-lived (Master -> Settings -> app
+        session length) and lives in Capacitor Preferences, which is ordinary
+        app-private storage. With backup enabled that storage is carried off by
+        Google auto-backup and by `adb backup` on any device with USB debugging
+        on - so a phone handed to a repair shop leaks a signed-in session into
+        a file anyone can read. For an app that reaches rent, resident ID
+        documents and payment screens, the convenience of restoring state to a
+        new handset is not worth that.
+
+        dataExtractionRules covers the same ground for Android 12 and later,
+        which ignores allowBackup; fullBackupContent covers 11 and earlier.
+        Both are needed because minSdk is 24.
+    -->
     <application
-        android:allowBackup="true"
+        android:allowBackup="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
         android:icon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:roundIcon="@mipmap/ic_launcher_round"

@@ -16,7 +16,7 @@ from app.api.v1.router import api_router
 from app.core.config import settings
 from app.core.database import check_database_connection
 from app.core.exceptions import register_exception_handlers
-from app.middleware import RequestContextMiddleware
+from app.middleware import RequestContextMiddleware, SecurityHeadersMiddleware
 from app.services import push_dispatcher
 
 logging.basicConfig(
@@ -72,6 +72,9 @@ app = FastAPI(
     ),
 )
 
+# Outermost, so the headers are on error responses and on anything a later
+# middleware short-circuits - a 500 page is exactly when you want nosniff.
+app.add_middleware(SecurityHeadersMiddleware, api_prefix=settings.api_v1_prefix)
 app.add_middleware(RequestContextMiddleware)
 app.add_middleware(
     CORSMiddleware,

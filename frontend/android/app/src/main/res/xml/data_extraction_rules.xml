@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Android 12 (API 31) and later. This file, not android:allowBackup, is what
+    those versions actually read.
+
+    Two separate channels, and both have to be closed:
+
+      cloud-backup     Google auto-backup, off-device
+      device-transfer  phone-to-phone migration during setup
+
+    Everything is excluded rather than listed selectively. An allow-list here
+    would need updating every time a plugin adds a store, and the one that gets
+    missed is the one holding the session token. There is nothing in this app
+    worth restoring: it is a WebView over pgguru.in, so a fresh install reaches
+    the same account after one sign-in.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="file" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

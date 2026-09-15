@@ -1,7 +1,7 @@
 # --- web ---
-fastapi==0.115.0
+fastapi==0.115.6
 uvicorn[standard]==0.30.6
-python-multipart==0.0.9
+python-multipart==0.0.31
 
 # --- database ---
 sqlalchemy==2.0.35
@@ -14,7 +14,12 @@ pydantic-settings==2.5.2
 email-validator==2.2.0
 
 # --- security (Milestone 2 consumes these; installed now so the foundation is complete) ---
-python-jose[cryptography]==3.3.0
+# PyJWT, not python-jose. python-jose carries an algorithm-confusion advisory
+# (PYSEC-2024-232) plus two JWT-bomb DoS advisories, and the 3.4.0 that fixes
+# them pins pyasn1<0.5.0 - which cannot coexist with google-auth below, whose
+# pyasn1-modules needs >=0.6.1. PyJWT has none of those advisories and no
+# pyasn1 dependency. The whole migration was four lines in app/core/security.py.
+PyJWT==2.10.1
 argon2-cffi==23.1.0
 passlib==1.7.4
 
@@ -29,7 +34,7 @@ google-auth==2.35.0
 # `google.auth.transport.requests` module imports this at call time, and
 # `requests` is an optional extra nobody installs by default - so the failure
 # appears only on a clean deploy, never on a laptop that already had it.
-requests==2.32.3
+requests==2.33.0
 
 # --- http client ---
 # Used by the push sender and by the Brevo transport. Was a test-only

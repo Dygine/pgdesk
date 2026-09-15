@@ -28,6 +28,7 @@
  */
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
+import { mayShowLink } from '@/lib/appLinks'
 import {
   ArrowRight, BedDouble, Users, IndianRupee, Smartphone, Search, ShieldCheck,
   Check, Phone, Mail, MapPin, Clock, Menu, X, Download,
@@ -59,10 +60,16 @@ const ICONS = {
 
 const rupees = (n) => `₹${Number(n).toLocaleString('en-IN')}`
 
-/** Internal links go through the router; anything else is a plain anchor. */
+/**
+ * Internal links go through the router; anything else is a plain anchor.
+ *
+ * An APK link renders nothing inside the installed Android app - see
+ * lib/appLinks.js. This page is the app's home screen as well as the website's.
+ */
 function Cta({ href, children, className, icon: Icon }) {
   const inner = (<>{children}{Icon ? <Icon size={16} /> : null}</>)
   if (!href) return null
+  if (!mayShowLink(href)) return null
   return href.startsWith('/') && !href.endsWith('.apk')
     ? <Link to={href} className={className}>{inner}</Link>
     : <a href={href} className={className}>{inner}</a>

@@ -15,7 +15,8 @@ from typing import Any, Literal
 
 from argon2 import PasswordHasher
 from argon2.exceptions import InvalidHashError, VerifyMismatchError
-from jose import JWTError, jwt
+import jwt
+from jwt import PyJWTError
 
 from app.core.config import settings
 
@@ -78,10 +79,22 @@ def create_refresh_token(subject: str, **claims: Any) -> str:
 
 
 def decode_token(token: str, expected_type: TokenType | None = None) -> dict[str, Any] | None:
-    """Returns None on any failure - expired, tampered, or the wrong token type."""
+    """
+    Returns None on any failure - expired, tampered, or the wrong token type.
+
+    PyJWT, not python-jose. python-jose carries an algorithm-confusion advisory
+    (PYSEC-2024-232) and two JWT-bomb denial-of-service advisories, and its
+    3.4.0 fix pins pyasn1<0.5 - which collides head-on with google-auth, needed
+    here for Firebase push. PyJWT has none of those advisories, no pyasn1
+    dependency at all, and refuses the "none" algorithm outright.
+
+    `algorithms` stays an explicit list. That single argument is what makes
+    algorithm confusion impossible: a token whose header claims something we
+    did not ask for is rejected rather than honoured.
+    """
     try:
         payload = jwt.decode(token, settings.secret_key, algorithms=[settings.jwt_algorithm])
-    except JWTError:
+    except PyJWTError:
         return None
     if expected_type and payload.get("type") != expected_type:
         return None

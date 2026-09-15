@@ -30,6 +30,16 @@ import { isNativeApp } from '@/lib/nativeSession'
 /** Hosts that still serve the app but are on their way out. */
 const RETIRED_HOSTS = ['pgdesk.dygine.com', 'get.dygine.com']
 const HOME = 'https://pgguru.in'
+/**
+ * Where an out-of-date app is sent.
+ *
+ * Play Store, never an .apk. This banner renders *only* inside the installed
+ * app, which is exactly the place Google's Device and Network Abuse policy
+ * forbids an off-Play download link. The old build it is talking to was
+ * sideloaded, but the fix has to be the Play listing or this component is
+ * itself the violation.
+ */
+const PLAY_STORE_URL = 'https://play.google.com/store/apps/details?id=in.pgguru.app'
 const SNOOZE_KEY = 'pgguru.legacyDomain.snoozed'
 const SNOOZE_DAYS = 3
 
@@ -64,13 +74,13 @@ export function LegacyDomainBanner() {
         <div className="min-w-0 flex-1">
           <p className="text-sm font-semibold text-accent-900">Update your app</p>
           <p className="text-xs text-accent-800/90 mt-0.5 leading-relaxed">
-            This copy still loads from our old address. Download the new one from
-            pgguru.in — you stay signed in and nothing is lost.
+            This copy still loads from our old address. Install the current
+            version from Google Play — you stay signed in and nothing is lost.
           </p>
           <div className="mt-2.5 flex flex-wrap gap-2">
-            <a href={`${HOME}/pgguru.apk`}
+            <a href={PLAY_STORE_URL} target="_blank" rel="noreferrer"
               className="inline-flex h-8 items-center gap-1.5 rounded-lg bg-accent-500 px-3 text-xs font-semibold text-white hover:bg-accent-600">
-              <Download size={13} /> Download
+              <Download size={13} /> Get the new app
             </a>
             <button type="button" onClick={later}
               className="inline-flex h-8 items-center rounded-lg border border-accent-300 px-3 text-xs font-medium text-accent-800 hover:bg-accent-100">

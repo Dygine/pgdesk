@@ -11,6 +11,7 @@
  */
 import { createContext, useContext, useEffect, useRef, useState } from 'react'
 import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { mayShowLink } from '@/lib/appLinks'
 import { Menu, X, Search, ArrowRight } from 'lucide-react'
 import { siteApi } from '@/services/api/siteApi'
 import { SITE_PRESETS, SITE_PRESET_IMAGES } from '@/data/sitePresets'
@@ -73,9 +74,16 @@ export function SectionHead({ eyebrow, title, intro, center }) {
   )
 }
 
-/** Internal links route; .apk and external links are plain anchors. */
+/**
+ * Internal links route; .apk and external links are plain anchors.
+ *
+ * An APK link renders nothing inside the installed Android app - see
+ * lib/appLinks.js. The whole site is served into that app's WebView, so
+ * without this the published app offers an off-Play download.
+ */
 export function Cta({ href, children, className, icon: Icon }) {
   if (!href) return null
+  if (!mayShowLink(href)) return null
   const inner = <>{children}{Icon ? <Icon size={16} /> : null}</>
   return href.startsWith('/') && !href.endsWith('.apk')
     ? <Link to={href} className={className}>{inner}</Link>
