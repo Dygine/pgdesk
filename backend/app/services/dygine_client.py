@@ -27,7 +27,7 @@ from app.models.platform import SINGLETON_ID
 
 log = logging.getLogger("pgguru.dygine")
 
-TIMEOUT = 20.0
+TIMEOUT = 45.0
 DEFAULT_BASE_URL = "https://pay.dygine.com"
 
 
