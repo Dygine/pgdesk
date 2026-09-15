@@ -38,20 +38,39 @@ Master = Annotated[CurrentScope, Depends(require_master)]
 
 
 class CouponCreate(BaseModel):
+    """
+    Every numeric limit here is guarded as positive.
+
+    A zero or negative limit does not fail loudly - it saves with a 200 and the
+    coupon then refuses every redemption with a message that describes a
+    different problem. `max_redemptions = -11` makes `used >= max_redemptions`
+    true at zero uses, so a brand new coupon reports "fully redeemed" and the
+    operator goes looking at the redemption table for a bug that is not there.
+
+    `max_per_org` has a CHECK constraint in the database; the others do not, so
+    these validators are the only thing standing in the way.
+    """
+
     code: str = Field(min_length=3, max_length=40)
     description: str | None = None
     kind: str = Field(default="percent", pattern="^(percent|fixed)$")
     #: Percent as a whole number, or rupees for a fixed discount. Converted to
     #: paise on the way in - the API speaks rupees because a human types it.
     value: float = Field(gt=0)
-    max_discount_rupees: float | None = None
-    min_amount_rupees: float = 0
+    #: A negative cap silently becomes a zero discount: the service takes
+    #: min(discount, cap) and then max(0, ...), so the coupon applies and takes
+    #: nothing off.
+    max_discount_rupees: float | None = Field(default=None, gt=0)
+    min_amount_rupees: float = Field(default=0, ge=0)
     applies_to_plans: list[str] = Field(default_factory=list)
-    applies_to_cycles: int | None = 1
+    #: None means every renewal forever. Zero or negative would mean the coupon
+    #: is exhausted before it is used.
+    applies_to_cycles: int | None = Field(default=1, gt=0)
     valid_from: date | None = None
     valid_until: date | None = None
-    max_redemptions: int | None = None
-    max_per_org: int = 1
+    #: None means unlimited. See the class docstring for what a negative does.
+    max_redemptions: int | None = Field(default=None, gt=0)
+    max_per_org: int = Field(default=1, gt=0)
 
     @field_validator("code")
     @classmethod
@@ -63,7 +82,9 @@ class CouponUpdate(BaseModel):
     description: str | None = None
     status: str | None = Field(default=None, pattern="^(active|paused|expired)$")
     valid_until: date | None = None
-    max_redemptions: int | None = None
+    #: Same guard as on create - this route writes the field too, so validating
+    #: only one of the two leaves the hole open.
+    max_redemptions: int | None = Field(default=None, gt=0)
 
 
 class AssignRequest(BaseModel):
